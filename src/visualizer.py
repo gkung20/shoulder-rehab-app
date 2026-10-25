@@ -1,4 +1,4 @@
-"""Visualizer for skeletal joints, angle telemetry, and user feedback overlays."""
+"""Visualizer for skeletal joints, angle telemetry, compensation metrics, and HUD overlays."""
 
 from typing import List, Optional, Tuple
 import cv2
@@ -13,10 +13,9 @@ COLOR_TRUNK_LINE = (255, 178, 102)     # Sky Blue / Cyan
 COLOR_JOINT = (255, 255, 255)          # White Joint dots
 COLOR_HUD_BG = (28, 28, 28)            # Dark Slate
 COLOR_WARNING = (30, 70, 255)          # Bright Red/Orange
+COLOR_ALERT = (0, 165, 255)            # Amber
 COLOR_TEXT = (245, 245, 245)           # Off-white
 
-
-# Key skeletal connections for upper body visualization
 UPPER_BODY_CONNECTIONS = [
     (PoseLandmarkIndex.LEFT_SHOULDER, PoseLandmarkIndex.RIGHT_SHOULDER),
     (PoseLandmarkIndex.LEFT_SHOULDER, PoseLandmarkIndex.LEFT_HIP),
@@ -32,20 +31,10 @@ def draw_hud(
     fps: float,
     status_text: str = "Pret",
     target_range: Tuple[float, float] = (80.0, 100.0),
+    is_calibrated: bool = False,
+    calibration_progress: Optional[Tuple[float, float]] = None,
 ) -> np.ndarray:
-    """Draw a clean, medical-tech style HUD banner at the top of the frame.
-
-    Args:
-        frame: OpenCV image in BGR format.
-        selected_arm: 'left' or 'right'.
-        abduction_angle: Current abduction angle in degrees (or None).
-        fps: Current measured frames per second.
-        status_text: Current status message.
-        target_range: (min_deg, max_deg) target abduction range.
-
-    Returns:
-        Frame with rendered HUD banner.
-    """
+    """Draw the top HUD banner with real-time status and calibration alerts."""
     h, w = frame.shape[:2]
     hud_height = 80
 
@@ -55,32 +44,116 @@ def draw_hud(
     cv2.addWeighted(overlay, 0.85, frame, 0.15, 0, frame)
 
     # Educational prototype disclaimer bar at bottom
-    disclaimer = "PROTOTYPE EDUCATIF - Arretez en cas de douleur vive"
-    cv2.putText(frame, disclaimer, (15, h - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (100, 100, 220), 1, cv2.LINE_AA)
+    disclaimer = "PROTOTYPE EDUCATIF - Ne pas utiliser a des fins de diagnostic. Arretez en cas de douleur vive."
+    cv2.putText(frame, disclaimer, (15, h - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (120, 120, 230), 1, cv2.LINE_AA)
 
-    # 1. Active Arm Indicator
+    # 1. Active Arm Indicator & Controls
     arm_label = f"BRAS ACTIF : {selected_arm.upper()}"
     cv2.putText(frame, arm_label, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 200), 2, cv2.LINE_AA)
-    cv2.putText(frame, "[L] Gauche  |  [R] Droite  |  [M] Miroir  |  [Q] Quitter", (20, 55), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (180, 180, 180), 1, cv2.LINE_AA)
+    calib_badge = "[CALIBRE]" if is_calibrated else "[NON CALIBRE]"
+    badge_color = (0, 230, 115) if is_calibrated else (0, 140, 255)
+    cv2.putText(frame, calib_badge, (200, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, badge_color, 2, cv2.LINE_AA)
+
+    cv2.putText(
+        frame,
+        "[L] Gauche  |  [R] Droite  |  [C] Calibrer  |  [M] Miroir  |  [Q] Quitter",
+        (20, 56),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.38,
+        (180, 180, 180),
+        1,
+        cv2.LINE_AA,
+    )
 
     # 2. Angle Display
     if abduction_angle is not None:
         angle_str = f"{abduction_angle:5.1f} deg"
-        # Green if in target range, otherwise white/amber
         in_target = target_range[0] <= abduction_angle <= target_range[1]
         angle_color = (0, 255, 120) if in_target else (255, 255, 255)
 
-        cv2.putText(frame, "ABDUCTION :", (w // 2 - 140, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1, cv2.LINE_AA)
-        cv2.putText(frame, angle_str, (w // 2, 36), cv2.FONT_HERSHEY_SIMPLEX, 0.9, angle_color, 2, cv2.LINE_AA)
+        cv2.putText(frame, "ABDUCTION :", (w // 2 - 130, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1, cv2.LINE_AA)
+        cv2.putText(frame, angle_str, (w // 2 + 10, 36), cv2.FONT_HERSHEY_SIMPLEX, 0.9, angle_color, 2, cv2.LINE_AA)
 
         target_str = f"Cible: [{int(target_range[0])} deg - {int(target_range[1])} deg]"
-        cv2.putText(frame, target_str, (w // 2 - 140, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (160, 160, 160), 1, cv2.LINE_AA)
+        cv2.putText(frame, target_str, (w // 2 - 130, 58), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (160, 160, 160), 1, cv2.LINE_AA)
     else:
         cv2.putText(frame, "RECHERCHE DU PATIENT...", (w // 2 - 120, 42), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (50, 100, 255), 2, cv2.LINE_AA)
 
     # 3. Telemetry (FPS & Status)
     cv2.putText(frame, f"FPS: {fps:4.1f}", (w - 110, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1, cv2.LINE_AA)
-    cv2.putText(frame, status_text, (w - 180, 58), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (100, 220, 100), 1, cv2.LINE_AA)
+    cv2.putText(frame, status_text, (w - 240, 58), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (100, 220, 100), 1, cv2.LINE_AA)
+
+    # 4. Calibration Progress Bar overlay
+    if calibration_progress is not None:
+        ratio, remaining = calibration_progress
+        bar_w = 300
+        bar_h = 20
+        bx = (w - bar_w) // 2
+        by = hud_height + 20
+
+        # Background
+        cv2.rectangle(frame, (bx - 5, by - 5), (bx + bar_w + 5, by + bar_h + 25), (30, 30, 30), -1)
+        # Empty bar
+        cv2.rectangle(frame, (bx, by), (bx + bar_w, by + bar_h), (80, 80, 80), -1)
+        # Filled bar
+        fill_w = int(bar_w * ratio)
+        cv2.rectangle(frame, (bx, by), (bx + fill_w, by + bar_h), (0, 220, 255), -1)
+
+        calib_txt = f"CALIBRATION : restez immobile... {remaining:3.1f}s"
+        cv2.putText(frame, calib_txt, (bx, by + bar_h + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 255), 1, cv2.LINE_AA)
+
+    return frame
+
+
+def draw_compensations_panel(
+    frame: np.ndarray,
+    trunk_lean_deg: Optional[float],
+    shrug_ratio: Optional[float],
+    elbow_angle_deg: Optional[float],
+    max_lean: float = 10.0,
+    max_shrug: float = 0.12,
+    min_elbow: float = 155.0,
+) -> np.ndarray:
+    """Draw a side panel displaying the three key compensatory movement metrics."""
+    h, w = frame.shape[:2]
+    panel_x = 20
+    panel_y = 100
+    panel_w = 260
+    panel_h = 105
+
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (panel_x, panel_y), (panel_x + panel_w, panel_y + panel_h), (25, 25, 25), -1)
+    cv2.addWeighted(overlay, 0.8, frame, 0.2, 0, frame)
+    cv2.rectangle(frame, (panel_x, panel_y), (panel_x + panel_w, panel_y + panel_h), (60, 60, 60), 1)
+
+    cv2.putText(frame, "CONTROLE POSTURAL (PHASE 2)", (panel_x + 10, panel_y + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 220, 255), 1, cv2.LINE_AA)
+
+    # 1. Trunk Lean
+    if trunk_lean_deg is not None:
+        lean_flag = trunk_lean_deg > max_lean
+        lean_color = COLOR_WARNING if lean_flag else (120, 255, 120)
+        lean_str = f"Inclinaison tronc : {trunk_lean_deg:4.1f} deg"
+        if lean_flag:
+            lean_str += " [COMPENSATION]"
+        cv2.putText(frame, lean_str, (panel_x + 10, panel_y + 45), cv2.FONT_HERSHEY_SIMPLEX, 0.40, lean_color, 1, cv2.LINE_AA)
+
+    # 2. Shoulder Shrug
+    if shrug_ratio is not None:
+        shrug_flag = shrug_ratio > max_shrug
+        shrug_color = COLOR_WARNING if shrug_flag else (120, 255, 120)
+        shrug_str = f"Haussement epaule : {shrug_ratio * 100:4.1f} %"
+        if shrug_flag:
+            shrug_str += " [COMPENSATION]"
+        cv2.putText(frame, shrug_str, (panel_x + 10, panel_y + 68), cv2.FONT_HERSHEY_SIMPLEX, 0.40, shrug_color, 1, cv2.LINE_AA)
+
+    # 3. Elbow Extension
+    if elbow_angle_deg is not None:
+        elbow_flag = elbow_angle_deg < min_elbow
+        elbow_color = COLOR_WARNING if elbow_flag else (120, 255, 120)
+        elbow_str = f"Extension coude   : {elbow_angle_deg:4.1f} deg"
+        if elbow_flag:
+            elbow_str += " [PLIE]"
+        cv2.putText(frame, elbow_str, (panel_x + 10, panel_y + 92), cv2.FONT_HERSHEY_SIMPLEX, 0.40, elbow_color, 1, cv2.LINE_AA)
 
     return frame
 
@@ -91,28 +164,16 @@ def draw_skeleton(
     selected_arm: str = "right",
     abduction_angle: Optional[float] = None,
 ) -> np.ndarray:
-    """Render skeleton lines, joint circles, and abduction angle callout.
-
-    Args:
-        frame: BGR image frame.
-        landmarks: 33 Point2D landmarks.
-        selected_arm: 'left' or 'right'.
-        abduction_angle: Optional calculated abduction angle to draw near shoulder.
-
-    Returns:
-        Frame with rendered skeleton.
-    """
+    """Render skeleton lines, joint circles, and abduction angle callout."""
     h, w = frame.shape[:2]
-
-    # Convert all normalized points to pixel tuples
     pixels = [lm.to_pixel(w, h) for lm in landmarks]
 
-    # 1. Draw Torso Core
+    # 1. Torso Core
     for idx1, idx2 in UPPER_BODY_CONNECTIONS:
         if landmarks[idx1].visibility > 0.5 and landmarks[idx2].visibility > 0.5:
             cv2.line(frame, pixels[idx1], pixels[idx2], COLOR_TRUNK_LINE, 2, cv2.LINE_AA)
 
-    # 2. Draw Left Arm
+    # 2. Left Arm
     left_color = COLOR_ACTIVE_ARM if selected_arm.lower() == "left" else COLOR_INACTIVE_ARM
     left_thick = 4 if selected_arm.lower() == "left" else 2
     if landmarks[PoseLandmarkIndex.LEFT_SHOULDER].visibility > 0.5 and landmarks[PoseLandmarkIndex.LEFT_ELBOW].visibility > 0.5:
@@ -120,7 +181,7 @@ def draw_skeleton(
     if landmarks[PoseLandmarkIndex.LEFT_ELBOW].visibility > 0.5 and landmarks[PoseLandmarkIndex.LEFT_WRIST].visibility > 0.5:
         cv2.line(frame, pixels[PoseLandmarkIndex.LEFT_ELBOW], pixels[PoseLandmarkIndex.LEFT_WRIST], left_color, left_thick, cv2.LINE_AA)
 
-    # 3. Draw Right Arm
+    # 3. Right Arm
     right_color = COLOR_ACTIVE_ARM if selected_arm.lower() == "right" else COLOR_INACTIVE_ARM
     right_thick = 4 if selected_arm.lower() == "right" else 2
     if landmarks[PoseLandmarkIndex.RIGHT_SHOULDER].visibility > 0.5 and landmarks[PoseLandmarkIndex.RIGHT_ELBOW].visibility > 0.5:
@@ -128,7 +189,7 @@ def draw_skeleton(
     if landmarks[PoseLandmarkIndex.RIGHT_ELBOW].visibility > 0.5 and landmarks[PoseLandmarkIndex.RIGHT_WRIST].visibility > 0.5:
         cv2.line(frame, pixels[PoseLandmarkIndex.RIGHT_ELBOW], pixels[PoseLandmarkIndex.RIGHT_WRIST], right_color, right_thick, cv2.LINE_AA)
 
-    # 4. Draw Joint Nodes
+    # 4. Joint Nodes
     active_indices = (
         [PoseLandmarkIndex.LEFT_SHOULDER, PoseLandmarkIndex.LEFT_ELBOW, PoseLandmarkIndex.LEFT_WRIST, PoseLandmarkIndex.LEFT_HIP]
         if selected_arm.lower() == "left"
@@ -140,7 +201,7 @@ def draw_skeleton(
             cv2.circle(frame, pixels[i], 6, (0, 0, 0), -1, cv2.LINE_AA)
             cv2.circle(frame, pixels[i], 4, (0, 255, 255), -1, cv2.LINE_AA)
 
-    # 5. Draw Abduction Angle Arc and Text near the Shoulder
+    # 5. Abduction Angle Text
     if abduction_angle is not None:
         active_shoulder_idx = (
             PoseLandmarkIndex.LEFT_SHOULDER if selected_arm.lower() == "left" else PoseLandmarkIndex.RIGHT_SHOULDER

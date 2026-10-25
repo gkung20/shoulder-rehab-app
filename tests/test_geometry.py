@@ -8,6 +8,10 @@ from src.geometry import (
     calculate_angle_2d,
     calculate_abduction_angle,
     calculate_elbow_angle,
+    calculate_distance_2d,
+    get_midpoint,
+    calculate_trunk_lean,
+    calculate_shoulder_shrug,
     are_landmarks_visible,
 )
 
@@ -54,7 +58,6 @@ def test_calculate_angle_2d_degenerate_zero_length():
 
 def test_calculate_abduction_angle_rest_and_horizontal():
     """Test abduction angle for anatomically representative positions."""
-    # Right shoulder at (0.4, 0.3), right hip at (0.4, 0.7) - vertical trunk
     shoulder = Point2D(0.4, 0.3)
     hip = Point2D(0.4, 0.7)
 
@@ -69,7 +72,6 @@ def test_calculate_abduction_angle_rest_and_horizontal():
     assert pytest.approx(angle_90, abs=1e-2) == 90.0
 
     # 45 degrees abduction
-    # Vector (dx, dy) with dx=dy
     elbow_45 = Point2D(0.4 + 0.2, 0.3 + 0.2)
     angle_45 = calculate_abduction_angle(shoulder, hip, elbow_45)
     assert pytest.approx(angle_45, abs=1e-2) == 45.0
@@ -79,13 +81,55 @@ def test_calculate_elbow_angle():
     """Test elbow extension angle."""
     shoulder = Point2D(0.4, 0.3)
     elbow = Point2D(0.6, 0.3)
-    # Straight arm: wrist continues in same direction
     wrist_straight = Point2D(0.8, 0.3)
     assert pytest.approx(calculate_elbow_angle(shoulder, elbow, wrist_straight), abs=1e-2) == 180.0
 
-    # 90-degree bent elbow
     wrist_bent = Point2D(0.6, 0.5)
     assert pytest.approx(calculate_elbow_angle(shoulder, elbow, wrist_bent), abs=1e-2) == 90.0
+
+
+def test_calculate_trunk_lean():
+    """Test lateral trunk lean relative to gravity vertical."""
+    # Perfectly upright torso
+    l_sh = Point2D(0.4, 0.2)
+    r_sh = Point2D(0.6, 0.2)
+    l_hip = Point2D(0.4, 0.7)
+    r_hip = Point2D(0.6, 0.7)
+
+    lean_upright = calculate_trunk_lean(l_sh, r_sh, l_hip, r_hip)
+    assert pytest.approx(lean_upright, abs=1e-2) == 0.0
+
+    # Tilted torso 45 degrees: shoulders shifted rightwards by 0.5
+    # Midpoint of hips = (0.5, 0.7), midpoint of shoulders = (0.5 + 0.5, 0.7 - 0.5) = (1.0, 0.2)
+    # dx = 0.5, dy = -0.5 -> angle with vertical (0, -1) = 45 degrees
+    l_sh_tilted = Point2D(0.9, 0.2)
+    r_sh_tilted = Point2D(1.1, 0.2)
+    lean_tilted = calculate_trunk_lean(l_sh_tilted, r_sh_tilted, l_hip, r_hip)
+    assert pytest.approx(lean_tilted, abs=1e-2) == 45.0
+
+
+def test_calculate_shoulder_shrug():
+    """Test normalized shoulder shrug ratio."""
+    # Baseline setup: ear at y=0.10, shoulder at y=0.25 (dist = 0.15), shoulder width = 0.30
+    baseline_ear_shoulder_dist = 0.15
+    baseline_shoulder_width = 0.30
+
+    ear = Point2D(0.5, 0.10)
+
+    # 1. At rest: shoulder still at y=0.25 -> shrug ratio = 0.0
+    shoulder_rest = Point2D(0.5, 0.25)
+    shrug_rest = calculate_shoulder_shrug(ear, shoulder_rest, baseline_ear_shoulder_dist, baseline_shoulder_width)
+    assert pytest.approx(shrug_rest, abs=1e-4) == 0.0
+
+    # 2. Shrugged: shoulder raised up to y=0.20 (closer to ear by 0.05)
+    # Shrug ratio = 0.05 / 0.30 = 0.1667 (16.7% of shoulder width)
+    shoulder_shrugged = Point2D(0.5, 0.20)
+    shrug_val = calculate_shoulder_shrug(ear, shoulder_shrugged, baseline_ear_shoulder_dist, baseline_shoulder_width)
+    assert pytest.approx(shrug_val, abs=1e-3) == (0.05 / 0.30)
+
+    # 3. Shoulder pushed down lower: clamped at 0.0
+    shoulder_lowered = Point2D(0.5, 0.30)
+    assert calculate_shoulder_shrug(ear, shoulder_lowered, baseline_ear_shoulder_dist, baseline_shoulder_width) == 0.0
 
 
 def test_are_landmarks_visible():

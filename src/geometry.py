@@ -139,6 +139,101 @@ def calculate_elbow_angle(shoulder: Point2D, elbow: Point2D, wrist: Point2D) -> 
     return calculate_angle_2d(p_vertex=elbow, p1=shoulder, p2=wrist)
 
 
+def calculate_distance_2d(p1: Point2D, p2: Point2D) -> float:
+    """Euclidean distance between two 2D points in normalized image space."""
+    return math.hypot(p2.x - p1.x, p2.y - p1.y)
+
+
+def get_midpoint(p1: Point2D, p2: Point2D) -> Point2D:
+    """Calculate the midpoint between two landmarks."""
+    return Point2D(
+        x=(p1.x + p2.x) / 2.0,
+        y=(p1.y + p2.y) / 2.0,
+        visibility=min(p1.visibility, p2.visibility),
+    )
+
+
+def calculate_trunk_lean(
+    left_shoulder: Point2D,
+    right_shoulder: Point2D,
+    left_hip: Point2D,
+    right_hip: Point2D,
+) -> float:
+    """Calculate lateral trunk lean deviation from vertical in degrees.
+
+    Trunk axis vector is defined from hip midpoint to shoulder midpoint
+    pointing upward (towards head). Vertical reference vector is (0, -1) in
+    screen coordinates where Y points downwards.
+
+    Args:
+        left_shoulder: Left shoulder landmark.
+        right_shoulder: Right shoulder landmark.
+        left_hip: Left hip landmark.
+        right_hip: Right hip landmark.
+
+    Returns:
+        Deviation from vertical in degrees [0.0, 90.0].
+        0 degrees = perfectly upright torso.
+    """
+    shoulder_mid = get_midpoint(left_shoulder, right_shoulder)
+    hip_mid = get_midpoint(left_hip, right_hip)
+
+    # Spine vector pointing upwards from hips to shoulders
+    spine_dx = shoulder_mid.x - hip_mid.x
+    spine_dy = shoulder_mid.y - hip_mid.y  # In image coords, shoulder is higher (smaller y), so spine_dy < 0
+
+    spine_norm = math.hypot(spine_dx, spine_dy)
+    if spine_norm < 1e-7:
+        return 0.0
+
+    # Vertical vector pointing upwards in image coords: (0, -1)
+    # dot_product = (spine_dx * 0) + (spine_dy * -1) = -spine_dy
+    cos_lean = (-spine_dy) / spine_norm
+    clamped_cos = max(-1.0, min(1.0, cos_lean))
+    lean_deg = math.degrees(math.acos(clamped_cos))
+    return min(90.0, max(0.0, lean_deg))
+
+
+def calculate_shoulder_shrug(
+    ear: Point2D,
+    shoulder: Point2D,
+    baseline_ear_shoulder_dist: float,
+    baseline_shoulder_width: float,
+) -> float:
+    """Calculate normalized shoulder shrug (clavicle elevation) ratio.
+
+    A patient shrugs by pulling their shoulder upward toward the ear.
+    In image coordinates (where Y increases downwards), the vertical distance
+    d = (shoulder.y - ear.y). When shrugging, shoulder.y decreases, so d decreases.
+
+    The elevation delta is normalized by baseline shoulder width to ensure
+    invariance to patient size and distance from the camera.
+
+    Args:
+        ear: Ear landmark of the active side.
+        shoulder: Shoulder landmark of the active side.
+        baseline_ear_shoulder_dist: Calibrated rest vertical distance (y_shoulder - y_ear).
+        baseline_shoulder_width: Calibrated distance between left and right shoulders.
+
+    Returns:
+        Shrug ratio (non-negative float).
+        0.0 = no shrug / normal baseline shoulder height.
+        > 0.10 = shoulder has raised upward by >10% of shoulder width.
+    """
+    if baseline_shoulder_width < 1e-5:
+        return 0.0
+
+    # Current vertical distance between ear and shoulder
+    current_dist = shoulder.y - ear.y
+
+    # If current_dist < baseline, the shoulder moved upward closer to the ear
+    elevation = baseline_ear_shoulder_dist - current_dist
+
+    # Shrug ratio normalized by anatomical shoulder width
+    ratio = elevation / baseline_shoulder_width
+    return max(0.0, ratio)
+
+
 def are_landmarks_visible(landmarks: Sequence[Point2D], min_visibility: float = 0.5) -> bool:
     """Check if all provided landmarks meet the minimum confidence threshold.
 

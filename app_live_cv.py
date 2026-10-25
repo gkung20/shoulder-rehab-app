@@ -1,7 +1,10 @@
-"""Phase 1: Real-time active shoulder abduction tracking application.
+"""Phase 2: Real-time active shoulder abduction tracking with calibration and compensation monitoring.
 
-Uses OpenCV for ultra-low-latency display and MediaPipe Tasks PoseLandmarker
-for 33-point skeletal landmark detection.
+Features:
+- Automatic baseline calibration (neutral rest position).
+- Exponential Moving Average (EMA) angle smoothing.
+- Real-time compensation monitoring: Trunk Lean, Shoulder Shrug, and Elbow Extension.
+- Interactive keyboard controls: [L], [R], [C], [M], [Q].
 """
 
 import sys
@@ -10,22 +13,36 @@ import yaml
 from pathlib import Path
 
 from src.capture import VideoCaptureManager
+from src.calibration import CalibrationManager
 from src.geometry import (
     Point2D,
+    PoseLandmarkIndex,
     calculate_abduction_angle,
+    calculate_trunk_lean,
+    calculate_shoulder_shrug,
+    calculate_elbow_angle,
     are_landmarks_visible,
 )
 from src.pose_detector import PoseDetector
-from src.visualizer import draw_hud, draw_skeleton
+from src.smoothing import MultiMetricSmoother
+from src.visualizer import draw_hud, draw_skeleton, draw_compensations_panel
 
 
 def load_config() -> dict:
-    """Load placeholder configuration parameters."""
+    """Load configuration parameters with fallback defaults."""
     config_path = Path(__file__).resolve().parent / "config" / "exercise_config.yaml"
     if not config_path.exists():
         return {
-            "thresholds": {"abduction": {"target_min_deg": 80.0, "target_max_deg": 100.0}},
-            "filtering": {"min_landmark_visibility": 0.6},
+            "thresholds": {
+                "abduction": {"target_min_deg": 80.0, "target_max_deg": 100.0},
+                "compensation": {
+                    "max_trunk_lean_deg": 10.0,
+                    "max_shrug_ratio": 0.12,
+                    "min_elbow_angle_deg": 155.0,
+                },
+            },
+            "filtering": {"ema_alpha": 0.35, "min_landmark_visibility": 0.6},
+            "calibration": {"duration_sec": 3.0, "max_variance_ratio": 0.05},
         }
     with open(config_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
@@ -34,85 +51,160 @@ def load_config() -> dict:
 def main():
     print("=" * 65)
     print("  KINESITHERAPIE VIRTUELLE - ABDUCTION ACTIVE DE L'EPAULE")
-    print("  Prototype educatif (Phase 1)")
+    print("  Phase 2 : Calibration & Mesure des Compensations")
     print("=" * 65)
     print("Controles clavier:")
     print("  [L] : Suivre le bras GAUCHE")
     print("  [R] : Suivre le bras DROIT")
-    print("  [M] : Activer / Desactiver l'effet miroir de la camera")
+    print("  [C] : Lancer la CALIBRATION (restez immobile 3 secondes)")
+    print("  [M] : Activer / Desactiver le mode miroir")
     print("  [Q] ou [ESC] : Quitter l'application")
     print("=" * 65)
 
     config = load_config()
     target_min = config.get("thresholds", {}).get("abduction", {}).get("target_min_deg", 80.0)
     target_max = config.get("thresholds", {}).get("abduction", {}).get("target_max_deg", 100.0)
+    max_lean = config.get("thresholds", {}).get("compensation", {}).get("max_trunk_lean_deg", 10.0)
+    max_shrug = config.get("thresholds", {}).get("compensation", {}).get("max_shrug_ratio", 0.12)
+    min_elbow = config.get("thresholds", {}).get("compensation", {}).get("min_elbow_angle_deg", 155.0)
+
+    ema_alpha = config.get("filtering", {}).get("ema_alpha", 0.35)
     min_vis = config.get("filtering", {}).get("min_landmark_visibility", 0.6)
+
+    calib_duration = config.get("calibration", {}).get("duration_sec", 3.0)
+    calib_variance = config.get("calibration", {}).get("max_variance_ratio", 0.05)
 
     selected_arm = "right"
     mirror_mode = True
+
+    smoother = MultiMetricSmoother(alpha=ema_alpha)
+    calibrator = CalibrationManager(duration_sec=calib_duration, max_variance_ratio=calib_variance)
 
     try:
         with VideoCaptureManager(camera_index=0, width=640, height=480, mirror=mirror_mode) as cap, \
              PoseDetector() as detector:
 
-            window_name = "Rehabilitation Epaule - Phase 1"
+            window_name = "Rehabilitation Epaule - Phase 2"
             cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-            cv2.resizeWindow(window_name, 960, 720)
+            cv2.resizeWindow(window_name, 1024, 768)
+
+            # Auto-trigger calibration at startup
+            calibrator.start(arm=selected_arm)
 
             while True:
                 success, frame, timestamp_ms, fps = cap.read_frame()
                 if not success or frame is None:
-                    print("[AVERTISSEMENT] Erreur de lecture de flux camera.")
+                    print("[AVERTISSEMENT] Perte de capture video.")
                     break
 
-                # 1. Pose detection via MediaPipe Tasks
+                # Detect landmarks
                 landmarks = detector.detect(frame, timestamp_ms=timestamp_ms)
 
-                abduction_angle = None
-                status = "Patient detecte"
+                abduction_raw = None
+                lean_raw = None
+                shrug_raw = None
+                elbow_raw = None
+                status = "Pret"
+                calib_progress = None
 
                 if landmarks is not None and len(landmarks) >= 33:
-                    # Extract joints for the selected arm
                     shoulder, hip, elbow, wrist, ear = detector.get_arm_landmarks(landmarks, arm=selected_arm)
+                    left_sh = landmarks[PoseLandmarkIndex.LEFT_SHOULDER]
+                    right_sh = landmarks[PoseLandmarkIndex.RIGHT_SHOULDER]
+                    left_hip = landmarks[PoseLandmarkIndex.LEFT_HIP]
+                    right_hip = landmarks[PoseLandmarkIndex.RIGHT_HIP]
 
-                    # Gating: check if key joints for abduction are visible enough
-                    if are_landmarks_visible([shoulder, hip, elbow], min_visibility=min_vis):
-                        abduction_angle = calculate_abduction_angle(shoulder=shoulder, hip=hip, elbow=elbow)
+                    # 1. Calibration update if currently in calibration state
+                    if calibrator.is_calibrating:
+                        completed, msg = calibrator.update(landmarks, arm=selected_arm)
+                        calib_progress = calibrator.get_progress()
+                        status = msg
+                        if completed:
+                            print(f"[OK] {msg} pour le bras {selected_arm.upper()}")
+                            print(f"     Largeur epaules : {calibrator.calibrated_data.baseline_shoulder_width:.3f}")
+                            print(f"     Distance oreille-epaule : {calibrator.calibrated_data.baseline_ear_shoulder_dist:.3f}")
                     else:
-                        status = "Visibilite articulaire faible"
+                        status = "Suivi actif"
 
-                    # 2. Draw Skeleton
+                    # 2. Raw Angle Calculations
+                    vis_ok = are_landmarks_visible([shoulder, hip, elbow], min_visibility=min_vis)
+                    if vis_ok:
+                        abduction_raw = calculate_abduction_angle(shoulder, hip, elbow)
+                    elbow_vis = are_landmarks_visible([shoulder, elbow, wrist], min_visibility=min_vis)
+                    if elbow_vis:
+                        elbow_raw = calculate_elbow_angle(shoulder, elbow, wrist)
+
+                    trunk_vis = are_landmarks_visible([left_sh, right_sh, left_hip, right_hip], min_visibility=min_vis)
+                    if trunk_vis:
+                        lean_raw = calculate_trunk_lean(left_sh, right_sh, left_hip, right_hip)
+
+                    if calibrator.calibrated_data.is_calibrated and are_landmarks_visible([ear, shoulder], min_visibility=min_vis):
+                        shrug_raw = calculate_shoulder_shrug(
+                            ear=ear,
+                            shoulder=shoulder,
+                            baseline_ear_shoulder_dist=calibrator.calibrated_data.baseline_ear_shoulder_dist,
+                            baseline_shoulder_width=calibrator.calibrated_data.baseline_shoulder_width,
+                        )
+
+                    # 3. Apply EMA Smoothing
+                    abduction_smooth = smoother.update("abduction", abduction_raw, is_valid=vis_ok)
+                    lean_smooth = smoother.update("lean", lean_raw, is_valid=trunk_vis)
+                    shrug_smooth = smoother.update("shrug", shrug_raw, is_valid=(shrug_raw is not None))
+                    elbow_smooth = smoother.update("elbow", elbow_raw, is_valid=elbow_vis)
+
+                    # 4. Render skeleton
                     frame = draw_skeleton(
                         frame=frame,
                         landmarks=landmarks,
                         selected_arm=selected_arm,
-                        abduction_angle=abduction_angle,
+                        abduction_angle=abduction_smooth,
+                    )
+
+                    # 5. Render compensations panel
+                    frame = draw_compensations_panel(
+                        frame=frame,
+                        trunk_lean_deg=lean_smooth,
+                        shrug_ratio=shrug_smooth,
+                        elbow_angle_deg=elbow_smooth,
+                        max_lean=max_lean,
+                        max_shrug=max_shrug,
+                        min_elbow=min_elbow,
                     )
                 else:
                     status = "Recherche patient..."
+                    smoother.reset_all()
 
-                # 3. Draw HUD Banner
+                # 6. Render HUD
                 frame = draw_hud(
                     frame=frame,
                     selected_arm=selected_arm,
-                    abduction_angle=abduction_angle,
+                    abduction_angle=smoother.get_smoother("abduction").value,
                     fps=fps,
                     status_text=status,
                     target_range=(target_min, target_max),
+                    is_calibrated=calibrator.calibrated_data.is_calibrated,
+                    calibration_progress=calib_progress,
                 )
 
                 cv2.imshow(window_name, frame)
 
                 key = cv2.waitKey(1) & 0xFF
-                if key in [ord("q"), ord("Q"), 27]:  # 'q' or ESC
+                if key in [ord("q"), ord("Q"), 27]:
                     print("\nArret demande par l'utilisateur.")
                     break
                 elif key in [ord("l"), ord("L")]:
                     selected_arm = "left"
-                    print("[INFO] Bras actif selectionne : GAUCHE")
+                    smoother.reset_all()
+                    calibrator.start(arm=selected_arm)
+                    print("[INFO] Bras actif : GAUCHE (recalibration lancee)")
                 elif key in [ord("r"), ord("R")]:
                     selected_arm = "right"
-                    print("[INFO] Bras actif selectionne : DROIT")
+                    smoother.reset_all()
+                    calibrator.start(arm=selected_arm)
+                    print("[INFO] Bras actif : DROIT (recalibration lancee)")
+                elif key in [ord("c"), ord("C")]:
+                    calibrator.start(arm=selected_arm)
+                    print("[INFO] Recalibration demarree...")
                 elif key in [ord("m"), ord("M")]:
                     cap.mirror = not cap.mirror
                     print(f"[INFO] Mode miroir : {'Active' if cap.mirror else 'Desactive'}")
