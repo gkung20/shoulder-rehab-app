@@ -1,10 +1,11 @@
-"""Visualizer for skeletal joints, angle telemetry, compensation metrics, and HUD overlays."""
+"""Visualizer for skeletal joints, angle telemetry, compensation metrics, HUD, and live French feedback."""
 
 from typing import List, Optional, Tuple
 import cv2
 import numpy as np
 
 from src.geometry import Point2D, PoseLandmarkIndex
+from src.rules_engine import LiveFeedback, FeedbackLevel, RepetitionEvaluation, SessionSummary
 from src.state_machine import ExercisePhase, RepetitionMetrics
 
 # Standard colors in BGR format
@@ -15,9 +16,9 @@ COLOR_JOINT = (255, 255, 255)          # White Joint dots
 COLOR_HUD_BG = (28, 28, 28)            # Dark Slate
 COLOR_WARNING = (30, 70, 255)          # Bright Red/Orange
 COLOR_ALERT = (0, 165, 255)            # Amber
+COLOR_SUCCESS = (0, 230, 115)          # Green
 COLOR_TEXT = (245, 245, 245)           # Off-white
 
-# French translation for exercise phases
 PHASE_FRENCH = {
     ExercisePhase.REST: "REPOS",
     ExercisePhase.RISING: "MONTEE (CONCENTRIQUE)",
@@ -44,18 +45,16 @@ def draw_hud(
     calibration_progress: Optional[Tuple[float, float]] = None,
     rep_count: int = 0,
     current_phase: ExercisePhase = ExercisePhase.REST,
-    last_completed_rep: Optional[RepetitionMetrics] = None,
+    last_evaluation: Optional[RepetitionEvaluation] = None,
 ) -> np.ndarray:
     """Draw the top HUD banner with real-time status, rep counters, and phase indicators."""
     h, w = frame.shape[:2]
     hud_height = 85
 
-    # Semi-transparent dark overlay banner
     overlay = frame.copy()
     cv2.rectangle(overlay, (0, 0), (w, hud_height), COLOR_HUD_BG, -1)
     cv2.addWeighted(overlay, 0.85, frame, 0.15, 0, frame)
 
-    # Educational prototype disclaimer bar at bottom
     disclaimer = "PROTOTYPE EDUCATIF - Ne pas utiliser a des fins de diagnostic. Arretez en cas de douleur vive."
     cv2.putText(frame, disclaimer, (15, h - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (120, 120, 230), 1, cv2.LINE_AA)
 
@@ -72,7 +71,7 @@ def draw_hud(
 
     cv2.putText(
         frame,
-        "[L] Gauche  |  [R] Droite  |  [C] Calibrer  |  [M] Miroir  |  [Q] Quitter",
+        "[L] Gauche | [R] Droite | [C] Calibrer | [S] Bilan | [M] Miroir | [Q] Quitter",
         (20, 74),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.36,
@@ -118,19 +117,52 @@ def draw_hud(
         cv2.putText(frame, calib_txt, (bx, by + bar_h + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 255), 1, cv2.LINE_AA)
 
     # 5. Last Repetition Result Banner
-    if last_completed_rep is not None:
-        last_box_y = h - 55
-        cv2.rectangle(frame, (15, last_box_y), (w - 15, last_box_y + 35), (25, 25, 25), -1)
-        cv2.rectangle(frame, (15, last_box_y), (w - 15, last_box_y + 35), (60, 60, 60), 1)
-        res_txt = (
-            f"Derniere Repetition #{last_completed_rep.rep_index} ({last_completed_rep.arm.upper()}): "
-            f"Angle Max = {last_completed_rep.peak_abduction_deg:.1f} deg | "
-            f"Montee = {last_completed_rep.concentric_duration_sec:.1f}s | "
-            f"Maintien = {last_completed_rep.hold_duration_sec:.1f}s | "
-            f"Descente = {last_completed_rep.eccentric_duration_sec:.1f}s"
-        )
-        cv2.putText(frame, res_txt, (25, last_box_y + 22), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 200), 1, cv2.LINE_AA)
+    if last_evaluation is not None:
+        last_box_y = h - 60
+        cv2.rectangle(frame, (15, last_box_y), (w - 15, last_box_y + 38), (25, 25, 25), -1)
+        box_border_color = (0, 230, 115) if last_evaluation.is_correct else (0, 140, 255)
+        cv2.rectangle(frame, (15, last_box_y), (w - 15, last_box_y + 38), box_border_color, 2)
 
+        verdict_color = (0, 255, 120) if last_evaluation.is_correct else (0, 165, 255)
+        verdict_txt = f"REP #{last_evaluation.rep_index} [{last_evaluation.status_label}]"
+        cv2.putText(frame, verdict_txt, (25, last_box_y + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.55, verdict_color, 2, cv2.LINE_AA)
+
+        if last_evaluation.is_correct:
+            reasons_txt = f"Execution parfaite ! (Angle max : {last_evaluation.metrics.peak_abduction_deg:.1f} deg)"
+        else:
+            reasons_txt = " | ".join(last_evaluation.reasons[:2])
+        cv2.putText(frame, reasons_txt, (240, last_box_y + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (230, 230, 230), 1, cv2.LINE_AA)
+
+    return frame
+
+
+def draw_live_feedback(frame: np.ndarray, feedback: Optional[LiveFeedback]) -> np.ndarray:
+    """Draw a centered live coaching cue banner in French."""
+    if feedback is None or not feedback.message:
+        return frame
+
+    h, w = frame.shape[:2]
+    banner_w = 480
+    banner_h = 36
+    bx = (w - banner_w) // 2
+    by = 95
+
+    bg_color = (30, 30, 30)
+    text_color = (255, 255, 255)
+
+    if feedback.level == FeedbackLevel.WARNING:
+        bg_color = (20, 20, 160)       # Dark Red/Crimson
+        text_color = (0, 255, 255)      # Yellow
+    elif feedback.level == FeedbackLevel.SUCCESS:
+        bg_color = (20, 100, 20)       # Dark Green
+        text_color = (0, 255, 120)     # Bright Green
+
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (bx, by), (bx + banner_w, by + banner_h), bg_color, -1)
+    cv2.addWeighted(overlay, 0.85, frame, 0.15, 0, frame)
+    cv2.rectangle(frame, (bx, by), (bx + banner_w, by + banner_h), text_color, 1)
+
+    cv2.putText(frame, feedback.message, (bx + 15, by + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.55, text_color, 2, cv2.LINE_AA)
     return frame
 
 
@@ -155,7 +187,7 @@ def draw_compensations_panel(
     cv2.addWeighted(overlay, 0.8, frame, 0.2, 0, frame)
     cv2.rectangle(frame, (panel_x, panel_y), (panel_x + panel_w, panel_y + panel_h), (60, 60, 60), 1)
 
-    cv2.putText(frame, "CONTROLE POSTURAL (PHASE 2)", (panel_x + 10, panel_y + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 220, 255), 1, cv2.LINE_AA)
+    cv2.putText(frame, "CONTROLE POSTURAL", (panel_x + 10, panel_y + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 220, 255), 1, cv2.LINE_AA)
 
     # 1. Trunk Lean
     if trunk_lean_deg is not None:
@@ -163,7 +195,7 @@ def draw_compensations_panel(
         lean_color = COLOR_WARNING if lean_flag else (120, 255, 120)
         lean_str = f"Inclinaison tronc : {trunk_lean_deg:4.1f} deg"
         if lean_flag:
-            lean_str += " [COMPENSATION]"
+            lean_str += " [!]"
         cv2.putText(frame, lean_str, (panel_x + 10, panel_y + 45), cv2.FONT_HERSHEY_SIMPLEX, 0.40, lean_color, 1, cv2.LINE_AA)
 
     # 2. Shoulder Shrug
@@ -172,7 +204,7 @@ def draw_compensations_panel(
         shrug_color = COLOR_WARNING if shrug_flag else (120, 255, 120)
         shrug_str = f"Haussement epaule : {shrug_ratio * 100:4.1f} %"
         if shrug_flag:
-            shrug_str += " [COMPENSATION]"
+            shrug_str += " [!]"
         cv2.putText(frame, shrug_str, (panel_x + 10, panel_y + 68), cv2.FONT_HERSHEY_SIMPLEX, 0.40, shrug_color, 1, cv2.LINE_AA)
 
     # 3. Elbow Extension
@@ -181,9 +213,43 @@ def draw_compensations_panel(
         elbow_color = COLOR_WARNING if elbow_flag else (120, 255, 120)
         elbow_str = f"Extension coude   : {elbow_angle_deg:4.1f} deg"
         if elbow_flag:
-            elbow_str += " [PLIE]"
+            elbow_str += " [!]"
         cv2.putText(frame, elbow_str, (panel_x + 10, panel_y + 92), cv2.FONT_HERSHEY_SIMPLEX, 0.40, elbow_color, 1, cv2.LINE_AA)
 
+    return frame
+
+
+def draw_session_summary_modal(frame: np.ndarray, summary: SessionSummary) -> np.ndarray:
+    """Render a semi-transparent session report overlay card."""
+    h, w = frame.shape[:2]
+    card_w = 540
+    card_h = 320
+    cx = (w - card_w) // 2
+    cy = (h - card_h) // 2
+
+    overlay = frame.copy()
+    cv2.rectangle(overlay, (cx, cy), (cx + card_w, cy + card_h), (20, 20, 20), -1)
+    cv2.addWeighted(overlay, 0.92, frame, 0.08, 0, frame)
+    cv2.rectangle(frame, (cx, cy), (cx + card_w, cy + card_h), (0, 220, 255), 2)
+
+    cv2.putText(frame, "BILAN DE LA SEANCE DE REHABILITATION", (cx + 30, cy + 35), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 220, 255), 2, cv2.LINE_AA)
+    cv2.line(frame, (cx + 30, cy + 48), (cx + card_w - 30, cy + 48), (80, 80, 80), 1)
+
+    cv2.putText(frame, f"Repetitions effectuees : {summary.total_repetitions}", (cx + 35, cy + 85), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
+    cv2.putText(frame, f"Repetitions correctes  : {summary.correct_repetitions}", (cx + 35, cy + 115), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (100, 255, 100), 1, cv2.LINE_AA)
+    cv2.putText(frame, f"Taux de reussite       : {summary.success_rate_percent:.1f} %", (cx + 35, cy + 145), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 220, 255), 2, cv2.LINE_AA)
+
+    cv2.putText(frame, "Compensations les plus frequentes :", (cx + 35, cy + 185), cv2.FONT_HERSHEY_SIMPLEX, 0.50, (200, 200, 200), 1, cv2.LINE_AA)
+    errors = summary.get_most_frequent_errors(top_n=3)
+    if not errors:
+        cv2.putText(frame, "  Aucune erreur detectee. Excellente posture !", (cx + 45, cy + 215), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 120), 1, cv2.LINE_AA)
+    else:
+        y_err = cy + 215
+        for err_msg, count in errors:
+            cv2.putText(frame, f"  - {err_msg[:45]} ({count}x)", (cx + 35, y_err), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 180, 255), 1, cv2.LINE_AA)
+            y_err += 25
+
+    cv2.putText(frame, "[Appuyez sur S pour fermer le bilan]", (cx + 120, cy + card_h - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (150, 150, 150), 1, cv2.LINE_AA)
     return frame
 
 

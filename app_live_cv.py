@@ -1,20 +1,20 @@
-"""Phase 3: Real-time active shoulder abduction tracking with repetition counting and FSM.
+"""Phase 4: Real-time active shoulder abduction tracking with clinical rules engine & French feedback.
 
 Features:
-- Finite State Machine with hysteresis: REST -> RISING -> HOLD -> LOWERING.
-- False repetition rejection (guards against micro-jitter and aborted motions).
-- Temporal tracking: concentric (raising), isometric (hold), and eccentric (lowering) durations.
-- Postural compensation capture per repetition.
+- Config-driven threshold evaluation (no hardcoded numbers).
+- Real-time live coaching cues in French ("Gardez l'epaule basse", "Gardez le tronc droit", etc.).
+- Post-repetition clinical evaluation ('CORRECT' vs 'A CORRIGER' with diagnostic reasons).
+- Interactive session summary card (toggle with [S]).
 """
 
 import sys
 import time
 import cv2
-import yaml
 from pathlib import Path
 
 from src.capture import VideoCaptureManager
 from src.calibration import CalibrationManager
+from src.config import ExerciseConfig
 from src.geometry import (
     Point2D,
     PoseLandmarkIndex,
@@ -25,98 +25,65 @@ from src.geometry import (
     are_landmarks_visible,
 )
 from src.pose_detector import PoseDetector
+from src.rules_engine import RulesEngine, LiveFeedback, RepetitionEvaluation
 from src.smoothing import MultiMetricSmoother
-from src.state_machine import RepetitionStateMachine, ExercisePhase, RepetitionMetrics
-from src.visualizer import draw_hud, draw_skeleton, draw_compensations_panel
-
-
-def load_config() -> dict:
-    """Load configuration parameters with fallback defaults."""
-    config_path = Path(__file__).resolve().parent / "config" / "exercise_config.yaml"
-    if not config_path.exists():
-        return {
-            "thresholds": {
-                "abduction": {
-                    "rest_threshold_deg": 25.0,
-                    "rising_start_deg": 32.0,
-                    "target_min_deg": 80.0,
-                    "target_max_deg": 100.0,
-                },
-                "compensation": {
-                    "max_trunk_lean_deg": 10.0,
-                    "max_shrug_ratio": 0.12,
-                    "min_elbow_angle_deg": 155.0,
-                },
-                "timing": {
-                    "min_hold_time_sec": 0.5,
-                },
-            },
-            "filtering": {"ema_alpha": 0.35, "min_landmark_visibility": 0.6},
-            "calibration": {"duration_sec": 3.0, "max_variance_ratio": 0.05},
-        }
-    with open(config_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+from src.state_machine import RepetitionStateMachine, ExercisePhase
+from src.visualizer import (
+    draw_hud,
+    draw_skeleton,
+    draw_compensations_panel,
+    draw_live_feedback,
+    draw_session_summary_modal,
+)
 
 
 def main():
-    print("=" * 65)
+    print("=" * 70)
     print("  KINESITHERAPIE VIRTUELLE - ABDUCTION ACTIVE DE L'EPAULE")
-    print("  Phase 3 : Machine a Etats Finis & Comptage des Repetitions")
-    print("=" * 65)
+    print("  Phase 4 : Moteur de Regles Cliniques & Retours en Francais")
+    print("=" * 70)
     print("Controles clavier:")
     print("  [L] : Suivre le bras GAUCHE")
     print("  [R] : Suivre le bras DROIT")
     print("  [C] : Lancer la CALIBRATION (restez immobile 3 secondes)")
+    print("  [S] : Afficher / Masquer le BILAN DE LA SEANCE")
     print("  [M] : Activer / Desactiver le mode miroir")
     print("  [Q] ou [ESC] : Quitter l'application")
-    print("=" * 65)
+    print("=" * 70)
 
-    config = load_config()
-    abd_cfg = config.get("thresholds", {}).get("abduction", {})
-    rest_thresh = abd_cfg.get("rest_threshold_deg", 25.0)
-    rising_start = abd_cfg.get("rising_start_deg", 32.0)
-    target_min = abd_cfg.get("target_min_deg", 80.0)
-    target_max = abd_cfg.get("target_max_deg", 100.0)
-
-    comp_cfg = config.get("thresholds", {}).get("compensation", {})
-    max_lean = comp_cfg.get("max_trunk_lean_deg", 10.0)
-    max_shrug = comp_cfg.get("max_shrug_ratio", 0.12)
-    min_elbow = comp_cfg.get("min_elbow_angle_deg", 155.0)
-
-    timing_cfg = config.get("thresholds", {}).get("timing", {})
-    min_hold = timing_cfg.get("min_hold_time_sec", 0.5)
-
-    ema_alpha = config.get("filtering", {}).get("ema_alpha", 0.35)
-    min_vis = config.get("filtering", {}).get("min_landmark_visibility", 0.6)
-
-    calib_duration = config.get("calibration", {}).get("duration_sec", 3.0)
-    calib_variance = config.get("calibration", {}).get("max_variance_ratio", 0.05)
+    # 1. Load configuration from YAML
+    config = ExerciseConfig.from_yaml()
+    rules_engine = RulesEngine(config=config)
 
     selected_arm = "right"
     mirror_mode = True
+    show_summary_modal = False
 
-    smoother = MultiMetricSmoother(alpha=ema_alpha)
-    calibrator = CalibrationManager(duration_sec=calib_duration, max_variance_ratio=calib_variance)
+    smoother = MultiMetricSmoother(alpha=config.filtering.ema_alpha)
+    calibrator = CalibrationManager(
+        duration_sec=config.calibration.duration_sec,
+        max_variance_ratio=config.calibration.max_variance_ratio,
+    )
     state_machine = RepetitionStateMachine(
-        rest_threshold_deg=rest_thresh,
-        rising_start_deg=rising_start,
-        target_min_deg=target_min,
-        target_max_deg=target_max,
-        min_hold_time_sec=min_hold,
+        rest_threshold_deg=config.abduction.rest_threshold_deg,
+        rising_start_deg=config.abduction.rising_start_deg,
+        target_min_deg=config.abduction.target_min_deg,
+        target_max_deg=config.abduction.target_max_deg,
+        min_hold_time_sec=config.timing.min_hold_time_sec,
         arm=selected_arm,
     )
 
-    last_completed_rep = None
+    last_eval: Optional[RepetitionEvaluation] = None
 
     try:
         with VideoCaptureManager(camera_index=0, width=640, height=480, mirror=mirror_mode) as cap, \
              PoseDetector() as detector:
 
-            window_name = "Rehabilitation Epaule - Phase 3"
+            window_name = "Rehabilitation Epaule - Phase 4"
             cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
             cv2.resizeWindow(window_name, 1024, 768)
 
-            # Auto-trigger initial calibration
+            # Auto-trigger baseline calibration
             calibrator.start(arm=selected_arm)
 
             while True:
@@ -127,7 +94,6 @@ def main():
 
                 now_sec = timestamp_ms / 1000.0
 
-                # Detect landmarks
                 landmarks = detector.detect(frame, timestamp_ms=timestamp_ms)
 
                 abduction_raw = None
@@ -136,6 +102,7 @@ def main():
                 elbow_raw = None
                 status = "Pret"
                 calib_progress = None
+                live_cue = None
 
                 if landmarks is not None and len(landmarks) >= 33:
                     shoulder, hip, elbow, wrist, ear = detector.get_arm_landmarks(landmarks, arm=selected_arm)
@@ -153,18 +120,20 @@ def main():
                         status = "Suivi actif"
 
                     # 2. Raw Angle Calculations
-                    vis_ok = are_landmarks_visible([shoulder, hip, elbow], min_visibility=min_vis)
+                    min_v = config.filtering.min_landmark_visibility
+                    vis_ok = are_landmarks_visible([shoulder, hip, elbow], min_visibility=min_v)
                     if vis_ok:
                         abduction_raw = calculate_abduction_angle(shoulder, hip, elbow)
-                    elbow_vis = are_landmarks_visible([shoulder, elbow, wrist], min_visibility=min_vis)
+
+                    elbow_vis = are_landmarks_visible([shoulder, elbow, wrist], min_visibility=min_v)
                     if elbow_vis:
                         elbow_raw = calculate_elbow_angle(shoulder, elbow, wrist)
 
-                    trunk_vis = are_landmarks_visible([left_sh, right_sh, left_hip, right_hip], min_visibility=min_vis)
+                    trunk_vis = are_landmarks_visible([left_sh, right_sh, left_hip, right_hip], min_visibility=min_v)
                     if trunk_vis:
                         lean_raw = calculate_trunk_lean(left_sh, right_sh, left_hip, right_hip)
 
-                    if calibrator.calibrated_data.is_calibrated and are_landmarks_visible([ear, shoulder], min_visibility=min_vis):
+                    if calibrator.calibrated_data.is_calibrated and are_landmarks_visible([ear, shoulder], min_visibility=min_v):
                         shrug_raw = calculate_shoulder_shrug(
                             ear=ear,
                             shoulder=shoulder,
@@ -178,7 +147,7 @@ def main():
                     shrug_smooth = smoother.update("shrug", shrug_raw, is_valid=(shrug_raw is not None))
                     elbow_smooth = smoother.update("elbow", elbow_raw, is_valid=elbow_vis)
 
-                    # 4. State Machine Repetition Tracker (only if calibration done)
+                    # 4. State Machine & Rules Evaluation (if calibrated)
                     if calibrator.calibrated_data.is_calibrated:
                         new_rep = state_machine.update(
                             current_angle=abduction_smooth,
@@ -187,11 +156,33 @@ def main():
                             current_shrug=shrug_smooth,
                             current_elbow=elbow_smooth,
                         )
+
+                        # Generate real-time French coaching cue
+                        live_cue = rules_engine.evaluate_live_frame(
+                            current_angle=abduction_smooth,
+                            current_lean=lean_smooth,
+                            current_shrug=shrug_smooth,
+                            current_elbow=elbow_smooth,
+                            current_phase=state_machine.current_phase,
+                        )
+
+                        # Evaluate completed repetition
                         if new_rep is not None:
-                            last_completed_rep = new_rep
-                            print(f"[REPETITION TERMINEE] #{new_rep.rep_index} ({new_rep.arm.upper()})")
-                            print(f"  Angle Max : {new_rep.peak_abduction_deg:.1f} deg | Cible atteinte : {new_rep.target_reached}")
-                            print(f"  Duree montee : {new_rep.concentric_duration_sec:.2f}s | Maintien : {new_rep.hold_duration_sec:.2f}s | Descente : {new_rep.eccentric_duration_sec:.2f}s")
+                            last_eval = rules_engine.evaluate_repetition(new_rep)
+                            print("\n" + "=" * 55)
+                            print(f"[REPETITION #{last_eval.rep_index}] Statut : {last_eval.status_label}")
+                            print(f"  Bras : {last_eval.arm.upper()} | Angle Max : {last_eval.metrics.peak_abduction_deg:.1f} deg")
+                            print(f"  Chronometrage : Montee={last_eval.metrics.concentric_duration_sec:.1f}s | "
+                                  f"Maintien={last_eval.metrics.hold_duration_sec:.1f}s | "
+                                  f"Descente={last_eval.metrics.eccentric_duration_sec:.1f}s")
+                            if last_eval.is_correct:
+                                print("  Diagnostic : Execution parfaite !")
+                            else:
+                                print("  Remarques / Corrections :")
+                                for r in last_eval.reasons:
+                                    print(f"    - {r}")
+                            print(f"  Progression de la seance : {rules_engine.session.correct_repetitions}/{rules_engine.session.total_repetitions} correctes ({rules_engine.session.success_rate_percent:.1f}%)")
+                            print("=" * 55)
 
                     # 5. Render Skeleton
                     frame = draw_skeleton(
@@ -207,28 +198,36 @@ def main():
                         trunk_lean_deg=lean_smooth,
                         shrug_ratio=shrug_smooth,
                         elbow_angle_deg=elbow_smooth,
-                        max_lean=max_lean,
-                        max_shrug=max_shrug,
-                        min_elbow=min_elbow,
+                        max_lean=config.compensation.max_trunk_lean_deg,
+                        max_shrug=config.compensation.max_shrug_ratio,
+                        min_elbow=config.compensation.min_elbow_angle_deg,
                     )
+
+                    # 7. Render Live Coaching Cue Banner
+                    frame = draw_live_feedback(frame=frame, feedback=live_cue)
+
                 else:
                     status = "Recherche patient..."
                     smoother.reset_all()
 
-                # 7. Render HUD
+                # 8. Render HUD
                 frame = draw_hud(
                     frame=frame,
                     selected_arm=selected_arm,
                     abduction_angle=smoother.get_smoother("abduction").value,
                     fps=fps,
                     status_text=status,
-                    target_range=(target_min, target_max),
+                    target_range=(config.abduction.target_min_deg, config.abduction.target_max_deg),
                     is_calibrated=calibrator.calibrated_data.is_calibrated,
                     calibration_progress=calib_progress,
                     rep_count=state_machine.rep_count,
                     current_phase=state_machine.current_phase,
-                    last_completed_rep=last_completed_rep,
+                    last_evaluation=last_eval,
                 )
+
+                # 9. Session Summary Card (if toggled)
+                if show_summary_modal:
+                    frame = draw_session_summary_modal(frame, rules_engine.session)
 
                 cv2.imshow(window_name, frame)
 
@@ -251,11 +250,30 @@ def main():
                 elif key in [ord("c"), ord("C")]:
                     calibrator.start(arm=selected_arm)
                     print("[INFO] Recalibration demarree...")
+                elif key in [ord("s"), ord("S")]:
+                    show_summary_modal = not show_summary_modal
+                    print(f"[INFO] Bilan de seance : {'Affiche' if show_summary_modal else 'Masque'}")
                 elif key in [ord("m"), ord("M")]:
                     cap.mirror = not cap.mirror
                     print(f"[INFO] Mode miroir : {'Active' if cap.mirror else 'Desactive'}")
 
             cv2.destroyAllWindows()
+
+            # Print terminal end-of-session summary
+            print("\n" + "=" * 55)
+            print("  BILAN FINAL DE LA SEANCE DE REHABILITATION")
+            print("=" * 55)
+            print(f"Total repetitions  : {rules_engine.session.total_repetitions}")
+            print(f"Repetitions valides : {rules_engine.session.correct_repetitions}")
+            print(f"Taux de reussite   : {rules_engine.session.success_rate_percent:.1f} %")
+            errs = rules_engine.session.get_most_frequent_errors()
+            if errs:
+                print("Compensations posturales les plus frequentes :")
+                for err, count in errs:
+                    print(f"  - {err} ({count}x)")
+            else:
+                print("Excellente posture globale !")
+            print("=" * 55)
 
     except RuntimeError as e:
         print(f"[ERREUR MATERIELLE] {e}")
