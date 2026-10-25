@@ -1,0 +1,14 @@
+# Computer Vision & Real-time Pose Tracking (Modern MediaPipe Tasks API)
+mediapipe>=0.10.14
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# Configuration & Data Processing
+PyYAML>=6.0
+pandas>=2.0.0
+
+# User Interface
+streamlit>=1.30.0
+
+# Testing & Quality Assurance
+pytest>=7.4.0

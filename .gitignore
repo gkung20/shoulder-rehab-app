@@ -1,0 +1,22 @@
+# Python environment & cache
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Binary MediaPipe models (downloaded via models/download_models.py)
+models/*.task
+
+# Local clips and annotations (Strictly private, local patient data only)
+data/recorded_clips/*
+!data/recorded_clips/.gitkeep
+data/annotations/*
+!data/annotations/.gitkeep
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

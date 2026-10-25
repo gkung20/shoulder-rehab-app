@@ -1,0 +1,68 @@
+# ==============================================================================
+# SHOULDER REHABILITATION CONFIGURATION: ACTIVE SHOULDER ABDUCTION
+# ==============================================================================
+# NOTE FOR ENGINEERING & CLINICAL EVALUATION:
+# All values below are PLACEHOLDERS designed for prototype testing and algorithm
+# verification. They are NOT clinically validated medical thresholds.
+# Every parameter must be reviewed and confirmed with a qualified physiotherapist
+# before any testing with clinical subjects or actual patients.
+# ==============================================================================
+
+exercise_metadata:
+  name: "Active Shoulder Abduction"
+  french_name: "Abduction Active de l'Epaule"
+  plane_of_motion: "frontal"
+  target_joint: "glenohumeral"
+
+# ------------------------------------------------------------------------------
+# Biomechanical Thresholds (PLACEHOLDERS)
+# ------------------------------------------------------------------------------
+thresholds:
+  # Abduction Angle (degrees)
+  # Measured between the trunk spine vector (shoulder -> hip) and arm vector (shoulder -> elbow/wrist).
+  abduction:
+    rest_threshold_deg: 25.0       # Arm is considered at resting position below this angle
+    rising_start_deg: 32.0         # Threshold to enter RISING phase (hysteresis threshold)
+    target_min_deg: 80.0           # Minimum elevation required for repetition target completion
+    target_max_deg: 100.0          # Upper bound for standard horizontal abduction range
+    overshoot_warn_deg: 110.0      # Warning if patient raises too high without authorization
+
+  # Compensatory Movements
+  compensation:
+    # Trunk Lean (degrees deviation from gravity vertical)
+    max_trunk_lean_deg: 10.0       # Torso line relative to vertical (compensation flag if exceeded)
+
+    # Shoulder Shrug (normalized ratio)
+    # Ratio = (current_ear_shoulder_dist - baseline_ear_shoulder_dist) / baseline_shoulder_width
+    max_shrug_ratio: 0.12          # Elevation of clavicle/shoulder toward ear relative to baseline
+
+    # Elbow Extension (degrees)
+    # 180 degrees corresponds to a completely straight arm.
+    min_elbow_angle_deg: 155.0     # Arm must remain extended (flagged if elbow bends excessively)
+
+  # Phase Timing & Speed (seconds)
+  timing:
+    min_concentric_time_sec: 1.0   # Raising speed minimum (guards against ballistic/jerking movement)
+    max_concentric_time_sec: 4.5   # Raising speed maximum (guards against stalled motion)
+    min_hold_time_sec: 0.5         # Required isometric hold duration at peak abduction
+    min_eccentric_time_sec: 1.0    # Lowering speed minimum (controlled descent)
+    max_eccentric_time_sec: 4.5    # Lowering speed maximum
+
+# ------------------------------------------------------------------------------
+# Signal Processing & Landmark Quality
+# ------------------------------------------------------------------------------
+filtering:
+  # Exponential Moving Average smoothing factor: smoothed = alpha * raw + (1 - alpha) * prev
+  # Lower values = smoother but more lag; higher values = more responsive but more jitter.
+  ema_alpha: 0.35
+  # Minimum visibility score from MediaPipe Pose landmark output (range 0.0 - 1.0)
+  min_landmark_visibility: 0.60
+
+# ------------------------------------------------------------------------------
+# Calibration Settings
+# ------------------------------------------------------------------------------
+calibration:
+  # Duration in seconds the user stands upright in neutral rest position
+  duration_sec: 3.0
+  # Stability check: standard deviation of shoulder position must stay below this pixel ratio
+  max_variance_ratio: 0.05
