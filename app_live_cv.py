@@ -1,13 +1,14 @@
-"""Phase 2: Real-time active shoulder abduction tracking with calibration and compensation monitoring.
+"""Phase 3: Real-time active shoulder abduction tracking with repetition counting and FSM.
 
 Features:
-- Automatic baseline calibration (neutral rest position).
-- Exponential Moving Average (EMA) angle smoothing.
-- Real-time compensation monitoring: Trunk Lean, Shoulder Shrug, and Elbow Extension.
-- Interactive keyboard controls: [L], [R], [C], [M], [Q].
+- Finite State Machine with hysteresis: REST -> RISING -> HOLD -> LOWERING.
+- False repetition rejection (guards against micro-jitter and aborted motions).
+- Temporal tracking: concentric (raising), isometric (hold), and eccentric (lowering) durations.
+- Postural compensation capture per repetition.
 """
 
 import sys
+import time
 import cv2
 import yaml
 from pathlib import Path
@@ -25,6 +26,7 @@ from src.geometry import (
 )
 from src.pose_detector import PoseDetector
 from src.smoothing import MultiMetricSmoother
+from src.state_machine import RepetitionStateMachine, ExercisePhase, RepetitionMetrics
 from src.visualizer import draw_hud, draw_skeleton, draw_compensations_panel
 
 
@@ -34,11 +36,19 @@ def load_config() -> dict:
     if not config_path.exists():
         return {
             "thresholds": {
-                "abduction": {"target_min_deg": 80.0, "target_max_deg": 100.0},
+                "abduction": {
+                    "rest_threshold_deg": 25.0,
+                    "rising_start_deg": 32.0,
+                    "target_min_deg": 80.0,
+                    "target_max_deg": 100.0,
+                },
                 "compensation": {
                     "max_trunk_lean_deg": 10.0,
                     "max_shrug_ratio": 0.12,
                     "min_elbow_angle_deg": 155.0,
+                },
+                "timing": {
+                    "min_hold_time_sec": 0.5,
                 },
             },
             "filtering": {"ema_alpha": 0.35, "min_landmark_visibility": 0.6},
@@ -51,7 +61,7 @@ def load_config() -> dict:
 def main():
     print("=" * 65)
     print("  KINESITHERAPIE VIRTUELLE - ABDUCTION ACTIVE DE L'EPAULE")
-    print("  Phase 2 : Calibration & Mesure des Compensations")
+    print("  Phase 3 : Machine a Etats Finis & Comptage des Repetitions")
     print("=" * 65)
     print("Controles clavier:")
     print("  [L] : Suivre le bras GAUCHE")
@@ -62,11 +72,19 @@ def main():
     print("=" * 65)
 
     config = load_config()
-    target_min = config.get("thresholds", {}).get("abduction", {}).get("target_min_deg", 80.0)
-    target_max = config.get("thresholds", {}).get("abduction", {}).get("target_max_deg", 100.0)
-    max_lean = config.get("thresholds", {}).get("compensation", {}).get("max_trunk_lean_deg", 10.0)
-    max_shrug = config.get("thresholds", {}).get("compensation", {}).get("max_shrug_ratio", 0.12)
-    min_elbow = config.get("thresholds", {}).get("compensation", {}).get("min_elbow_angle_deg", 155.0)
+    abd_cfg = config.get("thresholds", {}).get("abduction", {})
+    rest_thresh = abd_cfg.get("rest_threshold_deg", 25.0)
+    rising_start = abd_cfg.get("rising_start_deg", 32.0)
+    target_min = abd_cfg.get("target_min_deg", 80.0)
+    target_max = abd_cfg.get("target_max_deg", 100.0)
+
+    comp_cfg = config.get("thresholds", {}).get("compensation", {})
+    max_lean = comp_cfg.get("max_trunk_lean_deg", 10.0)
+    max_shrug = comp_cfg.get("max_shrug_ratio", 0.12)
+    min_elbow = comp_cfg.get("min_elbow_angle_deg", 155.0)
+
+    timing_cfg = config.get("thresholds", {}).get("timing", {})
+    min_hold = timing_cfg.get("min_hold_time_sec", 0.5)
 
     ema_alpha = config.get("filtering", {}).get("ema_alpha", 0.35)
     min_vis = config.get("filtering", {}).get("min_landmark_visibility", 0.6)
@@ -79,16 +97,26 @@ def main():
 
     smoother = MultiMetricSmoother(alpha=ema_alpha)
     calibrator = CalibrationManager(duration_sec=calib_duration, max_variance_ratio=calib_variance)
+    state_machine = RepetitionStateMachine(
+        rest_threshold_deg=rest_thresh,
+        rising_start_deg=rising_start,
+        target_min_deg=target_min,
+        target_max_deg=target_max,
+        min_hold_time_sec=min_hold,
+        arm=selected_arm,
+    )
+
+    last_completed_rep = None
 
     try:
         with VideoCaptureManager(camera_index=0, width=640, height=480, mirror=mirror_mode) as cap, \
              PoseDetector() as detector:
 
-            window_name = "Rehabilitation Epaule - Phase 2"
+            window_name = "Rehabilitation Epaule - Phase 3"
             cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
             cv2.resizeWindow(window_name, 1024, 768)
 
-            # Auto-trigger calibration at startup
+            # Auto-trigger initial calibration
             calibrator.start(arm=selected_arm)
 
             while True:
@@ -96,6 +124,8 @@ def main():
                 if not success or frame is None:
                     print("[AVERTISSEMENT] Perte de capture video.")
                     break
+
+                now_sec = timestamp_ms / 1000.0
 
                 # Detect landmarks
                 landmarks = detector.detect(frame, timestamp_ms=timestamp_ms)
@@ -114,15 +144,11 @@ def main():
                     left_hip = landmarks[PoseLandmarkIndex.LEFT_HIP]
                     right_hip = landmarks[PoseLandmarkIndex.RIGHT_HIP]
 
-                    # 1. Calibration update if currently in calibration state
+                    # 1. Calibration update
                     if calibrator.is_calibrating:
                         completed, msg = calibrator.update(landmarks, arm=selected_arm)
                         calib_progress = calibrator.get_progress()
                         status = msg
-                        if completed:
-                            print(f"[OK] {msg} pour le bras {selected_arm.upper()}")
-                            print(f"     Largeur epaules : {calibrator.calibrated_data.baseline_shoulder_width:.3f}")
-                            print(f"     Distance oreille-epaule : {calibrator.calibrated_data.baseline_ear_shoulder_dist:.3f}")
                     else:
                         status = "Suivi actif"
 
@@ -152,7 +178,22 @@ def main():
                     shrug_smooth = smoother.update("shrug", shrug_raw, is_valid=(shrug_raw is not None))
                     elbow_smooth = smoother.update("elbow", elbow_raw, is_valid=elbow_vis)
 
-                    # 4. Render skeleton
+                    # 4. State Machine Repetition Tracker (only if calibration done)
+                    if calibrator.calibrated_data.is_calibrated:
+                        new_rep = state_machine.update(
+                            current_angle=abduction_smooth,
+                            timestamp_sec=now_sec,
+                            current_lean=lean_smooth,
+                            current_shrug=shrug_smooth,
+                            current_elbow=elbow_smooth,
+                        )
+                        if new_rep is not None:
+                            last_completed_rep = new_rep
+                            print(f"[REPETITION TERMINEE] #{new_rep.rep_index} ({new_rep.arm.upper()})")
+                            print(f"  Angle Max : {new_rep.peak_abduction_deg:.1f} deg | Cible atteinte : {new_rep.target_reached}")
+                            print(f"  Duree montee : {new_rep.concentric_duration_sec:.2f}s | Maintien : {new_rep.hold_duration_sec:.2f}s | Descente : {new_rep.eccentric_duration_sec:.2f}s")
+
+                    # 5. Render Skeleton
                     frame = draw_skeleton(
                         frame=frame,
                         landmarks=landmarks,
@@ -160,7 +201,7 @@ def main():
                         abduction_angle=abduction_smooth,
                     )
 
-                    # 5. Render compensations panel
+                    # 6. Render Compensations Panel
                     frame = draw_compensations_panel(
                         frame=frame,
                         trunk_lean_deg=lean_smooth,
@@ -174,7 +215,7 @@ def main():
                     status = "Recherche patient..."
                     smoother.reset_all()
 
-                # 6. Render HUD
+                # 7. Render HUD
                 frame = draw_hud(
                     frame=frame,
                     selected_arm=selected_arm,
@@ -184,6 +225,9 @@ def main():
                     target_range=(target_min, target_max),
                     is_calibrated=calibrator.calibrated_data.is_calibrated,
                     calibration_progress=calib_progress,
+                    rep_count=state_machine.rep_count,
+                    current_phase=state_machine.current_phase,
+                    last_completed_rep=last_completed_rep,
                 )
 
                 cv2.imshow(window_name, frame)
@@ -195,11 +239,13 @@ def main():
                 elif key in [ord("l"), ord("L")]:
                     selected_arm = "left"
                     smoother.reset_all()
+                    state_machine.set_arm("left")
                     calibrator.start(arm=selected_arm)
                     print("[INFO] Bras actif : GAUCHE (recalibration lancee)")
                 elif key in [ord("r"), ord("R")]:
                     selected_arm = "right"
                     smoother.reset_all()
+                    state_machine.set_arm("right")
                     calibrator.start(arm=selected_arm)
                     print("[INFO] Bras actif : DROIT (recalibration lancee)")
                 elif key in [ord("c"), ord("C")]:

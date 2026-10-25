@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 
 from src.geometry import Point2D, PoseLandmarkIndex
+from src.state_machine import ExercisePhase, RepetitionMetrics
 
 # Standard colors in BGR format
 COLOR_ACTIVE_ARM = (0, 230, 115)       # Vibrant Spring Green
@@ -15,6 +16,14 @@ COLOR_HUD_BG = (28, 28, 28)            # Dark Slate
 COLOR_WARNING = (30, 70, 255)          # Bright Red/Orange
 COLOR_ALERT = (0, 165, 255)            # Amber
 COLOR_TEXT = (245, 245, 245)           # Off-white
+
+# French translation for exercise phases
+PHASE_FRENCH = {
+    ExercisePhase.REST: "REPOS",
+    ExercisePhase.RISING: "MONTEE (CONCENTRIQUE)",
+    ExercisePhase.HOLD: "MAINTIEN (ISOMETRIQUE)",
+    ExercisePhase.LOWERING: "DESCENTE (ECCENTRIQUE)",
+}
 
 UPPER_BODY_CONNECTIONS = [
     (PoseLandmarkIndex.LEFT_SHOULDER, PoseLandmarkIndex.RIGHT_SHOULDER),
@@ -33,10 +42,13 @@ def draw_hud(
     target_range: Tuple[float, float] = (80.0, 100.0),
     is_calibrated: bool = False,
     calibration_progress: Optional[Tuple[float, float]] = None,
+    rep_count: int = 0,
+    current_phase: ExercisePhase = ExercisePhase.REST,
+    last_completed_rep: Optional[RepetitionMetrics] = None,
 ) -> np.ndarray:
-    """Draw the top HUD banner with real-time status and calibration alerts."""
+    """Draw the top HUD banner with real-time status, rep counters, and phase indicators."""
     h, w = frame.shape[:2]
-    hud_height = 80
+    hud_height = 85
 
     # Semi-transparent dark overlay banner
     overlay = frame.copy()
@@ -48,19 +60,23 @@ def draw_hud(
     cv2.putText(frame, disclaimer, (15, h - 12), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (120, 120, 230), 1, cv2.LINE_AA)
 
     # 1. Active Arm Indicator & Controls
-    arm_label = f"BRAS ACTIF : {selected_arm.upper()}"
-    cv2.putText(frame, arm_label, (20, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 200), 2, cv2.LINE_AA)
+    arm_label = f"BRAS : {selected_arm.upper()}"
+    cv2.putText(frame, arm_label, (20, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 200), 2, cv2.LINE_AA)
     calib_badge = "[CALIBRE]" if is_calibrated else "[NON CALIBRE]"
     badge_color = (0, 230, 115) if is_calibrated else (0, 140, 255)
-    cv2.putText(frame, calib_badge, (200, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, badge_color, 2, cv2.LINE_AA)
+    cv2.putText(frame, calib_badge, (170, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.45, badge_color, 2, cv2.LINE_AA)
+
+    phase_label = PHASE_FRENCH.get(current_phase, current_phase.value)
+    phase_color = (0, 220, 255) if current_phase != ExercisePhase.REST else (180, 180, 180)
+    cv2.putText(frame, f"PHASE : {phase_label}", (20, 52), cv2.FONT_HERSHEY_SIMPLEX, 0.48, phase_color, 1, cv2.LINE_AA)
 
     cv2.putText(
         frame,
         "[L] Gauche  |  [R] Droite  |  [C] Calibrer  |  [M] Miroir  |  [Q] Quitter",
-        (20, 56),
+        (20, 74),
         cv2.FONT_HERSHEY_SIMPLEX,
-        0.38,
-        (180, 180, 180),
+        0.36,
+        (160, 160, 160),
         1,
         cv2.LINE_AA,
     )
@@ -71,36 +87,49 @@ def draw_hud(
         in_target = target_range[0] <= abduction_angle <= target_range[1]
         angle_color = (0, 255, 120) if in_target else (255, 255, 255)
 
-        cv2.putText(frame, "ABDUCTION :", (w // 2 - 130, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1, cv2.LINE_AA)
-        cv2.putText(frame, angle_str, (w // 2 + 10, 36), cv2.FONT_HERSHEY_SIMPLEX, 0.9, angle_color, 2, cv2.LINE_AA)
+        cv2.putText(frame, "ABDUCTION :", (w // 2 - 120, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1, cv2.LINE_AA)
+        cv2.putText(frame, angle_str, (w // 2 + 10, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.85, angle_color, 2, cv2.LINE_AA)
 
         target_str = f"Cible: [{int(target_range[0])} deg - {int(target_range[1])} deg]"
-        cv2.putText(frame, target_str, (w // 2 - 130, 58), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (160, 160, 160), 1, cv2.LINE_AA)
+        cv2.putText(frame, target_str, (w // 2 - 120, 56), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (160, 160, 160), 1, cv2.LINE_AA)
     else:
-        cv2.putText(frame, "RECHERCHE DU PATIENT...", (w // 2 - 120, 42), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (50, 100, 255), 2, cv2.LINE_AA)
+        cv2.putText(frame, "RECHERCHE DU PATIENT...", (w // 2 - 120, 36), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (50, 100, 255), 2, cv2.LINE_AA)
 
-    # 3. Telemetry (FPS & Status)
-    cv2.putText(frame, f"FPS: {fps:4.1f}", (w - 110, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1, cv2.LINE_AA)
-    cv2.putText(frame, status_text, (w - 240, 58), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (100, 220, 100), 1, cv2.LINE_AA)
+    # 3. Repetition Counter Badge
+    rep_badge_x = w - 180
+    cv2.putText(frame, f"REPETITIONS : {rep_count}", (rep_badge_x, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 255, 255), 2, cv2.LINE_AA)
+    cv2.putText(frame, f"FPS: {fps:4.1f}", (w - 90, 56), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (180, 180, 180), 1, cv2.LINE_AA)
+    cv2.putText(frame, status_text, (rep_badge_x, 74), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (100, 220, 100), 1, cv2.LINE_AA)
 
     # 4. Calibration Progress Bar overlay
     if calibration_progress is not None:
         ratio, remaining = calibration_progress
-        bar_w = 300
-        bar_h = 20
+        bar_w = 320
+        bar_h = 22
         bx = (w - bar_w) // 2
-        by = hud_height + 20
+        by = hud_height + 15
 
-        # Background
         cv2.rectangle(frame, (bx - 5, by - 5), (bx + bar_w + 5, by + bar_h + 25), (30, 30, 30), -1)
-        # Empty bar
         cv2.rectangle(frame, (bx, by), (bx + bar_w, by + bar_h), (80, 80, 80), -1)
-        # Filled bar
         fill_w = int(bar_w * ratio)
         cv2.rectangle(frame, (bx, by), (bx + fill_w, by + bar_h), (0, 220, 255), -1)
 
         calib_txt = f"CALIBRATION : restez immobile... {remaining:3.1f}s"
         cv2.putText(frame, calib_txt, (bx, by + bar_h + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 255), 1, cv2.LINE_AA)
+
+    # 5. Last Repetition Result Banner
+    if last_completed_rep is not None:
+        last_box_y = h - 55
+        cv2.rectangle(frame, (15, last_box_y), (w - 15, last_box_y + 35), (25, 25, 25), -1)
+        cv2.rectangle(frame, (15, last_box_y), (w - 15, last_box_y + 35), (60, 60, 60), 1)
+        res_txt = (
+            f"Derniere Repetition #{last_completed_rep.rep_index} ({last_completed_rep.arm.upper()}): "
+            f"Angle Max = {last_completed_rep.peak_abduction_deg:.1f} deg | "
+            f"Montee = {last_completed_rep.concentric_duration_sec:.1f}s | "
+            f"Maintien = {last_completed_rep.hold_duration_sec:.1f}s | "
+            f"Descente = {last_completed_rep.eccentric_duration_sec:.1f}s"
+        )
+        cv2.putText(frame, res_txt, (25, last_box_y + 22), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 200), 1, cv2.LINE_AA)
 
     return frame
 
