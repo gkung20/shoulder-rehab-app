@@ -171,16 +171,18 @@ def draw_compensations_panel(
     trunk_lean_deg: Optional[float],
     shrug_ratio: Optional[float],
     elbow_angle_deg: Optional[float],
+    drift_angle_deg: Optional[float] = None,
     max_lean: float = 10.0,
     max_shrug: float = 0.12,
     min_elbow: float = 155.0,
+    max_drift: float = 25.0,
 ) -> np.ndarray:
-    """Draw a side panel displaying the three key compensatory movement metrics."""
+    """Draw a side panel displaying the four key compensatory movement metrics."""
     h, w = frame.shape[:2]
     panel_x = 20
     panel_y = 100
-    panel_w = 260
-    panel_h = 105
+    panel_w = 265
+    panel_h = 130
 
     overlay = frame.copy()
     cv2.rectangle(overlay, (panel_x, panel_y), (panel_x + panel_w, panel_y + panel_h), (25, 25, 25), -1)
@@ -215,6 +217,15 @@ def draw_compensations_panel(
         if elbow_flag:
             elbow_str += " [!]"
         cv2.putText(frame, elbow_str, (panel_x + 10, panel_y + 92), cv2.FONT_HERSHEY_SIMPLEX, 0.40, elbow_color, 1, cv2.LINE_AA)
+
+    # 4. Out-of-Plane Forward Drift
+    if drift_angle_deg is not None:
+        drift_flag = drift_angle_deg > max_drift
+        drift_color = COLOR_WARNING if drift_flag else (120, 255, 120)
+        drift_str = f"Derive vers l'avant: {drift_angle_deg:4.1f} deg"
+        if drift_flag:
+            drift_str += " [!]"
+        cv2.putText(frame, drift_str, (panel_x + 10, panel_y + 116), cv2.FONT_HERSHEY_SIMPLEX, 0.40, drift_color, 1, cv2.LINE_AA)
 
     return frame
 

@@ -12,7 +12,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import numpy as np
 
-from src.geometry import Point2D, PoseLandmarkIndex
+from src.geometry import Point2D, Point3D, PoseLandmarkIndex
 
 
 class PoseDetector:
@@ -45,6 +45,7 @@ class PoseDetector:
         self.model_path = model_path
         self.running_mode = running_mode
         self._last_timestamp_ms = 0
+        self.last_world_landmarks: Optional[List[Point3D]] = None
 
         base_options = python.BaseOptions(model_asset_path=str(self.model_path))
         options = vision.PoseLandmarkerOptions(
@@ -91,7 +92,23 @@ class PoseDetector:
             result = self.landmarker.detect(mp_image)
 
         if not result.pose_landmarks or len(result.pose_landmarks) == 0:
+            self.last_world_landmarks = None
             return None
+
+        # Extract 3D metric world landmarks (in meters) if available
+        if getattr(result, "pose_world_landmarks", None) and len(result.pose_world_landmarks) > 0:
+            world_lms = result.pose_world_landmarks[0]
+            self.last_world_landmarks = [
+                Point3D(
+                    x=float(lm.x),
+                    y=float(lm.y),
+                    z=float(lm.z),
+                    visibility=float(getattr(lm, "visibility", 1.0) or 1.0),
+                )
+                for lm in world_lms
+            ]
+        else:
+            self.last_world_landmarks = None
 
         # Extract primary person landmarks (33 points)
         person_landmarks = result.pose_landmarks[0]
@@ -134,6 +151,37 @@ class PoseDetector:
             raise ValueError(f"Unknown arm selection '{arm}'. Must be 'left' or 'right'.")
 
         return shoulder, hip, elbow, wrist, ear
+
+    @staticmethod
+    def get_drift_landmarks(
+        world_landmarks: List[Point3D], arm: str = "right"
+    ) -> Tuple[Point3D, Point3D, Point3D, Point3D, Point3D]:
+        """Extract the 5 3D landmarks required for anterior drift evaluation.
+
+        Args:
+            world_landmarks: 33 Point3D world landmarks in metric units.
+            arm: 'left' or 'right'.
+
+        Returns:
+            Tuple of (active_shoulder, other_shoulder, active_hip, other_hip, active_elbow).
+        """
+        arm_lower = arm.lower().strip()
+        if arm_lower == "left":
+            act_sh = world_landmarks[PoseLandmarkIndex.LEFT_SHOULDER]
+            oth_sh = world_landmarks[PoseLandmarkIndex.RIGHT_SHOULDER]
+            act_hip = world_landmarks[PoseLandmarkIndex.LEFT_HIP]
+            oth_hip = world_landmarks[PoseLandmarkIndex.RIGHT_HIP]
+            act_el = world_landmarks[PoseLandmarkIndex.LEFT_ELBOW]
+        elif arm_lower == "right":
+            act_sh = world_landmarks[PoseLandmarkIndex.RIGHT_SHOULDER]
+            oth_sh = world_landmarks[PoseLandmarkIndex.LEFT_SHOULDER]
+            act_hip = world_landmarks[PoseLandmarkIndex.RIGHT_HIP]
+            oth_hip = world_landmarks[PoseLandmarkIndex.LEFT_HIP]
+            act_el = world_landmarks[PoseLandmarkIndex.RIGHT_ELBOW]
+        else:
+            raise ValueError(f"Unknown arm selection '{arm}'. Must be 'left' or 'right'.")
+
+        return act_sh, oth_sh, act_hip, oth_hip, act_el
 
     def close(self) -> None:
         """Release underlying MediaPipe landmarker resources."""

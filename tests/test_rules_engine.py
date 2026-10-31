@@ -12,7 +12,12 @@ def test_engine():
     """Create a RulesEngine with explicit test thresholds."""
     config = ExerciseConfig(
         abduction=AbductionThresholds(target_min_deg=80.0, target_max_deg=100.0, overshoot_warn_deg=110.0),
-        compensation=CompensationThresholds(max_trunk_lean_deg=10.0, max_shrug_ratio=0.12, min_elbow_angle_deg=155.0),
+        compensation=CompensationThresholds(
+            max_trunk_lean_deg=10.0,
+            max_shrug_ratio=0.12,
+            min_elbow_angle_deg=155.0,
+            max_anterior_drift_deg=25.0,
+        ),
         timing=TimingThresholds(min_concentric_time_sec=1.0, min_hold_time_sec=0.5, min_eccentric_time_sec=1.0),
         filtering=None,
         calibration=None,
@@ -148,6 +153,28 @@ def test_session_summary_aggregation(test_engine):
     assert most_common[0][1] == 2  # Happened twice
 
 
+def test_evaluate_repetition_with_anterior_drift(test_engine):
+    """Verify 3D forward arm drift flags an error in French."""
+    rep = RepetitionMetrics(
+        rep_index=6,
+        arm="right",
+        peak_abduction_deg=88.0,
+        target_reached=True,
+        concentric_duration_sec=2.0,
+        hold_duration_sec=0.8,
+        eccentric_duration_sec=1.5,
+        total_duration_sec=4.3,
+        max_trunk_lean_deg=3.0,
+        max_shrug_ratio=0.03,
+        min_elbow_angle_deg=170.0,
+        max_drift_deg=32.0,          # > 25.0 deg EXCEEDED
+    )
+
+    eval_result = test_engine.evaluate_repetition(rep)
+    assert eval_result.is_correct is False
+    assert any("avant" in r.lower() or "hors plan" in r.lower() for r in eval_result.reasons)
+
+
 def test_live_feedback_cues(test_engine):
     """Verify real-time live cues in French."""
     # Shrug warning takes highest priority
@@ -163,6 +190,18 @@ def test_live_feedback_cues(test_engine):
     )
     assert fb_lean.level == FeedbackLevel.WARNING
     assert "tronc droit" in fb_lean.message.lower()
+
+    # Anterior drift warning
+    fb_drift = test_engine.evaluate_live_frame(
+        current_angle=60.0,
+        current_lean=2.0,
+        current_shrug=0.02,
+        current_elbow=175.0,
+        current_phase=ExercisePhase.RISING,
+        current_drift=35.0,
+    )
+    assert fb_drift.level == FeedbackLevel.WARNING
+    assert "plan du corps" in fb_drift.message.lower()
 
     # Apex hold encouragement
     fb_hold = test_engine.evaluate_live_frame(

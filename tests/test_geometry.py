@@ -5,6 +5,7 @@ import pytest
 
 from src.geometry import (
     Point2D,
+    Point3D,
     calculate_angle_2d,
     calculate_abduction_angle,
     calculate_elbow_angle,
@@ -12,6 +13,7 @@ from src.geometry import (
     get_midpoint,
     calculate_trunk_lean,
     calculate_shoulder_shrug,
+    calculate_anterior_drift_angle,
     are_landmarks_visible,
 )
 
@@ -140,3 +142,40 @@ def test_are_landmarks_visible():
 
     assert are_landmarks_visible([lm1, lm2], min_visibility=0.6) is True
     assert are_landmarks_visible([lm1, lm2, lm3], min_visibility=0.6) is False
+
+
+def test_calculate_anterior_drift_3d():
+    """Verify 3D out-of-plane forward drift calculations relative to coronal plane."""
+    r_sh = Point3D(x=-0.2, y=0.5, z=0.0)
+    l_sh = Point3D(x=0.2, y=0.5, z=0.0)
+    r_hip = Point3D(x=-0.15, y=0.0, z=0.0)
+    l_hip = Point3D(x=0.15, y=0.0, z=0.0)
+
+    # 1. Pure coronal horizontal abduction (no forward or backward drift)
+    el_coronal = Point3D(x=-0.5, y=0.5, z=0.0)
+    drift_coronal = calculate_anterior_drift_angle(r_sh, l_sh, r_hip, l_hip, el_coronal)
+    assert pytest.approx(drift_coronal, abs=1e-3) == 0.0
+
+    # 2. 30 degrees anterior drift towards camera
+    # Arm length = 0.3, dx = -0.3 * cos(30 deg), dz = 0.3 * sin(30 deg)
+    el_30deg = Point3D(
+        x=-0.2 - (0.3 * math.cos(math.radians(30.0))),
+        y=0.5,
+        z=0.3 * math.sin(math.radians(30.0)),
+    )
+    drift_30 = calculate_anterior_drift_angle(r_sh, l_sh, r_hip, l_hip, el_30deg)
+    assert pytest.approx(drift_30, abs=1e-2) == 30.0
+
+    # 3. Pure forward flexion (90 deg out of plane)
+    el_forward = Point3D(x=-0.2, y=0.5, z=0.3)
+    drift_90 = calculate_anterior_drift_angle(r_sh, l_sh, r_hip, l_hip, el_forward)
+    assert pytest.approx(drift_90, abs=1e-2) == 90.0
+
+    # 4. Rest position (arm hanging straight down along torso)
+    el_rest = Point3D(x=-0.2, y=0.2, z=0.0)
+    drift_rest = calculate_anterior_drift_angle(r_sh, l_sh, r_hip, l_hip, el_rest)
+    assert pytest.approx(drift_rest, abs=1e-3) == 0.0
+
+    # 5. Degenerate zero-length arm
+    drift_degen = calculate_anterior_drift_angle(r_sh, l_sh, r_hip, l_hip, r_sh)
+    assert drift_degen == 0.0

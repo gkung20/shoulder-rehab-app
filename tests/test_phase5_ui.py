@@ -20,6 +20,7 @@ def test_streamlit_config_dynamic_construction():
     assert cfg.abduction.target_min_deg == 85.0
     assert cfg.compensation.max_trunk_lean_deg == 8.0
     assert cfg.compensation.max_shrug_ratio == 0.10
+    assert cfg.compensation.max_anterior_drift_deg == 25.0
 
 
 def test_streamlit_session_log_to_dataframe():

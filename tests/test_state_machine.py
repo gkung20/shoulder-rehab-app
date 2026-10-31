@@ -151,22 +151,23 @@ def test_telemetry_captures_compensatory_extrema():
     sm.update(current_angle=10.0, timestamp_sec=t, current_lean=2.0, current_shrug=0.02, current_elbow=178.0)
     t += 0.5
 
-    # Raising with compensatory shrug and lean
-    sm.update(current_angle=40.0, timestamp_sec=t, current_lean=12.5, current_shrug=0.18, current_elbow=160.0)
+    # Raising with compensatory shrug and lean and forward drift
+    sm.update(current_angle=40.0, timestamp_sec=t, current_lean=12.5, current_shrug=0.18, current_elbow=160.0, current_drift=28.5)
     t += 0.5
 
     # Apex: elbow bends to 142 deg
-    sm.update(current_angle=88.0, timestamp_sec=t, current_lean=14.0, current_shrug=0.15, current_elbow=142.0)
+    sm.update(current_angle=88.0, timestamp_sec=t, current_lean=14.0, current_shrug=0.15, current_elbow=142.0, current_drift=15.0)
     t += 1.0
 
     # Lowering
-    sm.update(current_angle=50.0, timestamp_sec=t, current_lean=5.0, current_shrug=0.05, current_elbow=170.0)
+    sm.update(current_angle=50.0, timestamp_sec=t, current_lean=5.0, current_shrug=0.05, current_elbow=170.0, current_drift=8.0)
     t += 0.5
 
     # Return to rest
-    final_rep = sm.update(current_angle=15.0, timestamp_sec=t, current_lean=1.0, current_shrug=0.01, current_elbow=175.0)
+    final_rep = sm.update(current_angle=15.0, timestamp_sec=t, current_lean=1.0, current_shrug=0.01, current_elbow=175.0, current_drift=0.0)
 
     assert final_rep is not None
     assert pytest.approx(final_rep.max_trunk_lean_deg, abs=1e-1) == 14.0
     assert pytest.approx(final_rep.max_shrug_ratio, abs=1e-3) == 0.18
     assert pytest.approx(final_rep.min_elbow_angle_deg, abs=1e-1) == 142.0
+    assert pytest.approx(final_rep.max_drift_deg, abs=1e-1) == 28.5

@@ -56,7 +56,17 @@ def run_simulation():
             "lean": 2.0,
             "shrug": 0.02,
             "elbow": 140.0,  # < 155.0 deg
+            "drift": 0.0,
             "step_dt": 0.15,  # Too fast
+        },
+        {
+            "name": "Scenario 4 : Compensation 3D (Projection du bras vers l'avant - Antepulsion)",
+            "angles": [12, 28, 48, 68, 88, 88, 86, 62, 42, 16],
+            "lean": 2.0,
+            "shrug": 0.03,
+            "elbow": 175.0,
+            "drift": 34.0,  # > 25.0 deg (hors plan 3D)
+            "step_dt": 0.35,
         },
     ]
 
@@ -76,6 +86,7 @@ def run_simulation():
                 current_lean=sc["lean"],
                 current_shrug=sc["shrug"],
                 current_elbow=sc["elbow"],
+                current_drift=sc.get("drift", 0.0),
             )
 
             # 2. Live coaching cue
@@ -85,6 +96,7 @@ def run_simulation():
                 current_shrug=sc["shrug"],
                 current_elbow=sc["elbow"],
                 current_phase=sm.current_phase,
+                current_drift=sc.get("drift", 0.0),
             )
 
             print(f"  [t={sim_time:4.2f}s | Phase: {sm.current_phase.value:<8} | Angle: {angle:3.0f} deg] -> Retransmission : {cue.message}")

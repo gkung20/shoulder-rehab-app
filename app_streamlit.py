@@ -32,6 +32,7 @@ from src.geometry import (
     calculate_trunk_lean,
     calculate_shoulder_shrug,
     calculate_elbow_angle,
+    calculate_anterior_drift_angle,
     are_landmarks_visible,
 )
 from src.pose_detector import PoseDetector
@@ -115,6 +116,7 @@ max_shrug_ratio = max_shrug_pct / 100.0
 
 max_lean_deg = st.sidebar.slider("Inclinaison max du tronc (°)", 3.0, 25.0, 10.0, 1.0)
 min_elbow_deg = st.sidebar.slider("Extension coude min (°)", 130.0, 180.0, 155.0, 5.0)
+max_drift_deg = st.sidebar.slider("Dérive max vers l'avant (hors plan 3D) (°)", 10.0, 45.0, 25.0, 1.0)
 
 # 4. Phase Speeds
 st.sidebar.subheader("Chronométrie (Contrôle moteur)")
@@ -133,6 +135,7 @@ current_config = ExerciseConfig(
         max_trunk_lean_deg=max_lean_deg,
         max_shrug_ratio=max_shrug_ratio,
         min_elbow_angle_deg=min_elbow_deg,
+        max_anterior_drift_deg=max_drift_deg,
     ),
     timing=TimingThresholds(
         min_concentric_time_sec=min_concentric_s,
@@ -237,6 +240,7 @@ with tab_live:
                     lean_raw = None
                     shrug_raw = None
                     elbow_raw = None
+                    drift_raw = None
                     calib_progress = None
                     live_cue = None
 
@@ -276,11 +280,30 @@ with tab_live:
                                 baseline_shoulder_width=calibrator.calibrated_data.baseline_shoulder_width,
                             )
 
+                        # 3D Out-of-Plane Anterior Drift (world landmarks)
+                        drift_vis = False
+                        if detector.last_world_landmarks is not None and len(detector.last_world_landmarks) >= 33:
+                            act_sh_3d, oth_sh_3d, act_hip_3d, oth_hip_3d, act_el_3d = detector.get_drift_landmarks(
+                                detector.last_world_landmarks, arm=selected_arm
+                            )
+                            drift_vis = are_landmarks_visible(
+                                [act_sh_3d, oth_sh_3d, act_hip_3d, oth_hip_3d, act_el_3d], min_visibility=min_v
+                            )
+                            if drift_vis:
+                                drift_raw = calculate_anterior_drift_angle(
+                                    active_shoulder=act_sh_3d,
+                                    other_shoulder=oth_sh_3d,
+                                    active_hip=act_hip_3d,
+                                    other_hip=oth_hip_3d,
+                                    active_elbow=act_el_3d,
+                                )
+
                         # 3. Smoothing
                         abduction_smooth = smoother.update("abduction", abduction_raw, is_valid=vis_ok)
                         lean_smooth = smoother.update("lean", lean_raw, is_valid=trunk_vis)
                         shrug_smooth = smoother.update("shrug", shrug_raw, is_valid=(shrug_raw is not None))
                         elbow_smooth = smoother.update("elbow", elbow_raw, is_valid=elbow_vis)
+                        drift_smooth = smoother.update("drift", drift_raw, is_valid=drift_vis)
 
                         # 4. State Machine & Rules Evaluation
                         if calibrator.calibrated_data.is_calibrated:
@@ -290,6 +313,7 @@ with tab_live:
                                 current_lean=lean_smooth,
                                 current_shrug=shrug_smooth,
                                 current_elbow=elbow_smooth,
+                                current_drift=drift_smooth,
                             )
 
                             live_cue = st.session_state.rules_engine.evaluate_live_frame(
@@ -298,6 +322,7 @@ with tab_live:
                                 current_shrug=shrug_smooth,
                                 current_elbow=elbow_smooth,
                                 current_phase=state_machine.current_phase,
+                                current_drift=drift_smooth,
                             )
 
                             if new_rep is not None:
@@ -314,6 +339,7 @@ with tab_live:
                                     "inclinaison_max_deg": round(last_eval.metrics.max_trunk_lean_deg, 1),
                                     "haussement_max_pct": round(last_eval.metrics.max_shrug_ratio * 100, 1),
                                     "coude_min_deg": round(last_eval.metrics.min_elbow_angle_deg, 1),
+                                    "derive_max_deg": round(last_eval.metrics.max_drift_deg, 1),
                                     "remarques": "; ".join(last_eval.reasons) if last_eval.reasons else "Parfait",
                                 })
 
@@ -324,9 +350,11 @@ with tab_live:
                             trunk_lean_deg=lean_smooth,
                             shrug_ratio=shrug_smooth,
                             elbow_angle_deg=elbow_smooth,
+                            drift_angle_deg=drift_smooth,
                             max_lean=current_config.compensation.max_trunk_lean_deg,
                             max_shrug=current_config.compensation.max_shrug_ratio,
                             min_elbow=current_config.compensation.min_elbow_angle_deg,
+                            max_drift=current_config.compensation.max_anterior_drift_deg,
                         )
                         frame = draw_live_feedback(frame, live_cue)
 

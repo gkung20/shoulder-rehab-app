@@ -22,6 +22,7 @@ from src.geometry import (
     calculate_trunk_lean,
     calculate_shoulder_shrug,
     calculate_elbow_angle,
+    calculate_anterior_drift_angle,
     are_landmarks_visible,
 )
 from src.pose_detector import PoseDetector
@@ -100,6 +101,7 @@ def main():
                 lean_raw = None
                 shrug_raw = None
                 elbow_raw = None
+                drift_raw = None
                 status = "Pret"
                 calib_progress = None
                 live_cue = None
@@ -141,11 +143,30 @@ def main():
                             baseline_shoulder_width=calibrator.calibrated_data.baseline_shoulder_width,
                         )
 
+                    # 3D Out-of-Plane Anterior Drift (using metric world landmarks)
+                    drift_vis = False
+                    if detector.last_world_landmarks is not None and len(detector.last_world_landmarks) >= 33:
+                        act_sh_3d, oth_sh_3d, act_hip_3d, oth_hip_3d, act_el_3d = detector.get_drift_landmarks(
+                            detector.last_world_landmarks, arm=selected_arm
+                        )
+                        drift_vis = are_landmarks_visible(
+                            [act_sh_3d, oth_sh_3d, act_hip_3d, oth_hip_3d, act_el_3d], min_visibility=min_v
+                        )
+                        if drift_vis:
+                            drift_raw = calculate_anterior_drift_angle(
+                                active_shoulder=act_sh_3d,
+                                other_shoulder=oth_sh_3d,
+                                active_hip=act_hip_3d,
+                                other_hip=oth_hip_3d,
+                                active_elbow=act_el_3d,
+                            )
+
                     # 3. Apply EMA Smoothing
                     abduction_smooth = smoother.update("abduction", abduction_raw, is_valid=vis_ok)
                     lean_smooth = smoother.update("lean", lean_raw, is_valid=trunk_vis)
                     shrug_smooth = smoother.update("shrug", shrug_raw, is_valid=(shrug_raw is not None))
                     elbow_smooth = smoother.update("elbow", elbow_raw, is_valid=elbow_vis)
+                    drift_smooth = smoother.update("drift", drift_raw, is_valid=drift_vis)
 
                     # 4. State Machine & Rules Evaluation (if calibrated)
                     if calibrator.calibrated_data.is_calibrated:
@@ -155,6 +176,7 @@ def main():
                             current_lean=lean_smooth,
                             current_shrug=shrug_smooth,
                             current_elbow=elbow_smooth,
+                            current_drift=drift_smooth,
                         )
 
                         # Generate real-time French coaching cue
@@ -164,6 +186,7 @@ def main():
                             current_shrug=shrug_smooth,
                             current_elbow=elbow_smooth,
                             current_phase=state_machine.current_phase,
+                            current_drift=drift_smooth,
                         )
 
                         # Evaluate completed repetition
@@ -198,9 +221,11 @@ def main():
                         trunk_lean_deg=lean_smooth,
                         shrug_ratio=shrug_smooth,
                         elbow_angle_deg=elbow_smooth,
+                        drift_angle_deg=drift_smooth,
                         max_lean=config.compensation.max_trunk_lean_deg,
                         max_shrug=config.compensation.max_shrug_ratio,
                         min_elbow=config.compensation.min_elbow_angle_deg,
+                        max_drift=config.compensation.max_anterior_drift_deg,
                     )
 
                     # 7. Render Live Coaching Cue Banner

@@ -40,6 +40,10 @@ thresholds:
     # 180 degrees corresponds to a completely straight arm.
     min_elbow_angle_deg: 155.0     # Arm must remain extended (flagged if elbow bends excessively)
 
+    # 3D Out-of-Plane Forward Drift (degrees)
+    # Measured using MediaPipe world landmarks depth deviation from torso coronal plane.
+    max_anterior_drift_deg: 25.0   # Arm drifting forward into antépulsion/flexion (compensation if exceeded)
+
   # Phase Timing & Speed (seconds)
   timing:
     min_concentric_time_sec: 1.0   # Raising speed minimum (guards against ballistic/jerking movement)

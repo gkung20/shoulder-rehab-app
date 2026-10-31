@@ -31,6 +31,7 @@ class RepetitionMetrics:
     max_trunk_lean_deg: float
     max_shrug_ratio: float
     min_elbow_angle_deg: float
+    max_drift_deg: float = 0.0
 
 
 class RepetitionStateMachine:
@@ -81,6 +82,7 @@ class RepetitionStateMachine:
         self._max_lean: float = 0.0
         self._max_shrug: float = 0.0
         self._min_elbow: float = 180.0
+        self._max_drift: float = 0.0
 
     @property
     def rep_count(self) -> int:
@@ -103,6 +105,7 @@ class RepetitionStateMachine:
         self._max_lean = 0.0
         self._max_shrug = 0.0
         self._min_elbow = 180.0
+        self._max_drift = 0.0
 
     def reset_all(self) -> None:
         """Clear all counters and historical records."""
@@ -117,6 +120,7 @@ class RepetitionStateMachine:
         current_lean: Optional[float] = None,
         current_shrug: Optional[float] = None,
         current_elbow: Optional[float] = None,
+        current_drift: Optional[float] = None,
     ) -> Optional[RepetitionMetrics]:
         """Process one frame through the state machine.
 
@@ -126,6 +130,7 @@ class RepetitionStateMachine:
             current_lean: Current lateral trunk lean in degrees.
             current_shrug: Current normalized shoulder shrug ratio.
             current_elbow: Current elbow extension angle in degrees.
+            current_drift: Current 3D out-of-plane forward drift angle in degrees.
 
         Returns:
             A completed RepetitionMetrics instance if a repetition ended on this frame,
@@ -143,6 +148,8 @@ class RepetitionStateMachine:
                 self._max_shrug = max(self._max_shrug, current_shrug)
             if current_elbow is not None:
                 self._min_elbow = min(self._min_elbow, current_elbow)
+            if current_drift is not None:
+                self._max_drift = max(self._max_drift, current_drift)
 
         completed_record: Optional[RepetitionMetrics] = None
 
@@ -158,6 +165,10 @@ class RepetitionStateMachine:
                     self._max_lean = current_lean
                 if current_shrug is not None:
                     self._max_shrug = current_shrug
+                if current_elbow is not None:
+                    self._min_elbow = current_elbow
+                if current_drift is not None:
+                    self._max_drift = current_drift
                 if current_elbow is not None:
                     self._min_elbow = current_elbow if current_elbow is not None else 180.0
 
@@ -220,6 +231,7 @@ class RepetitionStateMachine:
                     max_trunk_lean_deg=self._max_lean,
                     max_shrug_ratio=self._max_shrug,
                     min_elbow_angle_deg=self._min_elbow,
+                    max_drift_deg=self._max_drift,
                 )
 
                 self.completed_reps.append(completed_record)

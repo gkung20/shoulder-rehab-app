@@ -7,7 +7,7 @@ projected onto the camera image plane. No external state or I/O is performed.
 from dataclasses import dataclass
 from enum import IntEnum
 import math
-from typing import Sequence, Tuple
+from typing import Sequence, Tuple, Union
 
 
 class PoseLandmarkIndex(IntEnum):
@@ -59,6 +59,15 @@ class Point2D:
         px = int(round(self.x * image_width))
         py = int(round(self.y * image_height))
         return px, py
+
+
+@dataclass(frozen=True)
+class Point3D:
+    """Represents a 3D landmark point with metric coordinates in meters."""
+    x: float
+    y: float
+    z: float
+    visibility: float = 1.0
 
 
 def calculate_angle_2d(p_vertex: Point2D, p1: Point2D, p2: Point2D) -> float:
@@ -234,14 +243,99 @@ def calculate_shoulder_shrug(
     return max(0.0, ratio)
 
 
-def are_landmarks_visible(landmarks: Sequence[Point2D], min_visibility: float = 0.5) -> bool:
+def are_landmarks_visible(landmarks: Sequence[Union[Point2D, Point3D]], min_visibility: float = 0.5) -> bool:
     """Check if all provided landmarks meet the minimum confidence threshold.
 
     Args:
-        landmarks: Sequence of Point2D objects to check.
+        landmarks: Sequence of Point2D or Point3D objects to check.
         min_visibility: Minimum acceptable visibility score [0.0, 1.0].
 
     Returns:
         True if every landmark has visibility >= min_visibility, False otherwise.
     """
     return all(lm.visibility >= min_visibility for lm in landmarks)
+
+
+def calculate_anterior_drift_angle(
+    active_shoulder: Point3D,
+    other_shoulder: Point3D,
+    active_hip: Point3D,
+    other_hip: Point3D,
+    active_elbow: Point3D,
+) -> float:
+    """Calculate the 3D out-of-plane forward drift angle (antepulsion) in degrees.
+
+    Uses 3D world coordinates (in meters) to determine the angle between the arm vector
+    (shoulder -> elbow) and the patient's anatomical coronal (frontal) plane.
+
+    The coronal plane is spanned by:
+      - Lateral vector (from active shoulder across to contralateral shoulder)
+      - Spine vector (from hips midpoint to shoulders midpoint)
+
+    The normal vector N to this plane is:
+      N = (Lateral x Spine) normalized
+
+    When the arm moves purely in the frontal plane, its projection along N is 0 (0 degrees).
+    If the arm drifts forward towards the camera (antepulsion / anterior flexion),
+    the out-of-plane deviation angle theta is:
+      theta = arcsin( |A . N| / ||A|| )
+
+    Args:
+        active_shoulder: 3D position of the exercising shoulder.
+        other_shoulder: 3D position of the opposite shoulder.
+        active_hip: 3D position of the active side hip.
+        other_hip: 3D position of the opposite side hip.
+        active_elbow: 3D position of the active side elbow.
+
+    Returns:
+        Drift angle in degrees in range [0.0, 90.0].
+        Returns 0.0 if vectors are degenerate or arm length is near zero.
+    """
+    # Lateral vector across shoulders
+    lat_x = other_shoulder.x - active_shoulder.x
+    lat_y = other_shoulder.y - active_shoulder.y
+    lat_z = other_shoulder.z - active_shoulder.z
+
+    # Midpoints
+    sh_mid_x = (active_shoulder.x + other_shoulder.x) / 2.0
+    sh_mid_y = (active_shoulder.y + other_shoulder.y) / 2.0
+    sh_mid_z = (active_shoulder.z + other_shoulder.z) / 2.0
+
+    hip_mid_x = (active_hip.x + other_hip.x) / 2.0
+    hip_mid_y = (active_hip.y + other_hip.y) / 2.0
+    hip_mid_z = (active_hip.z + other_hip.z) / 2.0
+
+    # Spine vector pointing upwards (hips -> shoulders)
+    spine_x = sh_mid_x - hip_mid_x
+    spine_y = sh_mid_y - hip_mid_y
+    spine_z = sh_mid_z - hip_mid_z
+
+    # Normal to coronal plane via 3D cross product: Lateral x Spine
+    nx = (lat_y * spine_z) - (lat_z * spine_y)
+    ny = (lat_z * spine_x) - (lat_x * spine_z)
+    nz = (lat_x * spine_y) - (lat_y * spine_x)
+
+    norm_n = math.sqrt(nx * nx + ny * ny + nz * nz)
+    if norm_n < 1e-7:
+        return 0.0
+
+    # Unit normal vector
+    nx /= norm_n
+    ny /= norm_n
+    nz /= norm_n
+
+    # Arm vector (active shoulder -> active elbow)
+    arm_x = active_elbow.x - active_shoulder.x
+    arm_y = active_elbow.y - active_shoulder.y
+    arm_z = active_elbow.z - active_shoulder.z
+
+    arm_len = math.sqrt(arm_x * arm_x + arm_y * arm_y + arm_z * arm_z)
+    if arm_len < 1e-7:
+        return 0.0
+
+    # Projection along plane normal
+    dot = (arm_x * nx) + (arm_y * ny) + (arm_z * nz)
+    sin_theta = abs(dot) / arm_len
+    clamped_sin = max(-1.0, min(1.0, sin_theta))
+    theta_rad = math.asin(clamped_sin)
+    return min(90.0, max(0.0, math.degrees(theta_rad)))

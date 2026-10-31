@@ -35,6 +35,7 @@ ERR_OVERSHOOT_ROM = "Elevation excessive"
 ERR_SHOULDER_SHRUG = "Haussement d'epaule excessif"
 ERR_TRUNK_LEAN = "Inclinaison du tronc"
 ERR_ELBOW_BENT = "Coude plie"
+ERR_ANTERIOR_DRIFT = "Bras projete vers l'avant (hors plan)"
 ERR_FAST_CONCENTRIC = "Montee trop rapide"
 ERR_SHORT_HOLD = "Maintien trop court"
 ERR_FAST_ECCENTRIC = "Descente trop rapide"
@@ -111,6 +112,7 @@ class RulesEngine:
         current_shrug: Optional[float],
         current_elbow: Optional[float],
         current_phase: ExercisePhase,
+        current_drift: Optional[float] = None,
     ) -> LiveFeedback:
         """Generate real-time live French feedback cue for the current video frame.
 
@@ -128,6 +130,9 @@ class RulesEngine:
 
         if current_elbow is not None and current_elbow < self.config.compensation.min_elbow_angle_deg:
             return LiveFeedback("Gardez le bras tendu !", FeedbackLevel.WARNING)
+
+        if current_drift is not None and current_drift > self.config.compensation.max_anterior_drift_deg:
+            return LiveFeedback("Gardez le bras dans le plan du corps !", FeedbackLevel.WARNING)
 
         # 2. Phase-Specific Real-time Guidance
         if current_phase == ExercisePhase.REST:
@@ -189,7 +194,14 @@ class RulesEngine:
                 detail=f"Coude plie pendant le geste ({rep.min_elbow_angle_deg:.1f} deg < {self.config.compensation.min_elbow_angle_deg:.0f} deg)",
             ))
 
-        # 5. Timing / Speed Controls
+        # 5. Out-of-Plane Forward Drift Compensation
+        if rep.max_drift_deg > self.config.compensation.max_anterior_drift_deg:
+            errors.append(ClinicalError(
+                category=ERR_ANTERIOR_DRIFT,
+                detail=f"Bras projete vers l'avant ({rep.max_drift_deg:.1f} deg > {self.config.compensation.max_anterior_drift_deg:.0f} deg)",
+            ))
+
+        # 6. Timing / Speed Controls
         if rep.concentric_duration_sec < self.config.timing.min_concentric_time_sec:
             errors.append(ClinicalError(
                 category=ERR_FAST_CONCENTRIC,
