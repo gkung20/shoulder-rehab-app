@@ -40,6 +40,7 @@ from src.rules_engine import RulesEngine, RepetitionEvaluation, FeedbackLevel
 from src.smoothing import MultiMetricSmoother
 from src.state_machine import RepetitionStateMachine, ExercisePhase
 from src.audio_feedback import AudioCoach
+from src.report_generator import generate_clinical_pdf_report
 from src.visualizer import (
     draw_hud,
     draw_skeleton,
@@ -452,13 +453,32 @@ with tab_summary:
         df_logs = pd.DataFrame(st.session_state.repetition_logs)
         st.dataframe(df_logs, use_container_width=True, hide_index=True)
 
-        # CSV Download Button
-        csv_buffer = io.StringIO()
-        df_logs.to_csv(csv_buffer, index=False)
-        st.download_button(
-            label="📥 Télécharger le rapport de séance (CSV)",
-            data=csv_buffer.getvalue(),
-            file_name=f"bilan_abduction_epaule_{time.strftime('%Y%m%d_%H%M%S')}.csv",
-            mime="text/csv",
-            use_container_width=True,
-        )
+        # Export Buttons: CSV & Formatted Clinical PDF
+        st.markdown("### Exportations des Données de Santé")
+        col_exp1, col_exp2 = st.columns(2)
+        with col_exp1:
+            csv_buffer = io.StringIO()
+            df_logs.to_csv(csv_buffer, index=False)
+            st.download_button(
+                label="📥 Télécharger le rapport brut (CSV)",
+                data=csv_buffer.getvalue(),
+                file_name=f"bilan_abduction_epaule_{time.strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+
+        with col_exp2:
+            pdf_bytes = generate_clinical_pdf_report(
+                session_summary=session,
+                arm=selected_arm,
+                target_min=target_min_deg,
+                target_max=target_max_deg,
+                patient_id=f"PATIENT-{selected_arm.upper()}",
+            )
+            st.download_button(
+                label="📄 Télécharger le Bilan Kinésithérapique (PDF)",
+                data=pdf_bytes,
+                file_name=f"bilan_kinesitherapie_{selected_arm}_{time.strftime('%Y%m%d_%H%M%S')}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )

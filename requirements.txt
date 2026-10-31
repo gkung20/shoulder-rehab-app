@@ -7,9 +7,10 @@ numpy>=1.24.0
 PyYAML>=6.0
 pandas>=2.0.0
 
-# User Interface & Audio Feedback
+# User Interface, Audio Feedback & Clinical PDF Reporting
 streamlit>=1.30.0
 pyttsx3>=2.90
+reportlab>=4.0.0
 
 # Testing & Quality Assurance
 pytest>=7.4.0
