@@ -46,6 +46,7 @@ def draw_hud(
     rep_count: int = 0,
     current_phase: ExercisePhase = ExercisePhase.REST,
     last_evaluation: Optional[RepetitionEvaluation] = None,
+    audio_enabled: bool = True,
 ) -> np.ndarray:
     """Draw the top HUD banner with real-time status, rep counters, and phase indicators."""
     h, w = frame.shape[:2]
@@ -65,13 +66,17 @@ def draw_hud(
     badge_color = (0, 230, 115) if is_calibrated else (0, 140, 255)
     cv2.putText(frame, calib_badge, (170, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.45, badge_color, 2, cv2.LINE_AA)
 
+    audio_badge = "[AUDIO: ON]" if audio_enabled else "[AUDIO: MUET]"
+    audio_color = (0, 230, 115) if audio_enabled else (140, 140, 140)
+    cv2.putText(frame, audio_badge, (285, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.45, audio_color, 2, cv2.LINE_AA)
+
     phase_label = PHASE_FRENCH.get(current_phase, current_phase.value)
     phase_color = (0, 220, 255) if current_phase != ExercisePhase.REST else (180, 180, 180)
     cv2.putText(frame, f"PHASE : {phase_label}", (20, 52), cv2.FONT_HERSHEY_SIMPLEX, 0.48, phase_color, 1, cv2.LINE_AA)
 
     cv2.putText(
         frame,
-        "[L] Gauche | [R] Droite | [C] Calibrer | [S] Bilan | [M] Miroir | [Q] Quitter",
+        "[L] Gauche | [R] Droite | [C] Calibrer | [A] Audio | [S] Bilan | [M] Miroir | [Q] Quitter",
         (20, 74),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.36,

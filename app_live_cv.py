@@ -29,6 +29,7 @@ from src.pose_detector import PoseDetector
 from src.rules_engine import RulesEngine, LiveFeedback, RepetitionEvaluation
 from src.smoothing import MultiMetricSmoother
 from src.state_machine import RepetitionStateMachine, ExercisePhase
+from src.audio_feedback import AudioCoach
 from src.visualizer import (
     draw_hud,
     draw_skeleton,
@@ -47,6 +48,7 @@ def main():
     print("  [L] : Suivre le bras GAUCHE")
     print("  [R] : Suivre le bras DROIT")
     print("  [C] : Lancer la CALIBRATION (restez immobile 3 secondes)")
+    print("  [A] : Activer / Desactiver le coaching vocal francais (TTS)")
     print("  [S] : Afficher / Masquer le BILAN DE LA SEANCE")
     print("  [M] : Activer / Desactiver le mode miroir")
     print("  [Q] ou [ESC] : Quitter l'application")
@@ -78,7 +80,8 @@ def main():
 
     try:
         with VideoCaptureManager(camera_index=0, width=640, height=480, mirror=mirror_mode) as cap, \
-             PoseDetector() as detector:
+             PoseDetector() as detector, \
+             AudioCoach(enabled=True) as audio_coach:
 
             window_name = "Rehabilitation Epaule - Phase 4"
             cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
@@ -188,10 +191,12 @@ def main():
                             current_phase=state_machine.current_phase,
                             current_drift=drift_smooth,
                         )
+                        audio_coach.speak_cue(live_cue)
 
                         # Evaluate completed repetition
                         if new_rep is not None:
                             last_eval = rules_engine.evaluate_repetition(new_rep)
+                            audio_coach.speak_evaluation(last_eval)
                             print("\n" + "=" * 55)
                             print(f"[REPETITION #{last_eval.rep_index}] Statut : {last_eval.status_label}")
                             print(f"  Bras : {last_eval.arm.upper()} | Angle Max : {last_eval.metrics.peak_abduction_deg:.1f} deg")
@@ -248,6 +253,7 @@ def main():
                     rep_count=state_machine.rep_count,
                     current_phase=state_machine.current_phase,
                     last_evaluation=last_eval,
+                    audio_enabled=audio_coach.enabled,
                 )
 
                 # 9. Session Summary Card (if toggled)
@@ -260,6 +266,9 @@ def main():
                 if key in [ord("q"), ord("Q"), 27]:
                     print("\nArret demande par l'utilisateur.")
                     break
+                elif key in [ord("a"), ord("A")]:
+                    new_state = audio_coach.toggle()
+                    print(f"[INFO] Coaching vocal : {'ACTIVE' if new_state else 'DESACTIVE'}")
                 elif key in [ord("l"), ord("L")]:
                     selected_arm = "left"
                     smoother.reset_all()

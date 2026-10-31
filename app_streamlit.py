@@ -39,6 +39,7 @@ from src.pose_detector import PoseDetector
 from src.rules_engine import RulesEngine, RepetitionEvaluation, FeedbackLevel
 from src.smoothing import MultiMetricSmoother
 from src.state_machine import RepetitionStateMachine, ExercisePhase
+from src.audio_feedback import AudioCoach
 from src.visualizer import (
     draw_hud,
     draw_skeleton,
@@ -63,6 +64,8 @@ def initialize_session_state():
         st.session_state.repetition_logs = []
     if "is_running" not in st.session_state:
         st.session_state.is_running = False
+    if "audio_coach" not in st.session_state:
+        st.session_state.audio_coach = AudioCoach(enabled=True)
 
 
 initialize_session_state()
@@ -98,6 +101,11 @@ selected_arm_label = st.sidebar.radio(
     index=0,
 )
 selected_arm = "right" if selected_arm_label == "Bras Droit" else "left"
+
+# Audio Coach Toggle
+enable_tts = st.sidebar.checkbox("🔊 Coaching vocal français (TTS)", value=True)
+if "audio_coach" in st.session_state and st.session_state.audio_coach is not None:
+    st.session_state.audio_coach.enabled = enable_tts
 
 # 2. Target Range Sliders
 st.sidebar.subheader("Amplitude Cible (Abduction)")
@@ -324,9 +332,13 @@ with tab_live:
                                 current_phase=state_machine.current_phase,
                                 current_drift=drift_smooth,
                             )
+                            if "audio_coach" in st.session_state and st.session_state.audio_coach:
+                                st.session_state.audio_coach.speak_cue(live_cue)
 
                             if new_rep is not None:
                                 last_eval = st.session_state.rules_engine.evaluate_repetition(new_rep)
+                                if "audio_coach" in st.session_state and st.session_state.audio_coach:
+                                    st.session_state.audio_coach.speak_evaluation(last_eval)
                                 # Append to persistent log
                                 st.session_state.repetition_logs.append({
                                     "rep_index": last_eval.rep_index,
@@ -371,6 +383,7 @@ with tab_live:
                         rep_count=state_machine.rep_count,
                         current_phase=state_machine.current_phase,
                         last_evaluation=last_eval,
+                        audio_enabled=enable_tts,
                     )
 
                     # Render frame in Streamlit
