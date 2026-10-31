@@ -339,3 +339,93 @@ def calculate_anterior_drift_angle(
     clamped_sin = max(-1.0, min(1.0, sin_theta))
     theta_rad = math.asin(clamped_sin)
     return min(90.0, max(0.0, math.degrees(theta_rad)))
+
+
+def calculate_trajectory_smoothness(
+    timestamps: Sequence[float],
+    angles: Sequence[float],
+) -> Tuple[float, float]:
+    """Calculate motor control trajectory smoothness using Normalized Jerk.
+
+    In motor control neuroscience (Flash & Hogan, minimum-jerk theory), healthy
+    and coordinated limb movements follow a smooth bell-shaped velocity profile
+    minimizing the third derivative of displacement (jerk = d^3 theta / dt^3).
+    Pathological, fatigued, or compensatory movements exhibit hesitation,
+    sudden accelerations, and motor tremors (high jerk).
+
+    Formula (Dimensionless Normalized Jerk):
+        Normalized Jerk = sqrt( 0.5 * T^5 * (1/N * sum(jerk^2)) / (delta_theta)^2 )
+
+    Args:
+        timestamps: Sequence of monotonically increasing timestamps in seconds.
+        angles: Sequence of joint angles corresponding to timestamps.
+
+    Returns:
+        Tuple of (normalized_jerk: float, fluidity_score_percent: float).
+        fluidity_score_percent is mapped to [0.0, 100.0]%:
+          - ~90-100%: smooth, coordinated physiological movement.
+          - < 60%: jerky, trembling, or compensatory sub-movements.
+    """
+    if len(timestamps) < 5 or len(angles) < 5:
+        return 0.0, 100.0
+
+    t = [float(x) for x in timestamps]
+    a = [float(x) for x in angles]
+
+    duration = t[-1] - t[0]
+    if duration <= 0.15:
+        return 0.0, 100.0
+
+    # 1. Angular velocity: omega = da / dt
+    vel = []
+    t_vel = []
+    for i in range(len(t) - 1):
+        dt = t[i + 1] - t[i]
+        if dt > 1e-5:
+            vel.append((a[i + 1] - a[i]) / dt)
+            t_vel.append((t[i] + t[i + 1]) / 2.0)
+
+    if len(vel) < 3:
+        return 0.0, 100.0
+
+    # 2. Angular acceleration: alpha = d(omega) / dt
+    acc = []
+    t_acc = []
+    for i in range(len(vel) - 1):
+        dt = t_vel[i + 1] - t_vel[i]
+        if dt > 1e-5:
+            acc.append((vel[i + 1] - vel[i]) / dt)
+            t_acc.append((t_vel[i] + t_vel[i + 1]) / 2.0)
+
+    if len(acc) < 2:
+        return 0.0, 100.0
+
+    # 3. Angular jerk: j = d(alpha) / dt
+    jerk_sq_sum = 0.0
+    jerk_count = 0
+    for i in range(len(acc) - 1):
+        dt = t_acc[i + 1] - t_acc[i]
+        if dt > 1e-5:
+            j = (acc[i + 1] - acc[i]) / dt
+            jerk_sq_sum += j * j
+            jerk_count += 1
+
+    if jerk_count == 0:
+        return 0.0, 100.0
+
+    mean_sq_jerk = jerk_sq_sum / jerk_count
+
+    # Amplitude normalization (guarding against divide-by-zero on micro-movements)
+    amplitude = max(abs(max(a) - min(a)), 15.0)
+
+    # Dimensionless Normalized Jerk
+    norm_jerk = math.sqrt(0.5 * (duration ** 5) * mean_sq_jerk / (amplitude ** 2))
+
+    # Sigmoid mapping to 0-100% Fluidity Score
+    # Typical smooth minimum-jerk trajectory has norm_jerk ~ 10-30
+    # Jerky movements (>80) decline rapidly towards 0%
+    exponent = (norm_jerk - 60.0) / 20.0
+    clamped_exp = max(-20.0, min(20.0, exponent))
+    fluidity_score = 100.0 / (1.0 + math.exp(clamped_exp))
+
+    return round(float(norm_jerk), 2), round(max(0.0, min(100.0, fluidity_score)), 1)

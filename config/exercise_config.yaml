@@ -44,6 +44,10 @@ thresholds:
     # Measured using MediaPipe world landmarks depth deviation from torso coronal plane.
     max_anterior_drift_deg: 25.0   # Arm drifting forward into antépulsion/flexion (compensation if exceeded)
 
+    # Motor Smoothness & Fluidity Score (percentage)
+    # Derived from Normalized Jerk (third derivative of angular displacement).
+    min_fluidity_pct: 60.0         # Threshold below which movement is flagged as jerky or fatigued
+
   # Phase Timing & Speed (seconds)
   timing:
     min_concentric_time_sec: 1.0   # Raising speed minimum (guards against ballistic/jerking movement)

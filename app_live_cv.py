@@ -202,7 +202,8 @@ def main():
                             print(f"  Bras : {last_eval.arm.upper()} | Angle Max : {last_eval.metrics.peak_abduction_deg:.1f} deg")
                             print(f"  Chronometrage : Montee={last_eval.metrics.concentric_duration_sec:.1f}s | "
                                   f"Maintien={last_eval.metrics.hold_duration_sec:.1f}s | "
-                                  f"Descente={last_eval.metrics.eccentric_duration_sec:.1f}s")
+                                  f"Descente={last_eval.metrics.eccentric_duration_sec:.1f}s | "
+                                  f"Fluidite={last_eval.metrics.fluidity_score_pct:.1f}%")
                             if last_eval.is_correct:
                                 print("  Diagnostic : Execution parfaite !")
                             else:

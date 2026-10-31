@@ -36,6 +36,7 @@ ERR_SHOULDER_SHRUG = "Haussement d'epaule excessif"
 ERR_TRUNK_LEAN = "Inclinaison du tronc"
 ERR_ELBOW_BENT = "Coude plie"
 ERR_ANTERIOR_DRIFT = "Bras projete vers l'avant (hors plan)"
+ERR_JERKY_MOVEMENT = "Mouvement saccade (manque de fluidite)"
 ERR_FAST_CONCENTRIC = "Montee trop rapide"
 ERR_SHORT_HOLD = "Maintien trop court"
 ERR_FAST_ECCENTRIC = "Descente trop rapide"
@@ -201,7 +202,14 @@ class RulesEngine:
                 detail=f"Bras projete vers l'avant ({rep.max_drift_deg:.1f} deg > {self.config.compensation.max_anterior_drift_deg:.0f} deg)",
             ))
 
-        # 6. Timing / Speed Controls
+        # 6. Motor Control Fluidity (Smoothness / Normalized Jerk)
+        if rep.fluidity_score_pct < self.config.compensation.min_fluidity_pct:
+            errors.append(ClinicalError(
+                category=ERR_JERKY_MOVEMENT,
+                detail=f"Mouvement saccade ({rep.fluidity_score_pct:.1f}% < {self.config.compensation.min_fluidity_pct:.0f}%)",
+            ))
+
+        # 7. Timing / Speed Controls
         if rep.concentric_duration_sec < self.config.timing.min_concentric_time_sec:
             errors.append(ClinicalError(
                 category=ERR_FAST_CONCENTRIC,

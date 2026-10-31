@@ -251,25 +251,30 @@ def generate_clinical_pdf_report(
 
     if evals:
         peak_angles = [e.metrics.peak_abduction_deg for e in evals if e.metrics]
+        fluid_scores = [e.metrics.fluidity_score_pct for e in evals if e.metrics]
         mean_rom = np.mean(peak_angles) if peak_angles else 0.0
+        mean_fluid = np.mean(fluid_scores) if fluid_scores else 100.0
     else:
         mean_rom = 0.0
+        mean_fluid = 100.0
 
     kpi_data = [
         [
             Paragraph("<b>Répétitions Totales</b>", style_meta_label),
-            Paragraph("<b>Répétitions Conformes</b>", style_meta_label),
-            Paragraph("<b>Taux de Réussite</b>", style_meta_label),
-            Paragraph("<b>Amplitude Moyenne</b>", style_meta_label),
+            Paragraph("<b>Conformes</b>", style_meta_label),
+            Paragraph("<b>Taux Réussite</b>", style_meta_label),
+            Paragraph("<b>ROM Moyenne</b>", style_meta_label),
+            Paragraph("<b>Fluidité Motrice</b>", style_meta_label),
         ],
         [
-            Paragraph(f"<font size=13 color='#0d47a1'><b>{total_reps}</b></font>", style_tbl_cell),
-            Paragraph(f"<font size=13 color='#2e7d32'><b>{correct_reps}</b></font>", style_tbl_cell),
-            Paragraph(f"<font size=13 color='#0d47a1'><b>{success_rate:.1f} %</b></font>", style_tbl_cell),
-            Paragraph(f"<font size=13 color='#0d47a1'><b>{mean_rom:.1f} °</b></font>", style_tbl_cell),
+            Paragraph(f"<font size=12 color='#0d47a1'><b>{total_reps}</b></font>", style_tbl_cell),
+            Paragraph(f"<font size=12 color='#2e7d32'><b>{correct_reps}</b></font>", style_tbl_cell),
+            Paragraph(f"<font size=12 color='#0d47a1'><b>{success_rate:.1f} %</b></font>", style_tbl_cell),
+            Paragraph(f"<font size=12 color='#0d47a1'><b>{mean_rom:.1f} °</b></font>", style_tbl_cell),
+            Paragraph(f"<font size=12 color='#00796b'><b>{mean_fluid:.1f} %</b></font>", style_tbl_cell),
         ]
     ]
-    tbl_kpi = Table(kpi_data, colWidths=[130, 130, 130, 130])
+    tbl_kpi = Table(kpi_data, colWidths=[104, 104, 104, 104, 104])
     tbl_kpi.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e3f2fd")),
         ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#ffffff")),
@@ -295,6 +300,7 @@ def generate_clinical_pdf_report(
             Paragraph("<b>#</b>", style_tbl_header),
             Paragraph("<b>Statut</b>", style_tbl_header),
             Paragraph("<b>ROM Max</b>", style_tbl_header),
+            Paragraph("<b>Fluidité</b>", style_tbl_header),
             Paragraph("<b>Montée</b>", style_tbl_header),
             Paragraph("<b>Maintien</b>", style_tbl_header),
             Paragraph("<b>Descente</b>", style_tbl_header),
@@ -308,20 +314,21 @@ def generate_clinical_pdf_report(
         status_text = f"<font color='{status_color}'><b>{ev.status_label}</b></font>"
 
         reasons_text = "; ".join(ev.reasons) if ev.reasons else "Conforme aux prescriptions"
-        if len(reasons_text) > 60:
-            reasons_text = reasons_text[:57] + "..."
+        if len(reasons_text) > 55:
+            reasons_text = reasons_text[:52] + "..."
 
         table_rows.append([
             Paragraph(str(ev.rep_index), style_tbl_cell),
             Paragraph(status_text, style_tbl_cell),
             Paragraph(f"{m.peak_abduction_deg:.1f}°" if m else "-", style_tbl_cell),
+            Paragraph(f"{m.fluidity_score_pct:.0f}%" if m else "-", style_tbl_cell),
             Paragraph(f"{m.concentric_duration_sec:.1f}s" if m else "-", style_tbl_cell),
             Paragraph(f"{m.hold_duration_sec:.1f}s" if m else "-", style_tbl_cell),
             Paragraph(f"{m.eccentric_duration_sec:.1f}s" if m else "-", style_tbl_cell),
             Paragraph(reasons_text, style_tbl_cell),
         ])
 
-    tbl_reps = Table(table_rows, colWidths=[24, 66, 52, 45, 45, 48, 240])
+    tbl_reps = Table(table_rows, colWidths=[20, 64, 48, 44, 42, 42, 44, 216])
     tbl_style = [
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0d47a1")),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cfd8dc")),

@@ -17,6 +17,7 @@ def test_engine():
             max_shrug_ratio=0.12,
             min_elbow_angle_deg=155.0,
             max_anterior_drift_deg=25.0,
+            min_fluidity_pct=60.0,
         ),
         timing=TimingThresholds(min_concentric_time_sec=1.0, min_hold_time_sec=0.5, min_eccentric_time_sec=1.0),
         filtering=None,
@@ -173,6 +174,29 @@ def test_evaluate_repetition_with_anterior_drift(test_engine):
     eval_result = test_engine.evaluate_repetition(rep)
     assert eval_result.is_correct is False
     assert any("avant" in r.lower() or "hors plan" in r.lower() for r in eval_result.reasons)
+
+
+def test_evaluate_repetition_with_jerky_motion(test_engine):
+    """Verify lack of motor smoothness / jerky movement flags an error."""
+    rep = RepetitionMetrics(
+        rep_index=7,
+        arm="right",
+        peak_abduction_deg=88.0,
+        target_reached=True,
+        concentric_duration_sec=2.0,
+        hold_duration_sec=0.8,
+        eccentric_duration_sec=1.5,
+        total_duration_sec=4.3,
+        max_trunk_lean_deg=3.0,
+        max_shrug_ratio=0.03,
+        min_elbow_angle_deg=170.0,
+        max_drift_deg=5.0,
+        fluidity_score_pct=35.0,     # < 60% EXCEEDED
+    )
+
+    eval_result = test_engine.evaluate_repetition(rep)
+    assert eval_result.is_correct is False
+    assert any("saccade" in r.lower() or "fluidite" in r.lower() for r in eval_result.reasons)
 
 
 def test_live_feedback_cues(test_engine):

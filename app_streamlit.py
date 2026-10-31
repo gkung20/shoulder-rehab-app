@@ -126,6 +126,7 @@ max_shrug_ratio = max_shrug_pct / 100.0
 max_lean_deg = st.sidebar.slider("Inclinaison max du tronc (°)", 3.0, 25.0, 10.0, 1.0)
 min_elbow_deg = st.sidebar.slider("Extension coude min (°)", 130.0, 180.0, 155.0, 5.0)
 max_drift_deg = st.sidebar.slider("Dérive max vers l'avant (hors plan 3D) (°)", 10.0, 45.0, 25.0, 1.0)
+min_fluidity_pct = st.sidebar.slider("Fluidité motrice min (%)", 30.0, 90.0, 60.0, 5.0)
 
 # 4. Phase Speeds
 st.sidebar.subheader("Chronométrie (Contrôle moteur)")
@@ -145,6 +146,7 @@ current_config = ExerciseConfig(
         max_shrug_ratio=max_shrug_ratio,
         min_elbow_angle_deg=min_elbow_deg,
         max_anterior_drift_deg=max_drift_deg,
+        min_fluidity_pct=min_fluidity_pct,
     ),
     timing=TimingThresholds(
         min_concentric_time_sec=min_concentric_s,
@@ -353,6 +355,7 @@ with tab_live:
                                     "haussement_max_pct": round(last_eval.metrics.max_shrug_ratio * 100, 1),
                                     "coude_min_deg": round(last_eval.metrics.min_elbow_angle_deg, 1),
                                     "derive_max_deg": round(last_eval.metrics.max_drift_deg, 1),
+                                    "fluidite_pct": round(last_eval.metrics.fluidity_score_pct, 1),
                                     "remarques": "; ".join(last_eval.reasons) if last_eval.reasons else "Parfait",
                                 })
 
@@ -415,12 +418,14 @@ with tab_summary:
         st.info("Aucune répétition n'a encore été enregistrée. Démarrez la séance vidéo pour commencer l'exercice.")
     else:
         # KPI Row
-        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+        kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
         kpi1.metric("Total Répétitions", session.total_repetitions)
         kpi2.metric("Répétitions Correctes", session.correct_repetitions)
         kpi3.metric("Taux de Réussite", f"{session.success_rate_percent:.1f} %")
         avg_angle = np.mean([r["angle_max_deg"] for r in st.session_state.repetition_logs])
         kpi4.metric("Amplitude Moyenne", f"{avg_angle:.1f} °")
+        avg_fluid = np.mean([r.get("fluidite_pct", 100.0) for r in st.session_state.repetition_logs])
+        kpi5.metric("Fluidité Motrice", f"{avg_fluid:.1f} %")
 
         st.markdown("---")
 

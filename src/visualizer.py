@@ -133,7 +133,10 @@ def draw_hud(
         cv2.putText(frame, verdict_txt, (25, last_box_y + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.55, verdict_color, 2, cv2.LINE_AA)
 
         if last_evaluation.is_correct:
-            reasons_txt = f"Execution parfaite ! (Angle max : {last_evaluation.metrics.peak_abduction_deg:.1f} deg)"
+            reasons_txt = (
+                f"Execution parfaite ! (Angle: {last_evaluation.metrics.peak_abduction_deg:.1f} deg | "
+                f"Fluidite: {last_evaluation.metrics.fluidity_score_pct:.0f}%)"
+            )
         else:
             reasons_txt = " | ".join(last_evaluation.reasons[:2])
         cv2.putText(frame, reasons_txt, (240, last_box_y + 24), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (230, 230, 230), 1, cv2.LINE_AA)
@@ -239,7 +242,7 @@ def draw_session_summary_modal(frame: np.ndarray, summary: SessionSummary) -> np
     """Render a semi-transparent session report overlay card."""
     h, w = frame.shape[:2]
     card_w = 540
-    card_h = 320
+    card_h = 345
     cx = (w - card_w) // 2
     cy = (h - card_h) // 2
 
@@ -251,21 +254,27 @@ def draw_session_summary_modal(frame: np.ndarray, summary: SessionSummary) -> np
     cv2.putText(frame, "BILAN DE LA SEANCE DE REHABILITATION", (cx + 30, cy + 35), cv2.FONT_HERSHEY_SIMPLEX, 0.65, (0, 220, 255), 2, cv2.LINE_AA)
     cv2.line(frame, (cx + 30, cy + 48), (cx + card_w - 30, cy + 48), (80, 80, 80), 1)
 
-    cv2.putText(frame, f"Repetitions effectuees : {summary.total_repetitions}", (cx + 35, cy + 85), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
-    cv2.putText(frame, f"Repetitions correctes  : {summary.correct_repetitions}", (cx + 35, cy + 115), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (100, 255, 100), 1, cv2.LINE_AA)
-    cv2.putText(frame, f"Taux de reussite       : {summary.success_rate_percent:.1f} %", (cx + 35, cy + 145), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 220, 255), 2, cv2.LINE_AA)
+    cv2.putText(frame, f"Repetitions effectuees : {summary.total_repetitions}", (cx + 35, cy + 80), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (255, 255, 255), 1, cv2.LINE_AA)
+    cv2.putText(frame, f"Repetitions correctes  : {summary.correct_repetitions}", (cx + 35, cy + 106), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (100, 255, 100), 1, cv2.LINE_AA)
+    cv2.putText(frame, f"Taux de reussite       : {summary.success_rate_percent:.1f} %", (cx + 35, cy + 132), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (0, 220, 255), 2, cv2.LINE_AA)
 
-    cv2.putText(frame, "Compensations les plus frequentes :", (cx + 35, cy + 185), cv2.FONT_HERSHEY_SIMPLEX, 0.50, (200, 200, 200), 1, cv2.LINE_AA)
+    avg_fluid = 0.0
+    if summary.evaluations:
+        scores = [e.metrics.fluidity_score_pct for e in summary.evaluations if e.metrics]
+        avg_fluid = sum(scores) / len(scores) if scores else 0.0
+    cv2.putText(frame, f"Fluidite motrice moy.  : {avg_fluid:.1f} %", (cx + 35, cy + 158), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (0, 255, 200), 1, cv2.LINE_AA)
+
+    cv2.putText(frame, "Compensations les plus frequentes :", (cx + 35, cy + 195), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (200, 200, 200), 1, cv2.LINE_AA)
     errors = summary.get_most_frequent_errors(top_n=3)
     if not errors:
-        cv2.putText(frame, "  Aucune erreur detectee. Excellente posture !", (cx + 45, cy + 215), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 120), 1, cv2.LINE_AA)
+        cv2.putText(frame, "  Aucune erreur detectee. Excellente posture !", (cx + 45, cy + 225), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 120), 1, cv2.LINE_AA)
     else:
-        y_err = cy + 215
+        y_err = cy + 225
         for err_msg, count in errors:
             cv2.putText(frame, f"  - {err_msg[:45]} ({count}x)", (cx + 35, y_err), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 180, 255), 1, cv2.LINE_AA)
             y_err += 25
 
-    cv2.putText(frame, "[Appuyez sur S pour fermer le bilan]", (cx + 120, cy + card_h - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (150, 150, 150), 1, cv2.LINE_AA)
+    cv2.putText(frame, "[Appuyez sur S pour fermer le bilan]", (cx + 120, cy + card_h - 18), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (150, 150, 150), 1, cv2.LINE_AA)
     return frame
 
 

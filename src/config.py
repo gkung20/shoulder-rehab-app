@@ -21,6 +21,7 @@ class CompensationThresholds:
     max_shrug_ratio: float = 0.12
     min_elbow_angle_deg: float = 155.0
     max_anterior_drift_deg: float = 25.0
+    min_fluidity_pct: float = 60.0
 
 
 @dataclass
@@ -90,6 +91,7 @@ class ExerciseConfig:
                 max_shrug_ratio=float(comp.get("max_shrug_ratio", 0.12)),
                 min_elbow_angle_deg=float(comp.get("min_elbow_angle_deg", 155.0)),
                 max_anterior_drift_deg=float(comp.get("max_anterior_drift_deg", 25.0)),
+                min_fluidity_pct=float(comp.get("min_fluidity_pct", 60.0)),
             ),
             timing=TimingThresholds(
                 min_concentric_time_sec=float(tim.get("min_concentric_time_sec", 1.0)),

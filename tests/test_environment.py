@@ -59,3 +59,4 @@ def test_exercise_config_file_integrity():
     assert data["thresholds"]["compensation"]["max_shrug_ratio"] == 0.12
     assert data["thresholds"]["compensation"]["min_elbow_angle_deg"] == 155.0
     assert data["thresholds"]["compensation"]["max_anterior_drift_deg"] == 25.0
+    assert data["thresholds"]["compensation"]["min_fluidity_pct"] == 60.0

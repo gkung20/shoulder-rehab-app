@@ -14,6 +14,7 @@ from src.geometry import (
     calculate_trunk_lean,
     calculate_shoulder_shrug,
     calculate_anterior_drift_angle,
+    calculate_trajectory_smoothness,
     are_landmarks_visible,
 )
 
@@ -179,3 +180,38 @@ def test_calculate_anterior_drift_3d():
     # 5. Degenerate zero-length arm
     drift_degen = calculate_anterior_drift_angle(r_sh, l_sh, r_hip, l_hip, r_sh)
     assert drift_degen == 0.0
+
+
+def test_trajectory_smoothness_smooth_vs_jerky():
+    """Verify that coordinated smooth motion scores high fluidity and jerky motion scores low."""
+    # 1. Smooth minimum-jerk trajectory (quintic polynomial)
+    t_smooth = [i * 0.05 for i in range(41)]  # 0 to 2.0s
+    a_smooth = []
+    for t_val in t_smooth:
+        tau = t_val / 2.0
+        # quintic polynomial from 15 to 90 deg
+        poly = (10.0 * tau**3) - (15.0 * tau**4) + (6.0 * tau**5)
+        a_smooth.append(15.0 + 75.0 * poly)
+
+    jerk_s, fluid_s = calculate_trajectory_smoothness(t_smooth, a_smooth)
+    assert fluid_s >= 85.0
+    assert jerk_s < 40.0
+
+    # 2. Jerky trembling motion (added oscillations and sudden jumps)
+    a_jerky = []
+    for i, a_val in enumerate(a_smooth):
+        tremor = 8.0 if (i % 2 == 0) else -8.0
+        a_jerky.append(a_val + tremor)
+
+    jerk_j, fluid_j = calculate_trajectory_smoothness(t_smooth, a_jerky)
+    assert fluid_j < 45.0
+    assert jerk_j > 200.0
+
+
+def test_trajectory_smoothness_guards():
+    """Verify safety guards on degenerate or micro trajectories."""
+    # Less than 5 points
+    assert calculate_trajectory_smoothness([0.1, 0.2], [10.0, 20.0]) == (0.0, 100.0)
+
+    # Near-zero duration
+    assert calculate_trajectory_smoothness([0.0, 0.01, 0.02, 0.03, 0.04], [10, 15, 20, 25, 30]) == (0.0, 100.0)

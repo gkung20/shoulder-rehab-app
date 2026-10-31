@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional, Tuple
 
+from src.geometry import calculate_trajectory_smoothness
+
 
 class ExercisePhase(str, Enum):
     """Phases of an active shoulder abduction repetition."""
@@ -32,6 +34,7 @@ class RepetitionMetrics:
     max_shrug_ratio: float
     min_elbow_angle_deg: float
     max_drift_deg: float = 0.0
+    fluidity_score_pct: float = 100.0
 
 
 class RepetitionStateMachine:
@@ -83,6 +86,8 @@ class RepetitionStateMachine:
         self._max_shrug: float = 0.0
         self._min_elbow: float = 180.0
         self._max_drift: float = 0.0
+        self._trajectory_times: List[float] = []
+        self._trajectory_angles: List[float] = []
 
     @property
     def rep_count(self) -> int:
@@ -106,6 +111,8 @@ class RepetitionStateMachine:
         self._max_shrug = 0.0
         self._min_elbow = 180.0
         self._max_drift = 0.0
+        self._trajectory_times.clear()
+        self._trajectory_angles.clear()
 
     def reset_all(self) -> None:
         """Clear all counters and historical records."""
@@ -142,6 +149,8 @@ class RepetitionStateMachine:
         # Update telemetry extrema during any active movement
         if self.current_phase != ExercisePhase.REST:
             self._current_peak_angle = max(self._current_peak_angle, current_angle)
+            self._trajectory_times.append(timestamp_sec)
+            self._trajectory_angles.append(current_angle)
             if current_lean is not None:
                 self._max_lean = max(self._max_lean, current_lean)
             if current_shrug is not None:
@@ -161,6 +170,8 @@ class RepetitionStateMachine:
                 self._concentric_start_time = timestamp_sec
                 self._current_peak_angle = current_angle
                 self._hold_duration_accumulated = 0.0
+                self._trajectory_times = [timestamp_sec]
+                self._trajectory_angles = [current_angle]
                 if current_lean is not None:
                     self._max_lean = current_lean
                 if current_shrug is not None:
@@ -219,6 +230,11 @@ class RepetitionStateMachine:
                     else (concentric_t + hold_t + eccentric_t)
                 )
 
+                # Calculate motor control smoothness (Fluidity score via Normalized Jerk)
+                _, fluidity = calculate_trajectory_smoothness(
+                    self._trajectory_times, self._trajectory_angles
+                )
+
                 completed_record = RepetitionMetrics(
                     rep_index=self._rep_counter,
                     arm=self.arm,
@@ -232,6 +248,7 @@ class RepetitionStateMachine:
                     max_shrug_ratio=self._max_shrug,
                     min_elbow_angle_deg=self._min_elbow,
                     max_drift_deg=self._max_drift,
+                    fluidity_score_pct=fluidity,
                 )
 
                 self.completed_reps.append(completed_record)
