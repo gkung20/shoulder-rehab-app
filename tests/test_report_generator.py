@@ -100,3 +100,43 @@ def test_generate_pdf_populated_session(tmp_path):
     assert pdf_bytes.startswith(b"%PDF-")
     assert out_file.exists()
     assert out_file.stat().st_size == len(pdf_bytes)
+
+
+def test_report_keeps_all_repetitions_and_unknown_results(monkeypatch):
+    """Audit rows must not silently stop at ten; unknown smoothness stays blank."""
+    from dataclasses import replace
+    import src.report_generator as reports
+    from tests.test_session_processor import run_sequence
+    proc,evaluations = run_sequence(missing_world=True)
+    session = SessionSummary()
+    for index in range(1,26):
+        metric = replace(evaluations[0].metrics,rep_index=index,fluidity_score_pct=None)
+        session.record(replace(evaluations[0],rep_index=index,metrics=metric))
+    tables = []
+    original = reports.Table
+    def capture_table(data,*args,**kwargs):
+        table = original(data,*args,**kwargs)
+        tables.append((data,kwargs))
+        return table
+    monkeypatch.setattr(reports,"Table",capture_table)
+    pdf = reports.generate_clinical_pdf_report(session,arm="right",patient_id="Test <local> & anonymized")
+    audit,options = next((data,opts) for data,opts in tables if len(data) == 26)
+    assert audit[-1][0].text == "25"
+    assert "INDETERMINE" in audit[-1][1].text
+    assert audit[-1][3].text == "-"
+    assert options["repeatRows"] == 1
+    assert pdf.startswith(b"%PDF-")
+
+
+def test_empty_session_does_not_advertise_perfect_scores(monkeypatch):
+    import src.report_generator as reports
+    paragraphs=[]
+    original=reports.Paragraph
+    def capture(text,*args,**kwargs):
+        paragraphs.append(text)
+        return original(text,*args,**kwargs)
+    monkeypatch.setattr(reports,"Paragraph",capture)
+    reports.generate_clinical_pdf_report(SessionSummary(),arm="right")
+    assert any("Non mesurée" in text for text in paragraphs)
+    assert any("Non évaluable" in text for text in paragraphs)
+    assert not any("100.0 %" in text for text in paragraphs)

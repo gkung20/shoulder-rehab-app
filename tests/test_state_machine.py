@@ -89,7 +89,7 @@ def test_hysteresis_prevents_jitter_trigger():
 
 
 def test_aborted_incomplete_repetition():
-    """Verify an aborted repetition (raised to 50 deg then dropped) does not count."""
+    """Record an incomplete attempt so low range is not silently excluded from results."""
     sm = RepetitionStateMachine(
         rest_threshold_deg=25.0,
         rising_start_deg=32.0,
@@ -109,8 +109,9 @@ def test_aborted_incomplete_repetition():
 
     # Drop back down to rest (15 deg) without reaching 80 deg
     rep = sm.update(15.0, timestamp_sec=t)
-    assert rep is None
-    assert sm.rep_count == 0
+    assert rep is not None
+    assert rep.target_reached is False
+    assert sm.rep_count == 1
     assert sm.current_phase == ExercisePhase.REST
 
 

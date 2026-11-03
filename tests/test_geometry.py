@@ -179,7 +179,7 @@ def test_calculate_anterior_drift_3d():
 
     # 5. Degenerate zero-length arm
     drift_degen = calculate_anterior_drift_angle(r_sh, l_sh, r_hip, l_hip, r_sh)
-    assert drift_degen == 0.0
+    assert drift_degen is None
 
 
 def test_trajectory_smoothness_smooth_vs_jerky():
@@ -211,7 +211,7 @@ def test_trajectory_smoothness_smooth_vs_jerky():
 def test_trajectory_smoothness_guards():
     """Verify safety guards on degenerate or micro trajectories."""
     # Less than 5 points
-    assert calculate_trajectory_smoothness([0.1, 0.2], [10.0, 20.0]) == (0.0, 100.0)
+    assert calculate_trajectory_smoothness([0.1, 0.2], [10.0, 20.0]) == (None, None)
 
     # Near-zero duration
-    assert calculate_trajectory_smoothness([0.0, 0.01, 0.02, 0.03, 0.04], [10, 15, 20, 25, 30]) == (0.0, 100.0)
+    assert calculate_trajectory_smoothness([0.0, 0.01, 0.02, 0.03, 0.04], [10, 15, 20, 25, 30]) == (None, None)

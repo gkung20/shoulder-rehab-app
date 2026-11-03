@@ -136,7 +136,7 @@ def main():
 
     if args.live:
         from app_live_cv import main as live_main
-        live_main()
+        live_main([])
     else:
         run_simulation()
         print("\nPour lancer la camera en direct : python demo.py --live")

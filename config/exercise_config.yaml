@@ -8,6 +8,28 @@
 # before any testing with clinical subjects or actual patients.
 # ==============================================================================
 
+pose:
+  model: full                    # full = default; lite for slower PCs; heavy is optional
+
+audio:
+  backend: auto                  # Local neural Piper, then French Windows voice if available
+  voice: fr_FR-siwis-medium
+  length_scale: 1.30              # Slower French voice; greater = slower
+  volume: 0.85
+  speech_rate: 130                # Used only by the Windows voice fallback
+  min_interval_sec: 8.0           # Applies to posture corrections too
+  repeat_cooldown_sec: 40.0
+  guidance_mode: essential        # Text guides each phase; voice only helps when useful
+  warning_persistence_sec: 1.5     # Ignore brief posture flickers
+  announce_every_reps: 5          # No announcement after every movement
+
+camera:
+  index: 0                       # Select an external/virtual wide camera with 1, 2, etc.
+  width: 1280                    # Requested uncropped capture; device chooses supported modes
+  height: 720
+  fps: 30
+  zoom: null                     # Optional device-native zoom; cannot widen the physical lens
+
 exercise_metadata:
   name: "Active Shoulder Abduction"
   french_name: "Abduction Active de l'Epaule"
@@ -33,7 +55,7 @@ thresholds:
     max_trunk_lean_deg: 10.0       # Torso line relative to vertical (compensation flag if exceeded)
 
     # Shoulder Shrug (normalized ratio)
-    # Ratio = (current_ear_shoulder_dist - baseline_ear_shoulder_dist) / baseline_shoulder_width
+    # Ratio = (baseline_ear_shoulder_dist - current_ear_shoulder_dist) / baseline_shoulder_width
     max_shrug_ratio: 0.12          # Elevation of clavicle/shoulder toward ear relative to baseline
 
     # Elbow Extension (degrees)
@@ -46,7 +68,8 @@ thresholds:
 
     # Motor Smoothness & Fluidity Score (percentage)
     # Derived from Normalized Jerk (third derivative of angular displacement).
-    min_fluidity_pct: 60.0         # Threshold below which movement is flagged as jerky or fatigued
+    min_fluidity_pct: 60.0         # Experimental proxy threshold, not a fatigue diagnosis
+    evaluate_fluidity: false      # Requires validation before use as a grading criterion
 
   # Phase Timing & Speed (seconds)
   timing:
@@ -65,6 +88,7 @@ filtering:
   ema_alpha: 0.35
   # Minimum visibility score from MediaPipe Pose landmark output (range 0.0 - 1.0)
   min_landmark_visibility: 0.60
+  tracking_reset_sec: 0.75        # Long gaps discard an unfinished attempt; return to rest to restart
 
 # ------------------------------------------------------------------------------
 # Calibration Settings

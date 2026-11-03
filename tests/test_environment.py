@@ -24,7 +24,7 @@ def test_mediapipe_tasks_pose_landmarker():
     from mediapipe.tasks import python
     from mediapipe.tasks.python import vision
 
-    model_path = Path(__file__).resolve().parent.parent / "models" / "pose_landmarker_lite.task"
+    model_path = Path(__file__).resolve().parent.parent / "models" / "pose_landmarker_full.task"
     assert model_path.exists(), f"Model file not found at {model_path}"
     assert model_path.stat().st_size > 1_000_000, "Model file appears incomplete"
 

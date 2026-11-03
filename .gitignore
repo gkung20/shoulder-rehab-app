@@ -1,19 +1,53 @@
 # Python environment & cache
 venv/
 env/
+.env/
+.venv/
+.env
+.env.*
+!.env.example
+!.env.sample
+output/
 __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.cache/
+.coverage
+.coverage.*
+htmlcov/
+build/
+dist/
+*.egg-info/
+*.log
+*.tmp
 
 # Binary MediaPipe models (downloaded via models/download_models.py)
-models/*.task
+models/**/*.task
+models/**/*.part
+models/**/*.onnx
+models/**/*.onnx.json
+models/**/*.onnx.data
+models/**/*.tflite
 
 # Local clips and annotations (Strictly private, local patient data only)
 data/recorded_clips/*
 !data/recorded_clips/.gitkeep
 data/annotations/*
 !data/annotations/.gitkeep
+data/sessions/
+data/reports/
+data/exports/
+
+# Machine-local credentials and settings
+.streamlit/secrets.toml
+.aws/
+*.key
+*.pem
 
 # IDE & OS files
 .vscode/

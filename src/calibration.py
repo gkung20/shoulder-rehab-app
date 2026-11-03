@@ -1,160 +1,126 @@
-"""Patient calibration system for capturing anatomical baselines in resting position."""
-
+"""Stable rest calibration using the same frame clock for camera and video."""
 from dataclasses import dataclass
 import math
 import time
-from typing import List, Optional, Tuple
+from typing import Optional
 
-from src.geometry import (
-    Point2D,
-    PoseLandmarkIndex,
-    calculate_distance_2d,
-    calculate_abduction_angle,
-    calculate_trunk_lean,
-)
+from src.geometry import (PoseLandmarkIndex as I, are_landmarks_visible,
+    calculate_shoulder_reference_angle, calculate_distance_2d, calculate_trunk_lean)
 
 
 @dataclass
 class CalibrationData:
-    """Holds anatomical baseline measurements captured during neutral rest."""
     is_calibrated: bool = False
     arm: str = "right"
-    baseline_ear_shoulder_dist: float = 0.15
-    baseline_shoulder_width: float = 0.25
-    baseline_rest_angle_deg: float = 10.0
-    baseline_trunk_lean_deg: float = 0.0
+    baseline_ear_shoulder_dist: Optional[float] = None
+    baseline_shoulder_width: float = 0.0
+    baseline_rest_angle_deg: Optional[float] = None
+    baseline_trunk_lean_deg: Optional[float] = None
+    reference_mode: str = "shoulders"
 
 
 class CalibrationManager:
-    """Manages baseline calibration routine over a fixed duration."""
-
-    def __init__(self, duration_sec: float = 3.0, max_variance_ratio: float = 0.05):
-        """Initialize calibration manager.
-
-        Args:
-            duration_sec: Duration in seconds patient must stand in neutral rest.
-            max_variance_ratio: Maximum allowable relative movement to accept calibration.
-        """
+    def __init__(self, duration_sec=3.0, max_variance_ratio=0.05,
+                 min_visibility=0.6, rest_threshold_deg=25.0, max_lean_deg=10.0):
         self.duration_sec = duration_sec
         self.max_variance_ratio = max_variance_ratio
-
-        self._active_arm: str = "right"
-        self._is_calibrating: bool = False
+        self.min_visibility = min_visibility
+        self.rest_threshold_deg = rest_threshold_deg
+        self.max_lean_deg = max_lean_deg
+        self._is_calibrating = False
+        self._active_arm = "right"
         self._start_time: Optional[float] = None
-
-        # Sample buffers
-        self._ear_shoulder_samples: List[float] = []
-        self._shoulder_width_samples: List[float] = []
-        self._rest_angle_samples: List[float] = []
-        self._trunk_lean_samples: List[float] = []
-
+        self._now = None
+        self._explicit_clock = False
+        self._samples = []
         self.calibrated_data = CalibrationData()
-
-    def start(self, arm: str = "right") -> None:
-        """Begin calibration countdown for specified arm."""
-        self._active_arm = arm
-        self._is_calibrating = True
-        self._start_time = time.perf_counter()
-
-        self._ear_shoulder_samples.clear()
-        self._shoulder_width_samples.clear()
-        self._rest_angle_samples.clear()
-        self._trunk_lean_samples.clear()
+        self.status_message = "Calibration requise : appuyez sur C"
 
     @property
-    def is_calibrating(self) -> bool:
-        """True if calibration collection is currently active."""
+    def is_calibrating(self):
         return self._is_calibrating
 
-    def get_progress(self) -> Tuple[float, float]:
-        """Return (progress_ratio, seconds_remaining).
+    def start(self, arm="right", timestamp_sec=None):
+        if arm not in ("left", "right"):
+            raise ValueError("arm must be left or right")
+        self._active_arm = arm
+        self._is_calibrating = True
+        self._explicit_clock = timestamp_sec is not None
+        self._now = timestamp_sec if self._explicit_clock else time.perf_counter()
+        self._start_time = self._now
+        self._samples.clear()
+        # Previous baselines must never survive a failed recalibration or arm switch.
+        self.calibrated_data = CalibrationData(arm=arm)
+        self.status_message = "Montrez les deux epaules, gardez le bras au repos"
 
-        progress_ratio: 0.0 to 1.0
-        """
+    def get_progress(self):
         if not self._is_calibrating or self._start_time is None:
             return 0.0, 0.0
+        now = self._now if self._explicit_clock else time.perf_counter()
+        elapsed = max(0.0, now - self._start_time)
+        return min(1.0, elapsed / self.duration_sec), max(0.0, self.duration_sec - elapsed)
 
-        elapsed = time.perf_counter() - self._start_time
-        progress = min(1.0, elapsed / self.duration_sec)
-        remaining = max(0.0, self.duration_sec - elapsed)
-        return progress, remaining
+    def _reject(self, message):
+        self._samples.clear()
+        self._start_time = self._now
+        self.status_message = message
+        return False, message
 
-    def update(self, landmarks: List[Point2D], arm: str) -> Tuple[bool, str]:
-        """Process incoming frame landmarks during calibration.
-
-        Args:
-            landmarks: 33 Point2D landmarks.
-            arm: Current active arm ('left' or 'right').
-
-        Returns:
-            Tuple (completed, status_message)
-        """
+    def update(self, landmarks, arm, timestamp_sec=None):
         if not self._is_calibrating:
-            return False, "Non actif"
-
+            return False, self.status_message
+        self._now = timestamp_sec if timestamp_sec is not None else time.perf_counter()
         if arm != self._active_arm:
-            self._active_arm = arm
-
-        # Landmark extraction
-        left_shoulder = landmarks[PoseLandmarkIndex.LEFT_SHOULDER]
-        right_shoulder = landmarks[PoseLandmarkIndex.RIGHT_SHOULDER]
-        left_hip = landmarks[PoseLandmarkIndex.LEFT_HIP]
-        right_hip = landmarks[PoseLandmarkIndex.RIGHT_HIP]
-
-        if arm.lower() == "left":
-            shoulder = left_shoulder
-            ear = landmarks[PoseLandmarkIndex.LEFT_EAR]
-            elbow = landmarks[PoseLandmarkIndex.LEFT_ELBOW]
-            hip = left_hip
-        else:
-            shoulder = right_shoulder
-            ear = landmarks[PoseLandmarkIndex.RIGHT_EAR]
-            elbow = landmarks[PoseLandmarkIndex.RIGHT_ELBOW]
-            hip = right_hip
-
-        # Record metrics for current frame
-        ear_dist = shoulder.y - ear.y
-        sh_width = calculate_distance_2d(left_shoulder, right_shoulder)
-        rest_angle = calculate_abduction_angle(shoulder, hip, elbow)
-        lean = calculate_trunk_lean(left_shoulder, right_shoulder, left_hip, right_hip)
-
-        self._ear_shoulder_samples.append(ear_dist)
-        self._shoulder_width_samples.clear() if False else self._shoulder_width_samples.append(sh_width)
-        self._rest_angle_samples.append(rest_angle)
-        self._trunk_lean_samples.append(lean)
-
+            self.start(arm, timestamp_sec)
+        if not landmarks or len(landmarks) < 33:
+            return self._reject("Montrez les deux epaules pour commencer")
+        sh, hip, el, ear = ((I.LEFT_SHOULDER, I.LEFT_HIP, I.LEFT_ELBOW, I.LEFT_EAR)
+                            if arm == "left" else (I.RIGHT_SHOULDER, I.RIGHT_HIP, I.RIGHT_ELBOW, I.RIGHT_EAR))
+        required = [landmarks[i] for i in (I.LEFT_SHOULDER, I.RIGHT_SHOULDER)]
+        if not are_landmarks_visible(required, self.min_visibility):
+            return self._reject("Calibration en attente : deux epaules peu visibles")
+        width = calculate_distance_2d(landmarks[I.LEFT_SHOULDER], landmarks[I.RIGHT_SHOULDER])
+        ear_dist = None
+        if are_landmarks_visible([landmarks[ear]], self.min_visibility):
+            distance = landmarks[sh].y - landmarks[ear].y
+            if distance > 0:
+                ear_dist = distance
+        angle = None
+        if are_landmarks_visible([landmarks[el]], self.min_visibility):
+            angle = calculate_shoulder_reference_angle(landmarks[I.LEFT_SHOULDER], landmarks[I.RIGHT_SHOULDER], landmarks[sh], landmarks[el])
+        hips_visible = (are_landmarks_visible([landmarks[I.LEFT_HIP], landmarks[I.RIGHT_HIP]], self.min_visibility)
+                        and calculate_distance_2d(landmarks[sh], landmarks[hip]) > .1)
+        lean = calculate_trunk_lean(*(landmarks[i] for i in (I.LEFT_SHOULDER, I.RIGHT_SHOULDER, I.LEFT_HIP, I.RIGHT_HIP))) if hips_visible else None
+        if width < 0.05:
+            return self._reject("Montrez les deux epaules bien separees dans l'image")
+        if angle is not None and angle > self.rest_threshold_deg:
+            return self._reject("Baissez le bras pour terminer la calibration")
+        if lean is not None and lean > self.max_lean_deg:
+            return self._reject("Redressez le buste pour la calibration")
+        self._samples.append((ear_dist, width, angle, lean))
         progress, remaining = self.get_progress()
-
+        self.status_message = f"Restez au repos encore {remaining:.1f} s"
         if progress >= 1.0:
             return self._finalize()
+        return False, self.status_message
 
-        return False, f"Calibration : restez immobile ({remaining:3.1f}s)"
-
-    def _finalize(self) -> Tuple[bool, str]:
-        """Compute final baseline averages and check stability."""
+    def _finalize(self):
+        if len(self._samples) < 15:
+            self.status_message = f"Images valides : {len(self._samples)}/15, restez au repos"
+            return False, self.status_message
+        means, stds = [], []
+        for i in range(4):
+            values = [s[i] for s in self._samples if s[i] is not None]
+            complete = len(values) == len(self._samples)
+            mean = sum(values) / len(values) if complete else None
+            means.append(mean)
+            stds.append(math.sqrt(sum((v-mean)**2 for v in values) / len(values)) if complete else 0.)
+        if means[0] is not None and stds[0] / means[1] > self.max_variance_ratio:
+            means[0] = None  # An unstable optional ear disables shrug; it cannot block startup.
+        if (stds[1] / means[1] > self.max_variance_ratio or stds[2] > 3 or stds[3] > 3):
+            return self._reject("Mouvement detecte : restez au repos, nouvel essai")
+        mode = "torso" if means[3] is not None else "shoulders"
+        self.calibrated_data = CalibrationData(True, self._active_arm, *means, reference_mode=mode)
         self._is_calibrating = False
-
-        if len(self._shoulder_width_samples) < 15:
-            return False, "Calibration echouee : pas assez d'images valides"
-
-        avg_sh_width = sum(self._shoulder_width_samples) / len(self._shoulder_width_samples)
-        avg_ear_dist = sum(self._ear_shoulder_samples) / len(self._ear_shoulder_samples)
-        avg_rest_angle = sum(self._rest_angle_samples) / len(self._rest_angle_samples)
-        avg_lean = sum(self._trunk_lean_samples) / len(self._trunk_lean_samples)
-
-        # Stability check: compute standard deviation of shoulder width
-        variance = sum((w - avg_sh_width) ** 2 for w in self._shoulder_width_samples) / len(self._shoulder_width_samples)
-        std_dev = math.sqrt(variance)
-
-        if (std_dev / max(1e-5, avg_sh_width)) > self.max_variance_ratio:
-            return False, "Calibration echouee : mouvement excessif detecte"
-
-        self.calibrated_data = CalibrationData(
-            is_calibrated=True,
-            arm=self._active_arm,
-            baseline_ear_shoulder_dist=avg_ear_dist,
-            baseline_shoulder_width=avg_sh_width,
-            baseline_rest_angle_deg=avg_rest_angle,
-            baseline_trunk_lean_deg=avg_lean,
-        )
-        return True, "Calibration reussie"
+        self.status_message = "Calibration reussie" + (" : cadrage serre" if mode == "shoulders" else "")
+        return True, self.status_message

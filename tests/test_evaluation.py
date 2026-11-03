@@ -70,6 +70,6 @@ def test_analyze_video_file_on_synthetic_clip():
         out.release()
 
         evals, pred_label = analyze_video_file(test_video_path, arm="right")
-        # Empty/black video has no detected human, should return A CORRIGER safely
-        assert pred_label == "A CORRIGER"
+        # Empty/black video has no detected human, cannot assess movement quality
+        assert pred_label == "INDETERMINE"
         assert len(evals) == 0

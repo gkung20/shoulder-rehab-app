@@ -1,5 +1,115 @@
 # 🦾 Assistant Intelligent de Réhabilitation : Abduction Active de l'Épaule
 
+## Mise à jour : comptage, suivi et affichage
+
+**Pour un patient sur ce PC :** double-cliquez sur **`Ouvrir Mouvement.cmd`**.
+La fenêtre s’ouvre sans commande à saisir. Choisissez le bras, puis cliquez sur
+**Commencer**. Le comptage attend ce clic. Les boutons **Faire une pause**,
+**Reprendre**, **Terminer** et **Fermer** se pilotent à la souris. L’aide met
+automatiquement le suivi en pause ; sa fermeture ne relance pas le mouvement.
+La fenêtre peut être agrandie : l’interface garde ses proportions avec des marges
+si nécessaire, et les boutons restent alignés avec les clics de la souris.
+Le texte et les contrôles sont dessinés directement à la résolution de la fenêtre,
+avec gestion du DPI Windows, sans agrandir une image fixe de l’interface. La
+présentation utilise une palette neutre, des séparateurs fins et moins de blocs.
+Tous les boutons ont un contour rectangulaire ; les sélections sont légèrement
+ombrées et les actions indisponibles sont atténuées.
+La netteté de la vidéo reste limitée par la résolution et l’éclairage de la webcam.
+
+L’écran principal montre une seule consigne et un grand compteur. Les mesures,
+le squelette et les informations techniques sont accessibles avec **Mesures**.
+Dans Streamlit, ils sont regroupés dans **Réglages avancés** et les
+exports détaillés restent dans **Mon bilan**. Une pause arrête l’analyse et
+interrompt la tentative en cours sans inventer une répétition terminée.
+
+La voix est **plus lente et discrète par défaut** : une aide de préparation,
+puis des corrections persistantes seulement, au moins huit secondes entre
+annonces et quarante secondes avant de répéter la même consigne. Elle ne lit plus
+chaque phase ni chaque résultat ; un rappel est donné tous les cinq mouvements.
+Le texte reste disponible en continu. **Voix discrète**, **Sans voix** et
+**Guidage complet**, ainsi que les vitesses **Lente / Très lente**, sont proposés
+dans Streamlit.
+
+Le modèle **MediaPipe Full** est maintenant utilisé par défaut. L'application
+accepte un cadrage serré : **les deux épaules suffisent pour la calibration**,
+puis le coude du bras actif doit être visible pour compter. Le visage et les
+hanches ne sont plus obligatoires dans les règles de démarrage de l'application.
+
+Le coaching vocal utilise maintenant **Piper et une voix neuronale française
+Siwis** en local. Après installation des dépendances, téléchargez la voix une fois :
+
+```powershell
+python -m piper.download_voices fr_FR-siwis-medium --data-dir models/voices
+```
+
+Les consignes sont accentuées pour la prononciation, plus courtes, et les anciens
+messages sont remplacés au lieu de s'accumuler. **A** coupe/réactive la voix.
+Le volume et le rythme sont réglables dans Streamlit ou dans la section `audio`
+du fichier YAML. Aucun texte ni image n'est envoyé à un service vocal.
+Voir [la voix française et son installation](models/voices/README.md).
+
+L'application OpenCV utilise un tableau de bord séparant la vidéo, les consignes,
+le compteur, les mesures et le dernier résultat. La calibration demande un bras
+au repos et des articulations visibles ; ses instructions restent affichées et
+un nouvel essai démarre automatiquement après un mouvement excessif.
+
+Une tentative sous la cible est maintenant comptée et expliquée. Une mesure
+manquante donne **INDETERMINE**, sans succès ni échec inventé. Les interruptions
+longues sont affichées séparément. L'affichage miroir ne change plus le bras
+anatomique analysé. OpenCV, Streamlit et l'évaluation vidéo partagent le même
+processeur et la même horloge de trames.
+
+```powershell
+# Environnement existant dans ce projet
+.\.env\Scripts\python.exe app_live_cv.py
+
+# Webcam USB / virtuelle grand-angle : choisir son index et une résolution supportée
+.\.env\Scripts\python.exe app_live_cv.py --camera 1 --width 1920 --height 1080
+
+# Si le Full est trop lent : modèle Lite déjà téléchargé séparément
+.\.env\Scripts\python.exe app_live_cv.py --model lite
+
+# Installation avec les versions de l'environnement Windows / Python 3.13 testé
+python -m pip install -r requirements.txt -c constraints-windows-py313.txt
+
+# Interface locale Streamlit
+python -m streamlit run app_streamlit.py
+```
+
+Cliquez sur **Commencer** et gardez les deux épaules dans le cadre. Attendez la fin de la calibration, puis
+montrez le coude actif et levez et redescendez le bras : le compteur augmente au
+retour au repos. **C** relance la calibration ; **L/R** sélectionnent le bras.
+Dans Streamlit, les réglages sont verrouillés pendant la capture et le bouton
+**Terminer ma séance** libère la caméra. La caméra et la voix utilisent l'ordinateur serveur,
+ce mode est destiné à une utilisation locale.
+
+Sans hanches visibles, l'angle est une **estimation à partir de la ligne des
+épaules**, indiquée à l'écran et dans les exports. Les contrôles du tronc, du
+haussement et de la profondeur restent non évalués quand leurs repères manquent.
+Les répétitions sont comptées, mais ne reçoivent pas un verdict de qualité complet.
+Un changement de référence pendant un mouvement interrompt cette tentative et
+demande un retour au repos pour recommencer.
+
+La caméra, la résolution, le modèle et le zoom facultatif sont aussi sélectionnables
+dans Streamlit avant de démarrer. La résolution effective est affichée. Le zoom
+utilise les unités du pilote et peut être indisponible. Un champ de vision plus
+large nécessite une caméra qui le fournit ; augmenter la résolution ne suffit pas.
+L'image complète est affichée sans recadrage central.
+
+**Limite du modèle :** MediaPipe peut encore échouer si la tête est entièrement
+hors champ, même si notre application ne la demande plus. Le cadrage serré est une
+possibilité de traitement des repères détectés, pas une garantie de détection sans
+tête. Voir la [fiche officielle du modèle](https://storage.googleapis.com/mediapipe-assets/Model%20Card%20BlazePose%20GHUM%203D.pdf).
+
+La fluidité est un indicateur expérimental, exclu de la notation par défaut.
+Les exports conservent les réglages, la calibration et l'identifiant du modèle.
+L'évaluation affiche la couverture et des résultats par participant/condition,
+sans prétendre prouver l'absence de biais.
+
+Voir [la démarche de validation et la préparation de l'avatar](docs/validation-and-avatar.md).
+Le personnage animé est prévu pour une étape ultérieure ; le moteur de suivi est
+déjà séparé du rendu pour permettre cette évolution.
+
 > **Projet Universitaire de 3ème Année - Spécialité Santé Numérique (Digital Health)**  
 > *Auteur : Étudiant ingénieur (Profil Développement de Jeux & Vision par Ordinateur)*  
 > *Encadrement : Ingénieur Senior & Mentor en Vision par Ordinateur*
@@ -54,26 +164,26 @@ Les concepts exploitent des principes fondamentaux de développement de jeux (mo
 | **Inclinaison du Tronc (Lean)** | Angle entre l'axe rachidien $(M_{\text{épaules}} - M_{\text{hanches}})$ et la verticale ascendante $(0, -1)$. | Alerte si déviation $> 10.0^\circ$. |
 | **Extension du Coude** | Angle 3-points $\text{Épaule} - \text{Coude} - \text{Poignet}$. | Alerte si angle $< 155.0^\circ$ (bras fléchi pour tricher l'inertie). |
 | **Dérive 3D Hors Plan (Antépulsion)** | Angle $\theta = \arcsin\left(\frac{\|\vec{A} \cdot \vec{N}_{\text{coronal}}\|}{\|\vec{A}\|}\right)$ via repères 3D métriques MediaPipe. | Alerte si dérive $> 25.0^\circ$ (projection du bras vers l'avant). |
-| **Fluidité Motrice (Jerk Normalisé)** | Dérivée 3ème du déplacement $j(t) = \frac{d^3\theta}{dt^3}$ normalisée sans dimension. | Score $[0, 100\%]$ ; alerte si $< 60\%$ (mouvement saccadé / tremblement). |
-| **Machine à États (FSM)** | Hystérésis : déclenchement montée $> 32^\circ$, maintien $\ge 80^\circ$, validation retour $\le 25^\circ$. | Élimine les faux comptages causés par le bruit des capteurs. |
+| **Fluidité Motrice (Jerk Normalisé)** | Dérivée 3ème du déplacement $j(t) = \frac{d^3\theta}{dt^3}$ normalisée sans dimension. | Indicateur expérimental, exclu de la notation par défaut ; aucune valeur si les échantillons sont insuffisants. |
+| **Machine à États (FSM)** | Hystérésis : déclenchement montée $\ge 32^\circ$, maintien dans la zone cible, comptage au retour $\le 25^\circ$. | Compte aussi les tentatives sous la cible ; rejette le comptage d’une tentative interrompue par une perte de suivi prolongée. |
 | **Lissage Temporel (EMA)** | $S_t = \alpha X_t + (1 - \alpha) S_{t-1}$ (équivalent à un `lerp()` avec $\alpha = 0.35$). | Rejette les images de faible visibilité $(< 0.60)$. |
 
 > [!IMPORTANT]
-> **Tous les seuils ci-dessus sont des VALEURS INDICATIVES (PLACEHOLDERS)** centralisées dans [`config/exercise_config.yaml`](file:///C:/Users/hp/shoulder-rehab-app/config/exercise_config.yaml). Ils doivent être validés avec votre kinésithérapeute référent.
+> **Tous les seuils ci-dessus sont des VALEURS INDICATIVES (PLACEHOLDERS)** centralisées dans [`config/exercise_config.yaml`](config/exercise_config.yaml). Ils doivent être validés avec votre kinésithérapeute référent.
 
 ---
 
 ## 🛠️ 3. Technologies & Pile Logicielle
 
-- **Langage :** Python 3.10+ (testé sous Python 3.14)
-- **Vision par Ordinateur :** MediaPipe Tasks (`PoseLandmarker` v1.1.1, repères 2D normalisés + repères 3D métriques `pose_world_landmarks`)
-- **Traitement d'Image & Affichage :** OpenCV (`opencv-python` 5.0+)
+- **Langage :** Python 3.10+ (vérifié sous Python 3.13)
+- **Vision par Ordinateur :** MediaPipe Tasks `PoseLandmarker`, modèle Full par défaut ; coordonnées 2D et estimations 3D.
+- **Traitement d'Image & Affichage :** OpenCV et Pillow, dessin à la résolution native de la fenêtre.
 - **Calcul Vectoriel & Biomécanique :** NumPy, math (Jerk normalisé)
-- **Biofeedback Vocal (TTS) :** `pyttsx3` (Synthèse vocale SAPI5 hors ligne en français avec file d'attente non bloquante)
-- **Génération de Bilans Médicaux :** `reportlab` & Matplotlib (PDF clinique prêt à imprimer avec graphiques doubles)
-- **Interface Utilisateur Web :** Streamlit 1.66+
+- **Biofeedback Vocal (TTS) :** Piper + Siwis en local, lecture via SoundDevice ; voix Windows française via `pyttsx3` en secours.
+- **Bilans du Prototype :** ReportLab et Matplotlib, exports PDF, CSV et JSON avec contexte d’acquisition.
+- **Interface Utilisateur Web :** Streamlit avec mises à jour vidéo par fragments.
 - **Configuration :** PyYAML
-- **Tests & Assurance Qualité :** Pytest (51 tests unitaires & d'intégration)
+- **Tests & Assurance Qualité :** Pytest (tests unitaires, intégration et contrôles de l'interface)
 - **Gestion de Version :** Git & GitHub
 
 ---
@@ -88,7 +198,8 @@ shoulder-rehab-app/
 │
 ├── models/
 │   ├── download_models.py      # Script de téléchargement local du modèle MediaPipe (.task)
-│   └── pose_landmarker_lite.task (Fichier binaire du modèle, ignoré par git)
+│   ├── voices/                 # Documentation et modèle vocal local Siwis (binaires ignorés)
+│   └── pose_landmarker_full.task (Modèle Full par défaut, ignoré par git)
 │
 ├── src/
 │   ├── __init__.py
@@ -100,7 +211,13 @@ shoulder-rehab-app/
 │   ├── calibration.py          # Enregistrement des mesures de référence au repos (3 sec)
 │   ├── state_machine.py        # Machine à états finis (REST/RISING/HOLD/LOWERING) & télémétrie de fluidité
 │   ├── rules_engine.py         # Moteur de règles cliniques et retours en français
-│   ├── audio_feedback.py      # Coach vocal hors-ligne non-bloquant en français (SAPI5/pyttsx3)
+│   ├── session_processor.py    # Pipeline commun OpenCV, Streamlit et évaluation vidéo
+│   ├── dashboard.py            # Interface patient minimale dessinée à la résolution native
+│   ├── patient_controls.py     # Boutons et états de la séance, communs au rendu et aux clics
+│   ├── window_viewport.py      # Proportions, DPI et conversion des coordonnées de souris
+│   ├── speech.py               # Synthèse Piper locale et secours Windows français
+│   ├── audio_feedback.py       # Voix discrète : priorité, rythme et suppression des répétitions
+│   ├── live_session.py         # Ressources caméra/modèle/audio et pause dans Streamlit
 │   ├── report_generator.py     # Générateur de bilans cliniques PDF avec graphiques doubles
 │   └── visualizer.py           # Dessin du squelette, HUD médical et alertes visuelles
 │
@@ -117,15 +234,25 @@ shoulder-rehab-app/
 │   ├── test_rules_engine.py    # Tests des seuils cliniques, antépulsion et messages
 │   ├── test_audio.py           # Tests du coach vocal hors ligne et de la régulation de fréquence
 │   ├── test_report_generator.py# Tests de génération du document PDF médical
+│   ├── test_session_processor.py # Régressions du pipeline commun et du suivi
+│   ├── test_closeup_and_camera.py # Cadrage serré, caméra externe et mesures manquantes
+│   ├── test_evaluation_reliability.py # Accord des pipelines et couverture d’évaluation
+│   ├── test_french_speech.py    # Synthèse réelle de la voix française, sans lecture sonore
+│   ├── test_patient_controls.py # Parcours à la souris et dessin à la résolution native
+│   ├── test_window_viewport.py  # Plein écran, proportions, clics et DPI
+│   ├── test_live_ui.py          # Commandes Streamlit et libération des ressources
 │   └── test_phase5_ui.py       # Tests des structures de données du tableau de bord
 │
-├── app_live_cv.py              # Application autonome OpenCV HUD (~30-60 FPS) avec coaching vocal
-├── app_streamlit.py            # Tableau de bord clinique Streamlit complet avec exports CSV & PDF
+├── Ouvrir Mouvement.cmd        # Lanceur Windows par double-clic, sans saisie dans un terminal
+├── app_live_cv.py              # Interface patient OpenCV avec boutons et coaching discret
+├── app_streamlit.py            # Séance patient et exports, réglages avancés repliés
 ├── evaluate_dataset.py         # Script d'évaluation hors ligne (Matrice de confusion)
 ├── record_clip.py              # Outil d'enregistrement éthique avec recueil de consentement
 ├── demo.py                     # Démonstrateur autonome (4 scénarios simulés ou caméra directe)
-├── requirements.txt            # Dépendances verrouillées
-└── README.md                   # Documentation complète du projet
+├── requirements.txt            # Dépendances ; contraintes Windows dans un fichier séparé
+├── constraints-windows-py313.txt # Versions de l’environnement Windows testé
+├── docs/validation-and-avatar.md # Limites, évaluation et évolution de l’avatar
+└── README.md                   # Documentation du projet
 ```
 
 ---
@@ -139,26 +266,33 @@ git clone https://github.com/gkung20/shoulder-rehab-app.git
 cd shoulder-rehab-app
 
 # Créer un environnement virtuel Python
-python -m venv venv
+python -m venv .env
 
 # Activer l'environnement virtuel (Windows PowerShell)
-.\venv\Scripts\Activate.ps1
+.\.env\Scripts\Activate.ps1
 ```
 
 ### 5.2 Installer les dépendances & télécharger le modèle
 ```powershell
-# Installer les bibliothèques requises
-pip install -r requirements.txt
+# Installer les bibliothèques requises (Windows / Python 3.13)
+python -m pip install -r requirements.txt -c constraints-windows-py313.txt
 
-# Télécharger localement le modèle MediaPipe Tasks (5.7 Mo)
+# Télécharger localement MediaPipe Full (environ 9,4 Mo)
 python models/download_models.py
+
+# Télécharger la voix française locale (environ 63 Mo)
+python -m piper.download_voices fr_FR-siwis-medium --data-dir models/voices
 ```
 
 ### 5.3 Exécuter la suite de tests automatisée
 ```powershell
-# 51 tests unitaires et d'intégration validant chaque module mathématique et biomécanique
+# Tests unitaires, intégration et contrôles de l'interface
 pytest tests/ -v
 ```
+
+La CI Windows installe ces dépendances, télécharge les deux modèles et exécute les
+tests. Les tests synthétiques et les contrôles d’interface ne remplacent pas une
+validation sur webcam ou sur des participants représentatifs.
 
 ---
 
@@ -174,16 +308,19 @@ python demo.py --live
 ```
 
 ### Option B : Application Directe OpenCV (`app_live_cv.py`)
-Idéal pour un retour visuel ultra-fluide et une latence minimale sur PC portable :
+Interface locale utilisable à la souris ; les performances dépendent du PC et du modèle choisi :
 ```powershell
 python app_live_cv.py
 ```
-**Contrôles clavier :**
+Les boutons à l’écran suffisent. Raccourcis clavier facultatifs :
+- **`Espace`** : Commencer / Faire une pause / Reprendre
 - **`L`** : Sélectionner le bras **GAUCHE**
 - **`R`** : Sélectionner le bras **DROIT**
 - **`C`** : Lancer la **CALIBRATION** (maintenez la position de repos pendant 3 secondes)
 - **`A`** : Activer / Désactiver le **COACHING VOCAL EN FRANÇAIS (TTS)**
-- **`S`** : Afficher / Masquer la **FICHE BILAN DE SÉANCE**
+- **`S`** : Terminer la séance et afficher le bilan
+- **`D`** : Afficher / Masquer les mesures
+- **`H`** : Ouvrir / Fermer l’aide (le suivi reste en pause)
 - **`M`** : Activer / Désactiver le mode miroir
 - **`Q`** ou **`Échap`** : Quitter proprement
 
@@ -193,10 +330,10 @@ Interface complète destinée au patient et au kinésithérapeute :
 streamlit run app_streamlit.py
 ```
 - Ouvrez `http://localhost:8501` dans votre navigateur.
-- Ajustez les curseurs cliniques (ROM cible, compensations, seuil de fluidité motrice).
-- Visualisez le squelette en temps réel avec consignes orales/écrites en français.
-- Consultez l'onglet **Bilan & Statistiques** pour analyser le graphique des compensations.
-- Téléchargez au choix : le fichier brut **CSV** ou le **Bilan Kinésithérapique officiel en PDF** haute définition !
+- Choisissez votre bras et l’accompagnement vocal, puis cliquez sur **Commencer ma séance**.
+- Suivez la consigne écrite. Les mesures et réglages de l’exercice sont facultatifs, dans **Réglages avancés**.
+- Faites une pause ou terminez avec les boutons. Consultez **Mon bilan** pour enregistrer le PDF.
+- Exportez les observations et leur contexte en **CSV / JSON**, ou le **bilan PDF du prototype**.
 
 ---
 
@@ -218,6 +355,7 @@ python evaluate_dataset.py
 - La **Matrice de Confusion** ($2 \times 2$) dans la console.
 - Les métriques : **Exactitude (Accuracy)**, **Sensibilité (Recall)**, **Spécificité**, **Précision**, **F1-Score**.
 - Les rapports CSV détaillés dans `data/annotations/evaluation_details.csv` et `evaluation_metrics.csv`.
+- Les résultats par participant/condition dans `evaluation_groups.csv`, avec les clips non évaluables et la couverture du suivi. Les résultats indéterminés sont exclus des scores d’accord.
 
 ---
 
@@ -240,7 +378,7 @@ python evaluate_dataset.py
 
 ## 📚 10. Licences & Références Citées
 
-Toutes les ressources utilisées sont libres et open source. Nous remercions les auteurs des projets inspirants suivants :
+Références et attributions du projet. Les mesures publiées par ces projets ne constituent pas une validation de ce prototype :
 
 1. **Google MediaPipe :** Pose Landmarker Tasks API ([Documentation Officielle](https://developers.google.com/mediapipe)) — *Licence Apache 2.0*.
 2. **NgoQuocBao1010/Exercise-Correction :** Architecture de pipeline de correction d'exercices ([GitHub](https://github.com/NgoQuocBao1010/Exercise-Correction)) — *Licence MIT*.
@@ -248,3 +386,4 @@ Toutes les ressources utilisées sont libres et open source. Nous remercions les
 4. **Python-kunal/physio_app :** Structuration logicielle pour applications de kinésithérapie ([GitHub](https://github.com/Python-kunal/physio_app)) — *Licence MIT*.
 5. **sing1ee/my-pose :** Normalisation géométrique de poses squelettiques ([GitHub](https://github.com/sing1ee/my-pose)) — *Licence MIT*.
 6. **IEEE DataPort :** *"Shoulder Exercise Quality Dataset"* (Vidéos annotées d'exercices d'abduction/adduction de l'épaule) — *Accès de recherche académique IEEE DataPort*.
+7. **Piper / Siwis :** moteur vocal local et voix française ; sources et licences dans [models/voices/README.md](models/voices/README.md).

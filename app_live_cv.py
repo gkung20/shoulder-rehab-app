@@ -1,322 +1,164 @@
-"""Phase 4: Real-time active shoulder abduction tracking with clinical rules engine & French feedback.
-
-Features:
-- Config-driven threshold evaluation (no hardcoded numbers).
-- Real-time live coaching cues in French ("Gardez l'epaule basse", "Gardez le tronc droit", etc.).
-- Post-repetition clinical evaluation ('CORRECT' vs 'A CORRIGER' with diagnostic reasons).
-- Interactive session summary card (toggle with [S]).
-"""
-
+"""Local webcam coach with shared analysis and a readable dashboard."""
 import sys
-import time
+import argparse
+from dataclasses import replace
+from collections import deque
 import cv2
-from pathlib import Path
-
 from src.capture import VideoCaptureManager
-from src.calibration import CalibrationManager
 from src.config import ExerciseConfig
-from src.geometry import (
-    Point2D,
-    PoseLandmarkIndex,
-    calculate_abduction_angle,
-    calculate_trunk_lean,
-    calculate_shoulder_shrug,
-    calculate_elbow_angle,
-    calculate_anterior_drift_angle,
-    are_landmarks_visible,
-)
 from src.pose_detector import PoseDetector
-from src.rules_engine import RulesEngine, LiveFeedback, RepetitionEvaluation
-from src.smoothing import MultiMetricSmoother
-from src.state_machine import RepetitionStateMachine, ExercisePhase
+from src.session_processor import SessionProcessor, FrameAnalysis
+from src.dashboard import render_dashboard, CANVAS_SIZE
 from src.audio_feedback import AudioCoach
-from src.visualizer import (
-    draw_hud,
-    draw_skeleton,
-    draw_compensations_panel,
-    draw_live_feedback,
-    draw_session_summary_modal,
-)
+from src.patient_controls import PatientControls, dashboard_action_at
+from src.window_viewport import native_window_size, canvas_viewport, enable_high_dpi
 
 
-def main():
-    print("=" * 70)
-    print("  KINESITHERAPIE VIRTUELLE - ABDUCTION ACTIVE DE L'EPAULE")
-    print("  Phase 4 : Moteur de Regles Cliniques & Retours en Francais")
-    print("=" * 70)
-    print("Controles clavier:")
-    print("  [L] : Suivre le bras GAUCHE")
-    print("  [R] : Suivre le bras DROIT")
-    print("  [C] : Lancer la CALIBRATION (restez immobile 3 secondes)")
-    print("  [A] : Activer / Desactiver le coaching vocal francais (TTS)")
-    print("  [S] : Afficher / Masquer le BILAN DE LA SEANCE")
-    print("  [M] : Activer / Desactiver le mode miroir")
-    print("  [Q] ou [ESC] : Quitter l'application")
-    print("=" * 70)
+def show_startup_error(error):
+    print(f"[DÉMARRAGE] {error}")
+    if sys.stdout is None:  # Double-click launcher: show errors instead of losing them in a hidden console.
+        import tkinter as tk
+        from tkinter import messagebox
+        root=tk.Tk()
+        root.withdraw()
+        messagebox.showerror("Mouvement — besoin d’aide", f"Le suivi n’a pas pu démarrer.\nVérifiez la caméra ou demandez de l’aide pour l’installation.\n\n{error}",parent=root)
+        root.destroy()
 
-    # 1. Load configuration from YAML
+
+def window_size():
+    width,height=1280,840
+    if sys.platform == "win32":
+        import ctypes
+        screen_width=ctypes.windll.user32.GetSystemMetrics(0)
+        screen_height=ctypes.windll.user32.GetSystemMetrics(1)
+        scale=min(1,max(640,screen_width-80)/width,max(480,screen_height-100)/height)
+        width,height=round(width*scale),round(height*scale)
+    return width,height
+
+
+def main(argv=None):
+    enable_high_dpi()
+    parser = argparse.ArgumentParser(description="Coach epaule : cadrage serre ou webcam externe large")
+    parser.add_argument("--camera", type=int, help="Index camera, par exemple 1 pour une webcam USB")
+    parser.add_argument("--width", type=int, help="Largeur de capture demandee, sans recadrage")
+    parser.add_argument("--height", type=int, help="Hauteur de capture demandee")
+    parser.add_argument("--zoom", type=float, help="Zoom du pilote, si pris en charge (unites du fabricant)")
+    parser.add_argument("--model", choices=("lite", "full", "heavy"), help="Modele : full par defaut")
+    args = parser.parse_args(argv)
     config = ExerciseConfig.from_yaml()
-    rules_engine = RulesEngine(config=config)
-
-    selected_arm = "right"
-    mirror_mode = True
-    show_summary_modal = False
-
-    smoother = MultiMetricSmoother(alpha=config.filtering.ema_alpha)
-    calibrator = CalibrationManager(
-        duration_sec=config.calibration.duration_sec,
-        max_variance_ratio=config.calibration.max_variance_ratio,
-    )
-    state_machine = RepetitionStateMachine(
-        rest_threshold_deg=config.abduction.rest_threshold_deg,
-        rising_start_deg=config.abduction.rising_start_deg,
-        target_min_deg=config.abduction.target_min_deg,
-        target_max_deg=config.abduction.target_max_deg,
-        min_hold_time_sec=config.timing.min_hold_time_sec,
-        arm=selected_arm,
-    )
-
-    last_eval: Optional[RepetitionEvaluation] = None
-
+    overrides = {name: getattr(args, arg) for name,arg in (("index","camera"),("width","width"),("height","height"),("zoom","zoom")) if getattr(args,arg) is not None}
     try:
-        with VideoCaptureManager(camera_index=0, width=640, height=480, mirror=mirror_mode) as cap, \
-             PoseDetector() as detector, \
-             AudioCoach(enabled=True) as audio_coach:
-
-            window_name = "Rehabilitation Epaule - Phase 4"
-            cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-            cv2.resizeWindow(window_name, 1024, 768)
-
-            # Auto-trigger baseline calibration
-            calibrator.start(arm=selected_arm)
-
+        config = replace(config, camera=replace(config.camera, **overrides),
+                         pose=replace(config.pose, model=args.model or config.pose.model))
+    except ValueError as exc:
+        parser.error(str(exc))
+    processor = SessionProcessor(config)
+    mirror = True
+    controls = PatientControls()
+    actions = deque()
+    now_sec = 0.
+    window_name = "Mouvement - Coach epaule"
+    print("L/R bras | C calibration | A audio | S bilan | M miroir | Q quitter")
+    print("Deux epaules pour commencer ; coude actif visible pour compter. Visage non requis par l'application.")
+    try:
+        c = config.camera
+        with VideoCaptureManager(camera_index=c.index, width=c.width, height=c.height, target_fps=c.fps,
+                                 zoom=c.zoom, mirror=False) as cap, PoseDetector(model_variant=config.pose.model) as detector, AudioCoach.from_config(config.audio, enabled=True) as audio:
+            print(cap.status_message)
+            processor.model_info = detector.model_info.copy()
+            # Paint at the client area's actual pixels; Win32 must not enlarge a UI bitmap.
+            cv2.namedWindow(window_name, cv2.WINDOW_NORMAL | cv2.WINDOW_FREERATIO)
+            cv2.resizeWindow(window_name, *window_size())
+            viewport=None
+            def on_mouse(event,x,y,flags,param):
+                if event == cv2.EVENT_LBUTTONUP and viewport is not None:
+                    point=viewport.canvas_point(x,y)
+                    if point is None:
+                        return
+                    action=dashboard_action_at(*point,mode=controls.mode,arm=processor.arm,
+                        audio_enabled=audio.enabled,details=controls.details,help_visible=controls.help_visible)
+                    if action:
+                        actions.append(action)
+            cv2.setMouseCallback(window_name,on_mouse)
+            last_audio_status = None
+            quitting=False
             while True:
+                while actions:
+                    action=actions.popleft()
+                    old_mode=controls.mode
+                    if not controls.apply(action):
+                        continue
+                    if action == "quit":
+                        quitting=True
+                    elif action == "start":
+                        processor.recalibrate(timestamp_sec=now_sec)
+                        audio.begin_session()
+                    elif action in ("pause","finish") or (action == "help" and old_mode == "running"):
+                        processor.finish()
+                        audio.silence()
+                    elif action == "resume" and processor.calibrator.is_calibrating:
+                        processor.recalibrate(timestamp_sec=now_sec)
+                    elif action == "restart":
+                        processor=SessionProcessor(config,processor.arm)
+                        processor.model_info=detector.model_info.copy()
+                        audio.silence()
+                    elif action in ("arm_left","arm_right"):
+                        processor.recalibrate("left" if action == "arm_left" else "right",now_sec)
+                        audio.silence()
+                    elif action == "audio":
+                        audio.toggle()
+                    elif action == "mirror":
+                        mirror=not mirror
+                if quitting:
+                    break
                 success, frame, timestamp_ms, fps = cap.read_frame()
                 if not success or frame is None:
-                    print("[AVERTISSEMENT] Perte de capture video.")
+                    show_startup_error("La caméra ne répond plus. Vérifiez son branchement, puis ouvrez à nouveau Mouvement.")
                     break
-
-                now_sec = timestamp_ms / 1000.0
-
-                landmarks = detector.detect(frame, timestamp_ms=timestamp_ms)
-
-                abduction_raw = None
-                lean_raw = None
-                shrug_raw = None
-                elbow_raw = None
-                drift_raw = None
-                status = "Pret"
-                calib_progress = None
-                live_cue = None
-
-                if landmarks is not None and len(landmarks) >= 33:
-                    shoulder, hip, elbow, wrist, ear = detector.get_arm_landmarks(landmarks, arm=selected_arm)
-                    left_sh = landmarks[PoseLandmarkIndex.LEFT_SHOULDER]
-                    right_sh = landmarks[PoseLandmarkIndex.RIGHT_SHOULDER]
-                    left_hip = landmarks[PoseLandmarkIndex.LEFT_HIP]
-                    right_hip = landmarks[PoseLandmarkIndex.RIGHT_HIP]
-
-                    # 1. Calibration update
-                    if calibrator.is_calibrating:
-                        completed, msg = calibrator.update(landmarks, arm=selected_arm)
-                        calib_progress = calibrator.get_progress()
-                        status = msg
-                    else:
-                        status = "Suivi actif"
-
-                    # 2. Raw Angle Calculations
-                    min_v = config.filtering.min_landmark_visibility
-                    vis_ok = are_landmarks_visible([shoulder, hip, elbow], min_visibility=min_v)
-                    if vis_ok:
-                        abduction_raw = calculate_abduction_angle(shoulder, hip, elbow)
-
-                    elbow_vis = are_landmarks_visible([shoulder, elbow, wrist], min_visibility=min_v)
-                    if elbow_vis:
-                        elbow_raw = calculate_elbow_angle(shoulder, elbow, wrist)
-
-                    trunk_vis = are_landmarks_visible([left_sh, right_sh, left_hip, right_hip], min_visibility=min_v)
-                    if trunk_vis:
-                        lean_raw = calculate_trunk_lean(left_sh, right_sh, left_hip, right_hip)
-
-                    if calibrator.calibrated_data.is_calibrated and are_landmarks_visible([ear, shoulder], min_visibility=min_v):
-                        shrug_raw = calculate_shoulder_shrug(
-                            ear=ear,
-                            shoulder=shoulder,
-                            baseline_ear_shoulder_dist=calibrator.calibrated_data.baseline_ear_shoulder_dist,
-                            baseline_shoulder_width=calibrator.calibrated_data.baseline_shoulder_width,
-                        )
-
-                    # 3D Out-of-Plane Anterior Drift (using metric world landmarks)
-                    drift_vis = False
-                    if detector.last_world_landmarks is not None and len(detector.last_world_landmarks) >= 33:
-                        act_sh_3d, oth_sh_3d, act_hip_3d, oth_hip_3d, act_el_3d = detector.get_drift_landmarks(
-                            detector.last_world_landmarks, arm=selected_arm
-                        )
-                        drift_vis = are_landmarks_visible(
-                            [act_sh_3d, oth_sh_3d, act_hip_3d, oth_hip_3d, act_el_3d], min_visibility=min_v
-                        )
-                        if drift_vis:
-                            drift_raw = calculate_anterior_drift_angle(
-                                active_shoulder=act_sh_3d,
-                                other_shoulder=oth_sh_3d,
-                                active_hip=act_hip_3d,
-                                other_hip=oth_hip_3d,
-                                active_elbow=act_el_3d,
-                            )
-
-                    # 3. Apply EMA Smoothing
-                    abduction_smooth = smoother.update("abduction", abduction_raw, is_valid=vis_ok)
-                    lean_smooth = smoother.update("lean", lean_raw, is_valid=trunk_vis)
-                    shrug_smooth = smoother.update("shrug", shrug_raw, is_valid=(shrug_raw is not None))
-                    elbow_smooth = smoother.update("elbow", elbow_raw, is_valid=elbow_vis)
-                    drift_smooth = smoother.update("drift", drift_raw, is_valid=drift_vis)
-
-                    # 4. State Machine & Rules Evaluation (if calibrated)
-                    if calibrator.calibrated_data.is_calibrated:
-                        new_rep = state_machine.update(
-                            current_angle=abduction_smooth,
-                            timestamp_sec=now_sec,
-                            current_lean=lean_smooth,
-                            current_shrug=shrug_smooth,
-                            current_elbow=elbow_smooth,
-                            current_drift=drift_smooth,
-                        )
-
-                        # Generate real-time French coaching cue
-                        live_cue = rules_engine.evaluate_live_frame(
-                            current_angle=abduction_smooth,
-                            current_lean=lean_smooth,
-                            current_shrug=shrug_smooth,
-                            current_elbow=elbow_smooth,
-                            current_phase=state_machine.current_phase,
-                            current_drift=drift_smooth,
-                        )
-                        audio_coach.speak_cue(live_cue)
-
-                        # Evaluate completed repetition
-                        if new_rep is not None:
-                            last_eval = rules_engine.evaluate_repetition(new_rep)
-                            audio_coach.speak_evaluation(last_eval)
-                            print("\n" + "=" * 55)
-                            print(f"[REPETITION #{last_eval.rep_index}] Statut : {last_eval.status_label}")
-                            print(f"  Bras : {last_eval.arm.upper()} | Angle Max : {last_eval.metrics.peak_abduction_deg:.1f} deg")
-                            print(f"  Chronometrage : Montee={last_eval.metrics.concentric_duration_sec:.1f}s | "
-                                  f"Maintien={last_eval.metrics.hold_duration_sec:.1f}s | "
-                                  f"Descente={last_eval.metrics.eccentric_duration_sec:.1f}s | "
-                                  f"Fluidite={last_eval.metrics.fluidity_score_pct:.1f}%")
-                            if last_eval.is_correct:
-                                print("  Diagnostic : Execution parfaite !")
-                            else:
-                                print("  Remarques / Corrections :")
-                                for r in last_eval.reasons:
-                                    print(f"    - {r}")
-                            print(f"  Progression de la seance : {rules_engine.session.correct_repetitions}/{rules_engine.session.total_repetitions} correctes ({rules_engine.session.success_rate_percent:.1f}%)")
-                            print("=" * 55)
-
-                    # 5. Render Skeleton
-                    frame = draw_skeleton(
-                        frame=frame,
-                        landmarks=landmarks,
-                        selected_arm=selected_arm,
-                        abduction_angle=abduction_smooth,
-                    )
-
-                    # 6. Render Compensations Panel
-                    frame = draw_compensations_panel(
-                        frame=frame,
-                        trunk_lean_deg=lean_smooth,
-                        shrug_ratio=shrug_smooth,
-                        elbow_angle_deg=elbow_smooth,
-                        drift_angle_deg=drift_smooth,
-                        max_lean=config.compensation.max_trunk_lean_deg,
-                        max_shrug=config.compensation.max_shrug_ratio,
-                        min_elbow=config.compensation.min_elbow_angle_deg,
-                        max_drift=config.compensation.max_anterior_drift_deg,
-                    )
-
-                    # 7. Render Live Coaching Cue Banner
-                    frame = draw_live_feedback(frame=frame, feedback=live_cue)
-
+                now_sec=timestamp_ms/1000.
+                h, w = frame.shape[:2]
+                if controls.mode == "running":
+                    landmarks = detector.detect(frame, timestamp_ms)
+                    analysis = processor.process(landmarks, detector.last_world_landmarks, w, h, now_sec)
+                    audio.speak_cue(analysis.cue)
+                    if analysis.new_evaluation:
+                        audio.speak_evaluation(analysis.new_evaluation)
                 else:
-                    status = "Recherche patient..."
-                    smoother.reset_all()
-
-                # 8. Render HUD
-                frame = draw_hud(
-                    frame=frame,
-                    selected_arm=selected_arm,
-                    abduction_angle=smoother.get_smoother("abduction").value,
-                    fps=fps,
-                    status_text=status,
-                    target_range=(config.abduction.target_min_deg, config.abduction.target_max_deg),
-                    is_calibrated=calibrator.calibrated_data.is_calibrated,
-                    calibration_progress=calib_progress,
-                    rep_count=state_machine.rep_count,
-                    current_phase=state_machine.current_phase,
-                    last_evaluation=last_eval,
-                    audio_enabled=audio_coach.enabled,
-                )
-
-                # 9. Session Summary Card (if toggled)
-                if show_summary_modal:
-                    frame = draw_session_summary_modal(frame, rules_engine.session)
-
-                cv2.imshow(window_name, frame)
-
+                    analysis=FrameAnalysis(now_sec,metrics={},status=controls.mode.upper())
+                if audio.status_message != last_audio_status:
+                    print(f"[AUDIO] {audio.status_message}")
+                    last_audio_status = audio.status_message
+                output_size=native_window_size(window_name,CANVAS_SIZE)
+                display = render_dashboard(frame, analysis, processor, fps, mirror,
+                    audio.enabled, audio.status_message,mode=controls.mode,details=controls.details,
+                    help_visible=controls.help_visible,output_size=output_size)
+                viewport=canvas_viewport(CANVAS_SIZE,*output_size)
+                cv2.imshow(window_name, display)
                 key = cv2.waitKey(1) & 0xFF
-                if key in [ord("q"), ord("Q"), 27]:
-                    print("\nArret demande par l'utilisateur.")
+                if key in (ord('q'), ord('Q'), 27) or cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
                     break
-                elif key in [ord("a"), ord("A")]:
-                    new_state = audio_coach.toggle()
-                    print(f"[INFO] Coaching vocal : {'ACTIVE' if new_state else 'DESACTIVE'}")
-                elif key in [ord("l"), ord("L")]:
-                    selected_arm = "left"
-                    smoother.reset_all()
-                    state_machine.set_arm("left")
-                    calibrator.start(arm=selected_arm)
-                    print("[INFO] Bras actif : GAUCHE (recalibration lancee)")
-                elif key in [ord("r"), ord("R")]:
-                    selected_arm = "right"
-                    smoother.reset_all()
-                    state_machine.set_arm("right")
-                    calibrator.start(arm=selected_arm)
-                    print("[INFO] Bras actif : DROIT (recalibration lancee)")
-                elif key in [ord("c"), ord("C")]:
-                    calibrator.start(arm=selected_arm)
-                    print("[INFO] Recalibration demarree...")
-                elif key in [ord("s"), ord("S")]:
-                    show_summary_modal = not show_summary_modal
-                    print(f"[INFO] Bilan de seance : {'Affiche' if show_summary_modal else 'Masque'}")
-                elif key in [ord("m"), ord("M")]:
-                    cap.mirror = not cap.mirror
-                    print(f"[INFO] Mode miroir : {'Active' if cap.mirror else 'Desactive'}")
-
-            cv2.destroyAllWindows()
-
-            # Print terminal end-of-session summary
-            print("\n" + "=" * 55)
-            print("  BILAN FINAL DE LA SEANCE DE REHABILITATION")
-            print("=" * 55)
-            print(f"Total repetitions  : {rules_engine.session.total_repetitions}")
-            print(f"Repetitions valides : {rules_engine.session.correct_repetitions}")
-            print(f"Taux de reussite   : {rules_engine.session.success_rate_percent:.1f} %")
-            errs = rules_engine.session.get_most_frequent_errors()
-            if errs:
-                print("Compensations posturales les plus frequentes :")
-                for err, count in errs:
-                    print(f"  - {err} ({count}x)")
-            else:
-                print("Excellente posture globale !")
-            print("=" * 55)
-
-    except RuntimeError as e:
-        print(f"[ERREUR MATERIELLE] {e}")
-        sys.exit(1)
-    except Exception as e:
-        print(f"[ERREUR INATTENDUE] {e}")
-        sys.exit(1)
+                shortcuts={ord('l'):"arm_left",ord('r'):"arm_right",ord('a'):"audio",ord('s'):"finish",
+                           ord('m'):"mirror",ord('h'):"help",ord('d'):"details"}
+                if 65 <= key <= 90:
+                    key+=32
+                if key == ord('c') and controls.mode == "running":
+                    processor.recalibrate(timestamp_sec=now_sec)
+                    audio.silence()
+                elif key == 32:
+                    actions.append({"ready":"start","running":"pause","paused":"resume","finished":"restart"}[controls.mode])
+                elif key in shortcuts:
+                    actions.append(shortcuts[key])
+    except (RuntimeError, FileNotFoundError, cv2.error) as exc:
+        show_startup_error(exc)
+        return 1
+    finally:
+        processor.finish()
+        cv2.destroyAllWindows()
+    session = processor.rules_engine.session
+    print(f"Seance : {session.total_repetitions} tentatives terminees, {session.correct_repetitions} conformes, "
+          f"{session.total_repetitions - session.assessed_repetitions} indeterminees.")
+    return 0
 
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    sys.exit(main())

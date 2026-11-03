@@ -1,0 +1,23 @@
+name: Python checks
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  windows-tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            constraints-windows-py313.txt
+      - run: python -m pip install -r requirements.txt -c constraints-windows-py313.txt
+      - run: python models/download_models.py
+      - run: python -m piper.download_voices fr_FR-siwis-medium --data-dir models/voices
+      - run: python -m pytest -q

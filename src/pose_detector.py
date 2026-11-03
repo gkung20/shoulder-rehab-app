@@ -5,6 +5,7 @@ Operates fully offline using local .task model bundles.
 """
 
 from pathlib import Path
+import hashlib
 from typing import Dict, List, Optional, Tuple
 import cv2
 import mediapipe as mp
@@ -24,25 +25,31 @@ class PoseDetector:
         min_detection_confidence: float = 0.5,
         min_tracking_confidence: float = 0.5,
         running_mode: vision.RunningMode = vision.RunningMode.VIDEO,
+        model_variant: str = "full",
     ):
         """Initialize the PoseDetector.
 
         Args:
-            model_path: Path to the .task model file. Defaults to models/pose_landmarker_lite.task.
+            model_path: Optional explicit .task path; otherwise use model_variant (default full).
             min_detection_confidence: Minimum score for person detector.
             min_tracking_confidence: Minimum score for landmark tracking across video frames.
             running_mode: MediaPipe vision running mode (VIDEO or IMAGE).
         """
         if model_path is None:
-            model_path = Path(__file__).resolve().parent.parent / "models" / "pose_landmarker_lite.task"
+            if model_variant not in ("lite", "full", "heavy"):
+                raise ValueError("Model variant must be lite, full or heavy")
+            model_path = Path(__file__).resolve().parent.parent / "models" / f"pose_landmarker_{model_variant}.task"
+        model_path = Path(model_path)
 
         if not model_path.exists():
             raise FileNotFoundError(
                 f"MediaPipe model not found at {model_path}. "
-                "Run 'python models/download_models.py' first."
+                f"Run 'python models/download_models.py {model_path.name}' first."
             )
 
         self.model_path = model_path
+        self.model_info = {"file": model_path.name, "sha256": hashlib.sha256(model_path.read_bytes()).hexdigest(),
+                           "mediapipe_version": mp.__version__}
         self.running_mode = running_mode
         self._last_timestamp_ms = 0
         self.last_world_landmarks: Optional[List[Point3D]] = None
@@ -103,7 +110,7 @@ class PoseDetector:
                     x=float(lm.x),
                     y=float(lm.y),
                     z=float(lm.z),
-                    visibility=float(getattr(lm, "visibility", 1.0) or 1.0),
+                    visibility=float(lm.visibility) if lm.visibility is not None else 0.0,
                 )
                 for lm in world_lms
             ]
@@ -114,9 +121,9 @@ class PoseDetector:
         person_landmarks = result.pose_landmarks[0]
         points: List[Point2D] = []
         for lm in person_landmarks:
-            visibility = getattr(lm, "visibility", 1.0)
+            visibility = getattr(lm, "visibility", 0.0)
             if visibility is None:
-                visibility = 1.0
+                visibility = 0.0
             points.append(Point2D(x=float(lm.x), y=float(lm.y), visibility=float(visibility)))
 
         return points

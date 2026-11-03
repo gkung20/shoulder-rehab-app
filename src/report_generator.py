@@ -11,6 +11,7 @@ and orthopedic practitioners, including:
 
 from datetime import datetime
 import io
+from xml.sax.saxutils import escape
 from pathlib import Path
 from typing import Optional, Union
 
@@ -55,18 +56,22 @@ def _create_clinical_charts(
     correct_mask = [e.is_correct for e in evals]
 
     # --- 1. Range of Motion Plot ---
-    ax_rom.axhspan(target_min, target_max, color="#c8e6c9", alpha=0.65, label="Zone Cible Prescrite")
-    ax_rom.axhline(target_min, color="#2e7d32", linestyle="--", linewidth=1.0)
-    ax_rom.axhline(target_max, color="#2e7d32", linestyle="--", linewidth=1.0)
+    if not evals:
+        ax_rom.axhspan(target_min, target_max, color="#c8e6c9", alpha=0.65)
+    for ev in evals:
+        saved = ev.metrics.config_snapshot.get("abduction", {}) if ev.metrics else {}
+        low, high = saved.get("target_min_deg", target_min), saved.get("target_max_deg", target_max)
+        ax_rom.fill_between([ev.rep_index-.45, ev.rep_index+.45], low, high, color="#c8e6c9", alpha=.65)
 
     if rep_indices:
         # Plot connecting line
         ax_rom.plot(rep_indices, peak_angles, color="#1976d2", linewidth=1.5, alpha=0.7, zorder=2)
 
         # Plot individual points colored by status
-        for idx, ang, ok in zip(rep_indices, peak_angles, correct_mask):
-            pt_color = "#2e7d32" if ok else "#d32f2f"
-            pt_marker = "o" if ok else "X"
+        for idx, ang, ok, ev in zip(rep_indices, peak_angles, correct_mask, evals):
+            unknown = ev.status_label == "INDETERMINE"
+            pt_color = "#78909c" if unknown else "#2e7d32" if ok else "#d32f2f"
+            pt_marker = "s" if unknown else "o" if ok else "X"
             ax_rom.scatter(idx, ang, color=pt_color, s=55, marker=pt_marker, zorder=3)
 
         ax_rom.set_xticks(rep_indices)
@@ -102,7 +107,7 @@ def _create_clinical_charts(
             ax_err.text(w + 0.1, bar.get_y() + bar.get_height() / 2, f"{int(w)}", va="center", fontsize=7.5)
         ax_err.set_xlim(0, max(counts) + 1.2)
     else:
-        ax_err.text(0.5, 0.5, "Aucune compensation\n(Séance parfaite)", ha="center", va="center", transform=ax_err.transAxes, color="#2e7d32", fontweight="bold")
+        ax_err.text(0.5, 0.5, "Aucun écart mesuré\nConsulter la couverture", ha="center", va="center", transform=ax_err.transAxes, color="#546e7a", fontweight="bold")
         ax_err.set_title("Compensations Motrices", fontsize=9.5, fontweight="bold", pad=6)
         ax_err.axis("off")
 
@@ -222,7 +227,7 @@ def generate_clinical_pdf_report(
     meta_data = [
         [
             Paragraph("<b>Identifiant Patient :</b>", style_meta_label),
-            Paragraph(patient_id, style_meta_val),
+            Paragraph(escape(patient_id), style_meta_val),
             Paragraph("<b>Date de la Séance :</b>", style_meta_label),
             Paragraph(now_str, style_meta_val),
         ],
@@ -251,13 +256,43 @@ def generate_clinical_pdf_report(
 
     if evals:
         peak_angles = [e.metrics.peak_abduction_deg for e in evals if e.metrics]
-        fluid_scores = [e.metrics.fluidity_score_pct for e in evals if e.metrics]
+        fluid_scores = [e.metrics.fluidity_score_pct for e in evals if e.metrics and e.metrics.fluidity_score_pct is not None]
         mean_rom = np.mean(peak_angles) if peak_angles else 0.0
-        mean_fluid = np.mean(fluid_scores) if fluid_scores else 100.0
+        mean_fluid = np.mean(fluid_scores) if fluid_scores else None
     else:
         mean_rom = 0.0
-        mean_fluid = 100.0
+        mean_fluid = None
 
+    fluid_text = f"{mean_fluid:.1f} %" if mean_fluid is not None else "Non mesurée"
+    rom_text = f"{mean_rom:.1f} °" if evals else "Non mesurée"
+    rate_text = f"{success_rate:.1f} %" if session_summary.assessed_repetitions else "Non évaluable"
+    story.append(Paragraph(
+        f"Couverture : {session_summary.assessed_repetitions}/{total_reps} répétitions évaluables. "
+        "Les résultats indéterminés sont exclus du taux. Fluidité : indicateur expérimental, sans valeur diagnostique.", style_sub))
+    story.append(Paragraph(f"Tentatives interrompues : {session_summary.interrupted_attempts} (sans verdict).", style_sub))
+    story.append(Spacer(1, 6))
+    # Preserve settings across stop/start, arm changes and recalibrations.
+    contexts = {}
+    for ev in evals:
+        if ev.metrics and ev.metrics.session_id:
+            contexts[ev.metrics.session_id] = ev.metrics
+    for sid, metrics in contexts.items():
+        cfg = metrics.config_snapshot
+        target = cfg.get("abduction", {})
+        comp = cfg.get("compensation", {})
+        timing = cfg.get("timing", {})
+        context = (f"Session {sid[:8]} / {cfg.get('started_at', '')} : "
+            f"cible {target.get('target_min_deg', '?')}-{target.get('target_max_deg', '?')} deg ; "
+            f"tronc max {comp.get('max_trunk_lean_deg', '?')} deg ; "
+            f"haussement max {comp.get('max_shrug_ratio', '?')} ; "
+            f"coude min {comp.get('min_elbow_angle_deg', '?')} deg ; "
+            f"hors plan max {comp.get('max_anterior_drift_deg', '?')} deg ; "
+            f"temps min montee/maintien/descente {timing.get('min_concentric_time_sec', '?')}/"
+            f"{timing.get('min_hold_time_sec', '?')}/{timing.get('min_eccentric_time_sec', '?')} s ; "
+            f"calibration {metrics.calibration_snapshot.get('is_calibrated', False)} ; "
+            f"reference d'angle {metrics.calibration_snapshot.get('reference_mode', 'torso')}. "
+            "Contexte complet dans l'export JSON/CSV.")
+        story.append(Paragraph(escape(context), style_sub))
     kpi_data = [
         [
             Paragraph("<b>Répétitions Totales</b>", style_meta_label),
@@ -269,9 +304,9 @@ def generate_clinical_pdf_report(
         [
             Paragraph(f"<font size=12 color='#0d47a1'><b>{total_reps}</b></font>", style_tbl_cell),
             Paragraph(f"<font size=12 color='#2e7d32'><b>{correct_reps}</b></font>", style_tbl_cell),
-            Paragraph(f"<font size=12 color='#0d47a1'><b>{success_rate:.1f} %</b></font>", style_tbl_cell),
-            Paragraph(f"<font size=12 color='#0d47a1'><b>{mean_rom:.1f} °</b></font>", style_tbl_cell),
-            Paragraph(f"<font size=12 color='#00796b'><b>{mean_fluid:.1f} %</b></font>", style_tbl_cell),
+            Paragraph(f"<font size=12 color='#0d47a1'><b>{rate_text}</b></font>", style_tbl_cell),
+            Paragraph(f"<font size=12 color='#0d47a1'><b>{rom_text}</b></font>", style_tbl_cell),
+            Paragraph(f"<font size=12 color='#00796b'><b>{fluid_text}</b></font>", style_tbl_cell),
         ]
     ]
     tbl_kpi = Table(kpi_data, colWidths=[104, 104, 104, 104, 104])
@@ -308,27 +343,27 @@ def generate_clinical_pdf_report(
         ]
     ]
 
-    for ev in evals[:10]:  # Up to 10 reps per page
+    for ev in evals:  # ReportLab paginates the entire audit table.
         m = ev.metrics
-        status_color = "#2e7d32" if ev.is_correct else "#c62828"
+        status_color = "#546e7a" if ev.status_label == "INDETERMINE" else "#2e7d32" if ev.is_correct else "#c62828"
         status_text = f"<font color='{status_color}'><b>{ev.status_label}</b></font>"
 
-        reasons_text = "; ".join(ev.reasons) if ev.reasons else "Conforme aux prescriptions"
-        if len(reasons_text) > 55:
-            reasons_text = reasons_text[:52] + "..."
+        reasons_text = "; ".join(ev.reasons) if ev.reasons else "Seuils observes respectes"
+        reasons_text = f"{ev.arm.upper()} / " + reasons_text
+        reasons_text = escape(reasons_text)
 
         table_rows.append([
             Paragraph(str(ev.rep_index), style_tbl_cell),
             Paragraph(status_text, style_tbl_cell),
-            Paragraph(f"{m.peak_abduction_deg:.1f}°" if m else "-", style_tbl_cell),
-            Paragraph(f"{m.fluidity_score_pct:.0f}%" if m else "-", style_tbl_cell),
+            Paragraph((f"{m.peak_abduction_deg:.1f}°" + (" est." if m.angle_reference == "shoulders" else "")) if m else "-", style_tbl_cell),
+            Paragraph(f"{m.fluidity_score_pct:.0f}%" if m and m.fluidity_score_pct is not None else "-", style_tbl_cell),
             Paragraph(f"{m.concentric_duration_sec:.1f}s" if m else "-", style_tbl_cell),
             Paragraph(f"{m.hold_duration_sec:.1f}s" if m else "-", style_tbl_cell),
             Paragraph(f"{m.eccentric_duration_sec:.1f}s" if m else "-", style_tbl_cell),
             Paragraph(reasons_text, style_tbl_cell),
         ])
 
-    tbl_reps = Table(table_rows, colWidths=[20, 64, 48, 44, 42, 42, 44, 216])
+    tbl_reps = Table(table_rows, colWidths=[20, 64, 48, 44, 42, 42, 44, 216], repeatRows=1)
     tbl_style = [
         ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0d47a1")),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cfd8dc")),

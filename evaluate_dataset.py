@@ -6,27 +6,16 @@ and computes clinical statistical agreement with ground-truth human annotations
 """
 
 import csv
+import math
 from dataclasses import dataclass
 from pathlib import Path
 import sys
 from typing import Dict, List, Optional, Tuple
 import cv2
-import numpy as np
-
-from src.calibration import CalibrationManager
 from src.config import ExerciseConfig
-from src.geometry import (
-    PoseLandmarkIndex,
-    calculate_abduction_angle,
-    calculate_trunk_lean,
-    calculate_shoulder_shrug,
-    calculate_elbow_angle,
-    are_landmarks_visible,
-)
 from src.pose_detector import PoseDetector
-from src.rules_engine import RulesEngine, RepetitionEvaluation
-from src.smoothing import MultiMetricSmoother
-from src.state_machine import RepetitionStateMachine
+from src.rules_engine import RepetitionEvaluation
+from src.state_machine import ExercisePhase
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 CLIPS_DIR = DATA_DIR / "recorded_clips"
@@ -34,6 +23,7 @@ ANNOTATIONS_DIR = DATA_DIR / "annotations"
 GROUND_TRUTH_CSV = ANNOTATIONS_DIR / "ground_truth.csv"
 OUTPUT_DETAILS_CSV = ANNOTATIONS_DIR / "evaluation_details.csv"
 OUTPUT_METRICS_CSV = ANNOTATIONS_DIR / "evaluation_metrics.csv"
+OUTPUT_GROUPS_CSV = ANNOTATIONS_DIR / "evaluation_groups.csv"
 
 
 @dataclass
@@ -42,7 +32,8 @@ class ConfusionMatrix:
     true_positive: int = 0   # GT: CORRECT,      Pred: CORRECT
     false_negative: int = 0  # GT: CORRECT,      Pred: A CORRIGER
     true_negative: int = 0   # GT: A CORRIGER,   Pred: A CORRIGER
-    false_positive: int = 0  # GT: A CORRIGER,   Pred: CORRECT
+    false_positive: int = 0
+    unassessed: int = 0
 
     @property
     def total(self) -> int:
@@ -96,104 +87,34 @@ def analyze_video_file(
     if config is None:
         config = ExerciseConfig.from_yaml()
 
+    from src.session_processor import SessionProcessor
+    processor = SessionProcessor(config, arm)
     cap = cv2.VideoCapture(str(video_path))
-    if not cap.isOpened():
-        return [], "ERREUR_FICHIER"
-
-    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    frame_duration_ms = 1000.0 / fps
-
-    smoother = MultiMetricSmoother(alpha=config.filtering.ema_alpha)
-    calibrator = CalibrationManager(
-        duration_sec=min(2.0, config.calibration.duration_sec),
-        max_variance_ratio=config.calibration.max_variance_ratio,
-    )
-    state_machine = RepetitionStateMachine(
-        rest_threshold_deg=config.abduction.rest_threshold_deg,
-        rising_start_deg=config.abduction.rising_start_deg,
-        target_min_deg=config.abduction.target_min_deg,
-        target_max_deg=config.abduction.target_max_deg,
-        min_hold_time_sec=config.timing.min_hold_time_sec,
-        arm=arm,
-    )
-    rules_engine = RulesEngine(config=config)
-
-    evaluations: List[RepetitionEvaluation] = []
-
-    with PoseDetector() as detector:
-        calibrator.start(arm=arm)
-        frame_idx = 0
-
-        while True:
-            ret, frame = cap.read()
-            if not ret or frame is None:
-                break
-
-            timestamp_ms = int(frame_idx * frame_duration_ms)
-            now_sec = timestamp_ms / 1000.0
-            frame_idx += 1
-
-            landmarks = detector.detect(frame, timestamp_ms=timestamp_ms)
-            if not landmarks or len(landmarks) < 33:
-                continue
-
-            shoulder, hip, elbow, wrist, ear = detector.get_arm_landmarks(landmarks, arm=arm)
-            left_sh = landmarks[PoseLandmarkIndex.LEFT_SHOULDER]
-            right_sh = landmarks[PoseLandmarkIndex.RIGHT_SHOULDER]
-            left_hip = landmarks[PoseLandmarkIndex.LEFT_HIP]
-            right_hip = landmarks[PoseLandmarkIndex.RIGHT_HIP]
-
-            # Calibration during initial rest phase
-            if calibrator.is_calibrating:
-                calibrator.update(landmarks, arm=arm)
-
-            min_v = config.filtering.min_landmark_visibility
-            vis_ok = are_landmarks_visible([shoulder, hip, elbow], min_visibility=min_v)
-            elbow_vis = are_landmarks_visible([shoulder, elbow, wrist], min_visibility=min_v)
-            trunk_vis = are_landmarks_visible([left_sh, right_sh, left_hip, right_hip], min_visibility=min_v)
-
-            abduction_raw = calculate_abduction_angle(shoulder, hip, elbow) if vis_ok else None
-            elbow_raw = calculate_elbow_angle(shoulder, elbow, wrist) if elbow_vis else None
-            lean_raw = calculate_trunk_lean(left_sh, right_sh, left_hip, right_hip) if trunk_vis else None
-
-            shrug_raw = None
-            if calibrator.calibrated_data.is_calibrated and are_landmarks_visible([ear, shoulder], min_visibility=min_v):
-                shrug_raw = calculate_shoulder_shrug(
-                    ear=ear,
-                    shoulder=shoulder,
-                    baseline_ear_shoulder_dist=calibrator.calibrated_data.baseline_ear_shoulder_dist,
-                    baseline_shoulder_width=calibrator.calibrated_data.baseline_shoulder_width,
-                )
-
-            abduction_smooth = smoother.update("abduction", abduction_raw, is_valid=vis_ok)
-            lean_smooth = smoother.update("lean", lean_raw, is_valid=trunk_vis)
-            shrug_smooth = smoother.update("shrug", shrug_raw, is_valid=(shrug_raw is not None))
-            elbow_smooth = smoother.update("elbow", elbow_raw, is_valid=elbow_vis)
-
-            # State Machine & Repetition Evaluation
-            if calibrator.calibrated_data.is_calibrated:
-                new_rep = state_machine.update(
-                    current_angle=abduction_smooth,
-                    timestamp_sec=now_sec,
-                    current_lean=lean_smooth,
-                    current_shrug=shrug_smooth,
-                    current_elbow=elbow_smooth,
-                )
-                if new_rep is not None:
-                    eval_result = rules_engine.evaluate_repetition(new_rep)
-                    evaluations.append(eval_result)
-
-    cap.release()
-
-    # Determine overall video predicted label
-    if not evaluations:
-        predicted_label = "A CORRIGER"  # Incomplete / no valid repetition completed
-    elif all(e.is_correct for e in evaluations):
-        predicted_label = "CORRECT"
-    else:
-        predicted_label = "A CORRIGER"
-
-    return evaluations, predicted_label
+    try:
+        if not cap.isOpened():
+            return [], "ERREUR_FICHIER"
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        if not math.isfinite(fps) or fps <= 0:
+            return [], "ERREUR_FPS"
+        with PoseDetector(model_variant=config.pose.model) as detector:
+            processor.model_info = getattr(detector, "model_info", {}).copy()
+            frame_idx = 0
+            while True:
+                ok, frame = cap.read()
+                if not ok or frame is None:
+                    break
+                timestamp_sec = frame_idx / fps
+                frame_idx += 1
+                landmarks = detector.detect(frame, int(timestamp_sec * 1000))
+                h, w = frame.shape[:2]
+                processor.process(landmarks, detector.last_world_landmarks, w, h, timestamp_sec)
+    finally:
+        cap.release()
+    evaluations = processor.rules_engine.session.evaluations
+    if (not evaluations or any(e.status_label == "INDETERMINE" for e in evaluations)
+            or processor.interrupted_attempts or processor.state_machine.current_phase != ExercisePhase.REST):
+        return evaluations, "INDETERMINE"
+    return evaluations, "CORRECT" if all(e.is_correct for e in evaluations) else "A CORRIGER"
 
 
 def compute_dataset_metrics(ground_truth_path: Path) -> ConfusionMatrix:
@@ -225,10 +146,27 @@ def compute_dataset_metrics(ground_truth_path: Path) -> ConfusionMatrix:
         gt_label = row.get("ground_truth_label", "").strip().upper()
 
         video_path = CLIPS_DIR / filename
+        # An annotation may name a clip, never escape the private clips directory.
+        if not video_path.resolve().is_relative_to(CLIPS_DIR.resolve()):
+            cm.unassessed += 1
+            detailed_records.append({"video_file": filename, "arm": arm,
+                "ground_truth_label": gt_label, "predicted_label": "ERREUR_CHEMIN",
+                "agreement": "", "nb_reps": 0, "reasons": "Chemin de clip invalide"})
+            continue
         if not video_path.exists():
             print(f"[MANQUANT] {filename} introuvable dans {CLIPS_DIR}")
+            cm.unassessed += 1
+            detailed_records.append({"video_file": filename, "arm": arm,
+                "ground_truth_label": gt_label, "predicted_label": "ERREUR_FICHIER",
+                "agreement": "", "nb_reps": 0, "reasons": "Fichier manquant"})
             continue
 
+        if gt_label not in ("CORRECT", "A CORRIGER") or arm not in ("left", "right"):
+            cm.unassessed += 1
+            detailed_records.append({"video_file": filename, "arm": arm,
+                "ground_truth_label": gt_label, "predicted_label": "ERREUR_ANNOTATION",
+                "agreement": "", "nb_reps": 0, "reasons": "Annotation invalide"})
+            continue
         evals, pred_label = analyze_video_file(video_path, arm=arm, config=config)
 
         # Update Confusion Matrix
@@ -246,6 +184,7 @@ def compute_dataset_metrics(ground_truth_path: Path) -> ConfusionMatrix:
             match_status = "ERREUR (Faux Positif)"
         else:
             match_status = "INDETERMINE"
+            cm.unassessed += 1
 
         print(f"{filename[:30]:<32} {arm.upper():<6} {gt_label:<15} {pred_label:<15} {match_status}")
 
@@ -259,19 +198,58 @@ def compute_dataset_metrics(ground_truth_path: Path) -> ConfusionMatrix:
             "arm": arm,
             "ground_truth_label": gt_label,
             "predicted_label": pred_label,
-            "agreement": (gt_label == pred_label),
+            "agreement": (gt_label == pred_label) if pred_label in ("CORRECT", "A CORRIGER") else "",
             "nb_reps": len(evals),
             "reasons": reasons_combined,
         })
 
+    # Each annotation has a record, including missing files and invalid labels.
+    for record, row in zip(detailed_records, rows):
+        for key in ("participant_id", "lighting", "camera_view", "clothing", "compensation_type"):
+            record[key] = row.get(key, "").strip()
     # Save detailed CSV
     if detailed_records:
         with open(OUTPUT_DETAILS_CSV, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=detailed_records[0].keys())
             writer.writeheader()
             writer.writerows(detailed_records)
+        with open(OUTPUT_GROUPS_CSV, "w", newline="", encoding="utf-8") as f:
+            grouped = summarize_groups(detailed_records)
+            writer = csv.DictWriter(f, fieldnames=grouped[0].keys())
+            writer.writeheader()
+            writer.writerows(grouped)
 
     return cm
+
+
+def summarize_groups(records):
+    """Describe observed subgroup agreement and missingness, without inferring identity."""
+    output = []
+    for dimension in ("participant_id", "arm", "lighting", "camera_view", "clothing", "compensation_type"):
+        values = sorted({r.get(dimension, "") for r in records if r.get(dimension, "")})
+        for value in values:
+            subset = [r for r in records if r.get(dimension) == value]
+            cm = ConfusionMatrix()
+            for row in subset:
+                gt, pred = row["ground_truth_label"], row["predicted_label"]
+                if gt not in ("CORRECT", "A CORRIGER") or pred not in ("CORRECT", "A CORRIGER"):
+                    cm.unassessed += 1
+                elif gt == "CORRECT" and pred == "CORRECT":
+                    cm.true_positive += 1
+                elif gt == "CORRECT":
+                    cm.false_negative += 1
+                elif pred == "CORRECT":
+                    cm.false_positive += 1
+                else:
+                    cm.true_negative += 1
+            output.append({"dimension": dimension, "group": value, "clips": len(subset),
+                "assessed": cm.total, "unassessed": cm.unassessed,
+                "coverage_percent": round(100 * cm.total / len(subset), 2),
+                "accuracy_percent": round(cm.accuracy * 100, 2) if cm.total else "",
+                "false_approvals": cm.false_positive, "false_corrections": cm.false_negative})
+    return output or [{"dimension": "all", "group": "unknown", "clips": len(records),
+        "assessed": 0, "unassessed": len(records), "coverage_percent": 0,
+        "accuracy_percent": "", "false_approvals": 0, "false_corrections": 0}]
 
 
 def print_clinical_report(cm: ConfusionMatrix) -> None:
@@ -286,28 +264,34 @@ def print_clinical_report(cm: ConfusionMatrix) -> None:
     print(f"TERRAIN A CORR.   FP = {cm.false_positive:<12} TN = {cm.true_negative}")
 
     print("\n" + "-" * 65)
-    print("METRIQUES STATISTIQUES D'ACCORD CLINIQUE :")
-    print(f"  Exactitude (Accuracy)    : {cm.accuracy * 100:6.2f} %")
-    print(f"  Sensibilite (Recall)     : {cm.sensitivity * 100:6.2f} % (Taux de detection des reps correctes)")
-    print(f"  Specificite              : {cm.specificity * 100:6.2f} % (Taux de detection des compensations)")
-    print(f"  Precision                : {cm.precision * 100:6.2f} %")
-    print(f"  F1-Score                 : {cm.f1_score * 100:6.2f} %")
+    print(f"Clips evaluables : {cm.total} / {cm.total + cm.unassessed}")
+    print(f"Clips non evaluables (exclus des scores) : {cm.unassessed}")
+    print("METRIQUES DU PROTOTYPE SUR LES CLIPS EVALUABLES :")
+    metric_values = (
+        ("accuracy_percent", cm.accuracy, cm.total),
+        ("sensitivity_recall_percent", cm.sensitivity, cm.true_positive + cm.false_negative),
+        ("specificity_percent", cm.specificity, cm.true_negative + cm.false_positive),
+        ("precision_percent", cm.precision, cm.true_positive + cm.false_positive),
+        ("f1_score_percent", cm.f1_score, 2 * cm.true_positive + cm.false_positive + cm.false_negative),
+    )
+    for name, value, denominator in metric_values:
+        shown = f"{value * 100:.2f} %" if denominator else "non calculable"
+        print(f"  {name}: {shown}")
     print("=" * 65)
 
     # Save metrics CSV
     with open(OUTPUT_METRICS_CSV, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["metric", "value"])
-        writer.writerow(["total_samples", cm.total])
+        writer.writerow(["assessed_samples", cm.total])
+        writer.writerow(["unassessed_samples", cm.unassessed])
+        writer.writerow(["assessment_coverage_percent", round(100 * cm.total / (cm.total + cm.unassessed), 2) if cm.total + cm.unassessed else 0])
         writer.writerow(["true_positive", cm.true_positive])
         writer.writerow(["false_negative", cm.false_negative])
         writer.writerow(["true_negative", cm.true_negative])
         writer.writerow(["false_positive", cm.false_positive])
-        writer.writerow(["accuracy_percent", round(cm.accuracy * 100, 2)])
-        writer.writerow(["sensitivity_recall_percent", round(cm.sensitivity * 100, 2)])
-        writer.writerow(["specificity_percent", round(cm.specificity * 100, 2)])
-        writer.writerow(["precision_percent", round(cm.precision * 100, 2)])
-        writer.writerow(["f1_score_percent", round(cm.f1_score * 100, 2)])
+        for name, value, denominator in metric_values:
+            writer.writerow([name, round(value * 100, 2) if denominator else ""])
 
     print(f"[RAPPORT] Resultats detailles sauvegardes dans : {OUTPUT_DETAILS_CSV.name}")
     print(f"[RAPPORT] Metriques globales sauvegardees dans  : {OUTPUT_METRICS_CSV.name}\n")
@@ -320,7 +304,7 @@ def main():
         sys.exit(1)
 
     cm = compute_dataset_metrics(GROUND_TRUTH_CSV)
-    if cm.total > 0:
+    if cm.total + cm.unassessed > 0:
         print_clinical_report(cm)
 
 

@@ -134,8 +134,8 @@ def draw_hud(
 
         if last_evaluation.is_correct:
             reasons_txt = (
-                f"Execution parfaite ! (Angle: {last_evaluation.metrics.peak_abduction_deg:.1f} deg | "
-                f"Fluidite: {last_evaluation.metrics.fluidity_score_pct:.0f}%)"
+                f"Seuils respectes (Angle: {last_evaluation.metrics.peak_abduction_deg:.1f} deg | "
+                "indicateur experimental)"
             )
         else:
             reasons_txt = " | ".join(last_evaluation.reasons[:2])
@@ -260,14 +260,14 @@ def draw_session_summary_modal(frame: np.ndarray, summary: SessionSummary) -> np
 
     avg_fluid = 0.0
     if summary.evaluations:
-        scores = [e.metrics.fluidity_score_pct for e in summary.evaluations if e.metrics]
+        scores = [e.metrics.fluidity_score_pct for e in summary.evaluations if e.metrics and e.metrics.fluidity_score_pct is not None]
         avg_fluid = sum(scores) / len(scores) if scores else 0.0
-    cv2.putText(frame, f"Fluidite motrice moy.  : {avg_fluid:.1f} %", (cx + 35, cy + 158), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (0, 255, 200), 1, cv2.LINE_AA)
+    cv2.putText(frame, f"Evaluables : {summary.assessed_repetitions}/{summary.total_repetitions}", (cx + 35, cy + 158), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (0, 255, 200), 1, cv2.LINE_AA)
 
     cv2.putText(frame, "Compensations les plus frequentes :", (cx + 35, cy + 195), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (200, 200, 200), 1, cv2.LINE_AA)
     errors = summary.get_most_frequent_errors(top_n=3)
     if not errors:
-        cv2.putText(frame, "  Aucune erreur detectee. Excellente posture !", (cx + 45, cy + 225), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 120), 1, cv2.LINE_AA)
+        cv2.putText(frame, "  Aucun ecart mesure. Voir la couverture du suivi.", (cx + 45, cy + 225), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 120), 1, cv2.LINE_AA)
     else:
         y_err = cy + 225
         for err_msg, count in errors:

@@ -18,6 +18,7 @@ def test_engine():
             min_elbow_angle_deg=155.0,
             max_anterior_drift_deg=25.0,
             min_fluidity_pct=60.0,
+            evaluate_fluidity=True,
         ),
         timing=TimingThresholds(min_concentric_time_sec=1.0, min_hold_time_sec=0.5, min_eccentric_time_sec=1.0),
         filtering=None,
@@ -231,5 +232,5 @@ def test_live_feedback_cues(test_engine):
     fb_hold = test_engine.evaluate_live_frame(
         current_angle=90.0, current_lean=2.0, current_shrug=0.02, current_elbow=175.0, current_phase=ExercisePhase.HOLD
     )
-    assert fb_hold.level == FeedbackLevel.SUCCESS
+    assert fb_hold.level == FeedbackLevel.INFO
     assert "maintenez" in fb_hold.message.lower()

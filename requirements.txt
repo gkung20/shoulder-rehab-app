@@ -8,9 +8,13 @@ PyYAML>=6.0
 pandas>=2.0.0
 
 # User Interface, Audio Feedback & Clinical PDF Reporting
-streamlit>=1.30.0
+streamlit>=1.37.0
 pyttsx3>=2.90
+piper-tts>=1.8.0,<2
+sounddevice>=0.5.0
 reportlab>=4.0.0
+matplotlib>=3.8.0
+pillow>=10.1.0
 
 # Testing & Quality Assurance
 pytest>=7.4.0

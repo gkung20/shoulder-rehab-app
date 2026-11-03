@@ -67,6 +67,7 @@ class SessionSummary:
     def __init__(self):
         self.evaluations: List[RepetitionEvaluation] = []
         self.error_counter: Counter = Counter()
+        self.interrupted_attempts = 0
 
     def record(self, eval_result: RepetitionEvaluation) -> None:
         """Record a completed repetition evaluation and aggregate error categories."""
@@ -83,10 +84,14 @@ class SessionSummary:
         return sum(1 for e in self.evaluations if e.is_correct)
 
     @property
+    def assessed_repetitions(self) -> int:
+        return sum(e.status_label != "INDETERMINE" for e in self.evaluations)
+
+    @property
     def success_rate_percent(self) -> float:
-        if self.total_repetitions == 0:
+        if self.assessed_repetitions == 0:
             return 0.0
-        return (self.correct_repetitions / self.total_repetitions) * 100.0
+        return (self.correct_repetitions / self.assessed_repetitions) * 100.0
 
     def get_most_frequent_errors(self, top_n: int = 5) -> List[Tuple[str, int]]:
         """Return the top most frequent error categories with occurrence counts."""
@@ -96,6 +101,7 @@ class SessionSummary:
         """Reset all session history."""
         self.evaluations.clear()
         self.error_counter.clear()
+        self.interrupted_attempts = 0
 
 
 class RulesEngine:
@@ -143,12 +149,12 @@ class RulesEngine:
             if current_angle < self.config.abduction.target_min_deg - 10.0:
                 return LiveFeedback("Montez lentement le bras...", FeedbackLevel.INFO)
             else:
-                return LiveFeedback("Presque en haut, atteignez l'horizontale", FeedbackLevel.INFO)
+                return LiveFeedback("Presque ! Rejoignez votre zone cible", FeedbackLevel.INFO)
 
         elif current_phase == ExercisePhase.HOLD:
             if current_angle > self.config.abduction.overshoot_warn_deg:
-                return LiveFeedback("Ne levez pas trop haut (restez a l'horizontale)", FeedbackLevel.WARNING)
-            return LiveFeedback("Tres bien ! Maintenez la position...", FeedbackLevel.SUCCESS)
+                return LiveFeedback("Un peu moins haut : revenez dans la zone cible", FeedbackLevel.WARNING)
+            return LiveFeedback("Maintenez dans la zone cible, puis redescendez", FeedbackLevel.INFO)
 
         elif current_phase == ExercisePhase.LOWERING:
             return LiveFeedback("Controlez la descente lentement", FeedbackLevel.INFO)
@@ -168,10 +174,10 @@ class RulesEngine:
                 category=ERR_INSUFFICIENT_ROM,
                 detail=f"Amplitude insuffisante : {rep.peak_abduction_deg:.1f} deg (cible : >={self.config.abduction.target_min_deg:.0f} deg)",
             ))
-        elif rep.peak_abduction_deg > self.config.abduction.overshoot_warn_deg:
+        elif rep.peak_abduction_deg > self.config.abduction.target_max_deg:
             errors.append(ClinicalError(
                 category=ERR_OVERSHOOT_ROM,
-                detail=f"Elevation trop haute : {rep.peak_abduction_deg:.1f} deg (max : {self.config.abduction.overshoot_warn_deg:.0f} deg)",
+                detail=f"Elevation hors cible : {rep.peak_abduction_deg:.1f} deg (cible max : {self.config.abduction.target_max_deg:.0f} deg)",
             ))
 
         # 2. Shoulder Shrug Compensation
@@ -203,7 +209,8 @@ class RulesEngine:
             ))
 
         # 6. Motor Control Fluidity (Smoothness / Normalized Jerk)
-        if rep.fluidity_score_pct < self.config.compensation.min_fluidity_pct:
+        if (self.config.compensation.evaluate_fluidity and rep.fluidity_score_pct is not None
+                and rep.fluidity_score_pct < self.config.compensation.min_fluidity_pct):
             errors.append(ClinicalError(
                 category=ERR_JERKY_MOVEMENT,
                 detail=f"Mouvement saccade ({rep.fluidity_score_pct:.1f}% < {self.config.compensation.min_fluidity_pct:.0f}%)",
@@ -228,9 +235,11 @@ class RulesEngine:
                 detail=f"Descente trop rapide ({rep.eccentric_duration_sec:.1f}s < {self.config.timing.min_eccentric_time_sec:.1f}s)",
             ))
 
-        is_correct = (len(errors) == 0)
-        status_label = "CORRECT" if is_correct else "A CORRIGER"
+        is_correct = not errors and not rep.missing_metrics
+        status_label = "INDETERMINE" if rep.missing_metrics else ("CORRECT" if is_correct else "A CORRIGER")
         reasons = [err.detail for err in errors]
+        if rep.missing_metrics:
+            reasons.insert(0, "Evaluation incomplete : " + ", ".join(rep.missing_metrics))
 
         result = RepetitionEvaluation(
             rep_index=rep.rep_index,

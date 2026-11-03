@@ -7,7 +7,7 @@ projected onto the camera image plane. No external state or I/O is performed.
 from dataclasses import dataclass
 from enum import IntEnum
 import math
-from typing import Sequence, Tuple, Union
+from typing import Optional, Sequence, Tuple, Union
 
 
 class PoseLandmarkIndex(IntEnum):
@@ -68,6 +68,17 @@ class Point3D:
     y: float
     z: float
     visibility: float = 1.0
+
+
+def to_measurement_space(landmarks: Sequence[Point2D], width: int, height: int) -> list:
+    """Use image-height units on both axes; keep detector coordinates for rendering.
+
+    MediaPipe normalizes x by width and y by height. Angles and anatomical
+    distance ratios require an isotropic coordinate system.
+    """
+    if width <= 0 or height <= 0:
+        raise ValueError("Image dimensions must be positive")
+    return [Point2D(p.x * width / height, p.y, p.visibility) for p in landmarks]
 
 
 def calculate_angle_2d(p_vertex: Point2D, p1: Point2D, p2: Point2D) -> float:
@@ -146,6 +157,25 @@ def calculate_elbow_angle(shoulder: Point2D, elbow: Point2D, wrist: Point2D) -> 
         Elbow angle in degrees [0.0, 180.0].
     """
     return calculate_angle_2d(p_vertex=elbow, p1=shoulder, p2=wrist)
+
+
+def calculate_shoulder_reference_angle(left: Point2D, right: Point2D,
+                                     shoulder: Point2D, elbow: Point2D) -> Optional[float]:
+    """Close-up estimate against the downward normal of the shoulder line.
+
+    Needs equal x/y units. This is a shoulder-based proxy, not a torso-referenced
+    abduction measurement, and cannot establish trunk posture.
+    """
+    dx, dy = right.x - left.x, right.y - left.y
+    length = math.hypot(dx, dy)
+    if length < .05 or math.hypot(elbow.x-shoulder.x, elbow.y-shoulder.y) < .02:
+        return None
+    nx, ny = -dy / length, dx / length
+    if ny < 0:
+        nx, ny = -nx, -ny
+    if ny < .3:  # A nearly vertical shoulder line has no reliable downward normal.
+        return None
+    return calculate_angle_2d(shoulder, Point2D(shoulder.x+nx, shoulder.y+ny), elbow)
 
 
 def calculate_distance_2d(p1: Point2D, p2: Point2D) -> float:
@@ -253,7 +283,12 @@ def are_landmarks_visible(landmarks: Sequence[Union[Point2D, Point3D]], min_visi
     Returns:
         True if every landmark has visibility >= min_visibility, False otherwise.
     """
-    return all(lm.visibility >= min_visibility for lm in landmarks)
+    return bool(landmarks) and all(
+        math.isfinite(lm.visibility) and lm.visibility >= min_visibility
+        and math.isfinite(lm.x) and math.isfinite(lm.y)
+        and (not isinstance(lm, Point3D) or math.isfinite(lm.z))
+        for lm in landmarks
+    )
 
 
 def calculate_anterior_drift_angle(
@@ -262,7 +297,7 @@ def calculate_anterior_drift_angle(
     active_hip: Point3D,
     other_hip: Point3D,
     active_elbow: Point3D,
-) -> float:
+) -> Optional[float]:
     """Calculate the 3D out-of-plane forward drift angle (antepulsion) in degrees.
 
     Uses 3D world coordinates (in meters) to determine the angle between the arm vector
@@ -289,7 +324,7 @@ def calculate_anterior_drift_angle(
 
     Returns:
         Drift angle in degrees in range [0.0, 90.0].
-        Returns 0.0 if vectors are degenerate or arm length is near zero.
+        Returns None if vectors are degenerate or arm length is near zero.
     """
     # Lateral vector across shoulders
     lat_x = other_shoulder.x - active_shoulder.x
@@ -317,7 +352,7 @@ def calculate_anterior_drift_angle(
 
     norm_n = math.sqrt(nx * nx + ny * ny + nz * nz)
     if norm_n < 1e-7:
-        return 0.0
+        return None
 
     # Unit normal vector
     nx /= norm_n
@@ -331,7 +366,7 @@ def calculate_anterior_drift_angle(
 
     arm_len = math.sqrt(arm_x * arm_x + arm_y * arm_y + arm_z * arm_z)
     if arm_len < 1e-7:
-        return 0.0
+        return None
 
     # Projection along plane normal
     dot = (arm_x * nx) + (arm_y * ny) + (arm_z * nz)
@@ -344,37 +379,38 @@ def calculate_anterior_drift_angle(
 def calculate_trajectory_smoothness(
     timestamps: Sequence[float],
     angles: Sequence[float],
-) -> Tuple[float, float]:
-    """Calculate motor control trajectory smoothness using Normalized Jerk.
+) -> Tuple[Optional[float], Optional[float]]:
+    """Experimental angular-trajectory smoothness proxy, sensitive to sensor noise.
 
-    In motor control neuroscience (Flash & Hogan, minimum-jerk theory), healthy
-    and coordinated limb movements follow a smooth bell-shaped velocity profile
-    minimizing the third derivative of displacement (jerk = d^3 theta / dt^3).
-    Pathological, fatigued, or compensatory movements exhibit hesitation,
-    sudden accelerations, and motor tremors (high jerk).
+    This measures a numerical derivative, not fatigue, tremor or a diagnosis.
 
     Formula (Dimensionless Normalized Jerk):
-        Normalized Jerk = sqrt( 0.5 * T^5 * (1/N * sum(jerk^2)) / (delta_theta)^2 )
+        Normalized Jerk = sqrt(0.5 * T^6 * time_weighted_mean(jerk^2) / amplitude^2)
 
     Args:
         timestamps: Sequence of monotonically increasing timestamps in seconds.
         angles: Sequence of joint angles corresponding to timestamps.
 
     Returns:
-        Tuple of (normalized_jerk: float, fluidity_score_percent: float).
-        fluidity_score_percent is mapped to [0.0, 100.0]%:
-          - ~90-100%: smooth, coordinated physiological movement.
-          - < 60%: jerky, trembling, or compensatory sub-movements.
+        Tuple of (normalized_jerk, experimental_score), or (None, None) when
+        samples are insufficient. The 0-100 mapping is a heuristic, not a
+        calibrated probability of correct movement.
     """
     if len(timestamps) < 5 or len(angles) < 5:
-        return 0.0, 100.0
+        return None, None
 
+    if len(timestamps) != len(angles):
+        return None, None
+    if not all(math.isfinite(x) for x in (*timestamps, *angles)):
+        return None, None
+    if any(timestamps[i+1] <= timestamps[i] for i in range(len(timestamps)-1)):
+        return None, None
     t = [float(x) for x in timestamps]
     a = [float(x) for x in angles]
 
     duration = t[-1] - t[0]
     if duration <= 0.15:
-        return 0.0, 100.0
+        return None, None
 
     # 1. Angular velocity: omega = da / dt
     vel = []
@@ -386,7 +422,7 @@ def calculate_trajectory_smoothness(
             t_vel.append((t[i] + t[i + 1]) / 2.0)
 
     if len(vel) < 3:
-        return 0.0, 100.0
+        return None, None
 
     # 2. Angular acceleration: alpha = d(omega) / dt
     acc = []
@@ -398,28 +434,30 @@ def calculate_trajectory_smoothness(
             t_acc.append((t_vel[i] + t_vel[i + 1]) / 2.0)
 
     if len(acc) < 2:
-        return 0.0, 100.0
+        return None, None
 
     # 3. Angular jerk: j = d(alpha) / dt
     jerk_sq_sum = 0.0
+    jerk_duration = 0.0
     jerk_count = 0
     for i in range(len(acc) - 1):
         dt = t_acc[i + 1] - t_acc[i]
         if dt > 1e-5:
             j = (acc[i + 1] - acc[i]) / dt
-            jerk_sq_sum += j * j
+            jerk_sq_sum += j * j * dt
+            jerk_duration += dt
             jerk_count += 1
 
     if jerk_count == 0:
-        return 0.0, 100.0
+        return None, None
 
-    mean_sq_jerk = jerk_sq_sum / jerk_count
+    mean_sq_jerk = jerk_sq_sum / jerk_duration
 
     # Amplitude normalization (guarding against divide-by-zero on micro-movements)
     amplitude = max(abs(max(a) - min(a)), 15.0)
 
     # Dimensionless Normalized Jerk
-    norm_jerk = math.sqrt(0.5 * (duration ** 5) * mean_sq_jerk / (amplitude ** 2))
+    norm_jerk = math.sqrt(0.5 * (duration ** 6) * mean_sq_jerk / (amplitude ** 2))
 
     # Sigmoid mapping to 0-100% Fluidity Score
     # Typical smooth minimum-jerk trajectory has norm_jerk ~ 10-30
