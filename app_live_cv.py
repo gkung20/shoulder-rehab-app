@@ -12,6 +12,8 @@ from src.dashboard import render_dashboard, CANVAS_SIZE
 from src.audio_feedback import AudioCoach
 from src.patient_controls import PatientControls, dashboard_action_at
 from src.window_viewport import native_window_size, canvas_viewport, enable_high_dpi
+from src.avatar_stage import AvatarStage
+from src.hand_detector import HandDetector,MODEL_PATH as HAND_MODEL_PATH
 
 
 def show_startup_error(error):
@@ -44,6 +46,8 @@ def main(argv=None):
     parser.add_argument("--height", type=int, help="Hauteur de capture demandee")
     parser.add_argument("--zoom", type=float, help="Zoom du pilote, si pris en charge (unites du fabricant)")
     parser.add_argument("--model", choices=("lite", "full", "heavy"), help="Modele : full par defaut")
+    parser.add_argument("--no-avatars", action="store_true", help="Vue camera seule, sans moteur 3D")
+    parser.add_argument("--no-hands", action="store_true", help="Desactiver le suivi detaille des mains")
     args = parser.parse_args(argv)
     config = ExerciseConfig.from_yaml()
     overrides = {name: getattr(args, arg) for name,arg in (("index","camera"),("width","width"),("height","height"),("zoom","zoom")) if getattr(args,arg) is not None}
@@ -54,13 +58,24 @@ def main(argv=None):
         parser.error(str(exc))
     processor = SessionProcessor(config)
     mirror = True
-    controls = PatientControls()
+    controls = PatientControls(avatars=not args.no_avatars)
     actions = deque()
     now_sec = 0.
     window_name = "Mouvement - Coach epaule"
-    print("L/R bras | C calibration | A audio | S bilan | M miroir | Q quitter")
+    avatar_stage=None
+    hand_detector=None
+    print("L/R bras | C calibration | A audio | S bilan | M miroir | V avatars/camera | Q quitter")
     print("Deux epaules pour commencer ; coude actif visible pour compter. Visage non requis par l'application.")
     try:
+        # AvatarStage preloads the voice runtime, then initializes graphics before
+        # the audio worker starts. Windows native library order matters here.
+        if not args.no_avatars:
+            avatar_stage=AvatarStage()
+        if not args.no_hands and HAND_MODEL_PATH.exists():
+            hand_detector=HandDetector()
+            print("[MAINS] Suivi detaille des paumes et doigts actif.")
+        elif not args.no_hands:
+            print("[MAINS] Modele optionnel absent : python models/download_models.py hand_landmarker.task")
         c = config.camera
         with VideoCaptureManager(camera_index=c.index, width=c.width, height=c.height, target_fps=c.fps,
                                  zoom=c.zoom, mirror=False) as cap, PoseDetector(model_variant=config.pose.model) as detector, AudioCoach.from_config(config.audio, enabled=True) as audio:
@@ -76,7 +91,8 @@ def main(argv=None):
                     if point is None:
                         return
                     action=dashboard_action_at(*point,mode=controls.mode,arm=processor.arm,
-                        audio_enabled=audio.enabled,details=controls.details,help_visible=controls.help_visible)
+                        audio_enabled=audio.enabled,details=controls.details,help_visible=controls.help_visible,
+                        avatars=controls.avatars,avatar_gender=controls.avatar_gender)
                     if action:
                         actions.append(action)
             cv2.setMouseCallback(window_name,on_mouse)
@@ -107,6 +123,11 @@ def main(argv=None):
                         audio.silence()
                     elif action == "audio":
                         audio.toggle()
+                    elif action == "avatars" and controls.avatars and avatar_stage is None:
+                        avatar_stage=AvatarStage()
+                        avatar_stage.set_user_gender(controls.avatar_gender)
+                    elif action in ("avatar_male","avatar_female") and avatar_stage is not None:
+                        avatar_stage.set_user_gender(controls.avatar_gender)
                     elif action == "mirror":
                         mirror=not mirror
                 if quitting:
@@ -120,6 +141,8 @@ def main(argv=None):
                 if controls.mode == "running":
                     landmarks = detector.detect(frame, timestamp_ms)
                     analysis = processor.process(landmarks, detector.last_world_landmarks, w, h, now_sec)
+                    if hand_detector is not None:
+                        analysis.hands=hand_detector.detect(frame,timestamp_ms,landmarks)
                     audio.speak_cue(analysis.cue)
                     if analysis.new_evaluation:
                         audio.speak_evaluation(analysis.new_evaluation)
@@ -131,14 +154,15 @@ def main(argv=None):
                 output_size=native_window_size(window_name,CANVAS_SIZE)
                 display = render_dashboard(frame, analysis, processor, fps, mirror,
                     audio.enabled, audio.status_message,mode=controls.mode,details=controls.details,
-                    help_visible=controls.help_visible,output_size=output_size)
+                    help_visible=controls.help_visible,output_size=output_size,
+                    avatar_stage=avatar_stage,avatars=controls.avatars,avatar_gender=controls.avatar_gender)
                 viewport=canvas_viewport(CANVAS_SIZE,*output_size)
                 cv2.imshow(window_name, display)
                 key = cv2.waitKey(1) & 0xFF
                 if key in (ord('q'), ord('Q'), 27) or cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
                     break
                 shortcuts={ord('l'):"arm_left",ord('r'):"arm_right",ord('a'):"audio",ord('s'):"finish",
-                           ord('m'):"mirror",ord('h'):"help",ord('d'):"details"}
+                           ord('m'):"mirror",ord('h'):"help",ord('d'):"details",ord('v'):"avatars"}
                 if 65 <= key <= 90:
                     key+=32
                 if key == ord('c') and controls.mode == "running":
@@ -148,10 +172,14 @@ def main(argv=None):
                     actions.append({"ready":"start","running":"pause","paused":"resume","finished":"restart"}[controls.mode])
                 elif key in shortcuts:
                     actions.append(shortcuts[key])
-    except (RuntimeError, FileNotFoundError, cv2.error) as exc:
+    except (RuntimeError, ValueError, FileNotFoundError, ImportError, cv2.error) as exc:
         show_startup_error(exc)
         return 1
     finally:
+        if hand_detector is not None:
+            hand_detector.close()
+        if avatar_stage is not None:
+            avatar_stage.close()
         processor.finish()
         cv2.destroyAllWindows()
     session = processor.rules_engine.session

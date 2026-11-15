@@ -8,6 +8,10 @@ env/
 !.env.example
 !.env.sample
 output/
+# Earlier generated previews and pytest artifacts moved here locally.
+3d/
+# Locally downloaded character assets and original archives (licenses kept separately).
+alo/
 __pycache__/
 *.py[cod]
 *$py.class

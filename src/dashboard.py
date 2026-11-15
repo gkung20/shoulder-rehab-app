@@ -133,7 +133,8 @@ def _button(p,button):
 
 
 def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_enabled=True,audio_status="",
-                     *,mode="running",details=False,help_visible=False,show_controls=True,output_size=None):
+                     *,mode="running",details=False,help_visible=False,show_controls=True,output_size=None,
+                     avatar_stage=None,avatars=True,avatar_gender="male"):
     width,height=output_size or CANVAS_SIZE
     if width <= 0 or height <= 0:
         width,height=CANVAS_SIZE
@@ -143,7 +144,10 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
     p.text((32,17),"mouvement",30)
     p.text((34,60),"Épaule / séance guidée",14,MUTED)
     p.rule(32,98,1248,98)
-    p.text((32,108),"CAMÉRA",11,MUTED)
+    use_avatars=avatars and avatar_stage is not None
+    p.text((32,108),"VOTRE COACH" if use_avatars else "CAMÉRA",11,MUTED)
+    if use_avatars:
+        p.text((468,108),"VOTRE MOUVEMENT · ESTIMATION",11,MUTED)
 
     video=camera_frame.copy()
     if details and analysis.landmarks:
@@ -159,6 +163,25 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
     resized=cv2.resize(video,(video_width,video_height),interpolation=cv2.INTER_AREA if scale < 1 else cv2.INTER_CUBIC)
     canvas.paste(Image.fromarray(cv2.cvtColor(resized,cv2.COLOR_BGR2RGB)),
                  (x1+(x2-x1-video_width)//2,y1+(y2-y1-video_height)//2))
+    if use_avatars:
+        scene,tracked=avatar_stage.render(analysis,processor,mode,(vw,vh),(x2-x1,y2-y1))
+        canvas.paste(Image.fromarray(scene),(x1,y1))
+        p.rule(446,150,446,545)
+        p.text((54,150),"Démonstration",16)
+        resting=getattr(avatar_stage,'resting_sides',set())
+        partial=isinstance(resting,set) and len(resting)==1
+        label=("Suivi partiel · bras au repos" if tracked and partial else "En direct" if tracked
+               else "Au repos · aucun suivi")
+        p.text((472,150),label,15)
+        # A framing preview remains visible, without covering the moving arms.
+        thumb_w,thumb_h=round(160*p.sx),round(90*p.sy)
+        thumb_scale=min(thumb_w/vw,thumb_h/vh)
+        thumb=cv2.resize(video,(max(1,round(vw*thumb_scale)),max(1,round(vh*thumb_scale))))
+        canvas.paste(Image.fromarray(cv2.cvtColor(thumb,cv2.COLOR_BGR2RGB)),p.point(366,494))
+        p.text((54,570),"Exemple à votre rythme",12,MUTED)
+        detailed=getattr(avatar_stage,'detailed_hands',0)
+        p.text((550,570),"Paume et doigts suivis" if isinstance(detailed,int) and detailed>0
+               else "Main absente : bras au repos",12,MUTED)
 
     p.rule(892,132,892,706)
     title,body,status=patient_guidance(analysis,mode,processor)
@@ -216,10 +239,10 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
     if help_visible:
         p.rect((52,152,840,582),fill=BG,outline=LINE)
         p.text((82,175),"Comment faire",27)
-        tips=["Choisissez le bras droit ou gauche en haut de l’écran.",
+        tips=["Choisissez votre avatar et le bras suivi en haut de l’écran.",
               "Montrez les deux épaules et le coude du bras suivi.",
               "Commencez, puis gardez le bras baissé quelques instants.",
-              "Suivez le texte : lever, maintenir, puis redescendre.",
+              "Suivez le coach et le texte : lever, maintenir, redescendre.",
               "Faites une pause quand vous en avez besoin. Arrêtez en cas de douleur."]
         y=235
         for index,tip in enumerate(tips,1):
@@ -227,7 +250,7 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
             y=p.wrap((120,y-4),tip,684,19,max_lines=2)+22
     p.rule(32,732,1248,732)
     if show_controls:
-        for button in patient_buttons(mode,processor.arm,audio_enabled,details,help_visible):
+        for button in patient_buttons(mode,processor.arm,audio_enabled,details,help_visible,avatars,avatar_gender):
             _button(p,button)
     else:
         p.text((32,766),"Utilisez les commandes de la page pour mettre en pause ou terminer.",16,MUTED)

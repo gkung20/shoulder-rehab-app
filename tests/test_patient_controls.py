@@ -77,6 +77,9 @@ def test_fullscreen_text_is_rasterized_at_native_font_size_not_enlarged(monkeypa
 @pytest.mark.parametrize("window_dimensions",[(1280,840),(1920,1080)])
 def test_native_mouse_buttons_pause_inference_and_finish_before_closing(monkeypatch,window_dimensions):
     import app_live_cv as app
+    monkeypatch.setattr(app,"AvatarStage",lambda: Mock())
+    hands=Mock(detect=Mock(return_value={}))
+    monkeypatch.setattr(app,"HandDetector",lambda: hands)
     monkeypatch.setattr(app,"enable_high_dpi",lambda: None)
     created=[]
     original_processor=SessionProcessor
@@ -140,6 +143,9 @@ def test_native_mouse_buttons_pause_inference_and_finish_before_closing(monkeypa
     assert app.main([]) == 0
     assert created[0].process.call_count == 4
     assert detector.detect.call_count == 4
+    if app.HAND_MODEL_PATH.exists():
+        assert hands.detect.call_count == 4
+        hands.close.assert_called_once()
     assert all(size == window_dimensions for size in rendered_sizes)
     assert all(shape == (window_dimensions[1],window_dimensions[0],3) for shape in displayed_shapes)
     audio.begin_session.assert_called_once()

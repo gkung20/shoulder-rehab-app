@@ -1,5 +1,113 @@
 # 🦾 Assistant Intelligent de Réhabilitation : Abduction Active de l'Épaule
 
+## Coach médecin 3D et avatars homme / femme
+
+Dans **`app_live_cv.py`**, le médecin et un personnage utilisateur texturé apparaissent côte à côte dans la
+même fenêtre : le médecin démontre l’abduction du bras choisi, et l’avatar
+utilisateur reproduit les épaules, coudes et poignets visibles pendant la séance.
+Les consignes françaises, la voix discrète et le compteur restent disponibles.
+Avant **Commencer**, seul le coach s’anime : aucun suivi utilisateur ni comptage
+n’est lancé. Pendant le suivi, la démonstration accompagne les phases lever,
+maintenir et redescendre ; pendant la calibration, le coach garde le bras baissé.
+Une pause fige le coach et ramène les bras utilisateur au repos,
+explicitement marqué **Au repos · aucun suivi**.
+
+Les boutons **Homme / Femme** choisissent le personnage utilisateur sans changer
+le bras suivi, les mesures ou le comptage. Le médecin garde une posture neutre
+et le coude droit ; pendant la montée et la descente, son angle suit le rythme
+mesuré, limité à la cible prévue. Pendant le maintien, il montre la cible.
+
+Le rendu inverse maintenant **droite → gauche / gauche → droite**, pour le
+médecin et l’utilisateur, afin de correspondre à l’affichage demandé. Le bras
+anatomique choisi pour le comptage ne change pas. Les angles affichés utilisent
+un filtre adaptatif **One Euro**, un rejet des sauts isolés, une limite de vitesse
+et des rotations bornées sans retournement axial des mains. Le coude conserve
+son sens de flexion jusqu’au retour près de l’extension. Ces limites sont
+graphiques : elles ne corrigent pas les observations utilisées pour les mesures.
+
+Les clavicules accompagnent maintenant l’élévation des bras et le haut du thorax
+suit l’inclinaison de la ligne des épaules. Le ventre, le bassin et les jambes
+restent fixes ; la tête effectue de petits mouvements naturels. Si une main disparaît du suivi, son bras
+reste visible et redescend doucement au repos. À son retour, le mouvement reprend
+progressivement. **Suivi partiel · bras au repos** distingue ce repos automatique
+du mouvement réellement observé ; il ne compte jamais comme une répétition.
+
+Les doigts suivent désormais la main même sous la taille : ils sont exclus de
+la règle qui garde le ventre fixe, ce qui supprime les pointes étirées à côté du
+bassin. Au repos, un léger écart des bras évite d’enfoncer les mains dans les
+cuisses. La tête tourne doucement (±3°), avec une respiration et un balancement
+très discrets du haut du corps. Ces animations sont décoratives, sans suivi du
+visage ni influence sur les mesures ; elles se figent pendant une pause.
+
+Les mouvements vers l’avant utilisent aussi la profondeur estimée des épaules,
+coudes et poignets MediaPipe, quand leur visibilité est suffisante. Une main
+qui passe devant le thorax est gardée du côté visible du corps, avec un léger
+accompagnement du bras pour éviter de traverser le torse. La profondeur est
+lissée et bornée, sans allonger les os. Si elle manque, le suivi reprend les
+positions de l’image avec la même protection devant le corps.
+
+Le suivi détaillé des mains utilise désormais **MediaPipe Hand Landmarker** en
+plus du modèle de pose : 21 points par main, normale de la paume, orientation du
+poignet et flexion des doigts. Il est actif dans l’application OpenCV quand le
+modèle local est présent, sans demander de visage. **Paume et doigts suivis**
+indique qu’une main détaillée est disponible. Le fichier officiel (~7,8 Mo) est
+déjà installé sur ce PC ; pour une autre installation :
+
+```powershell
+python models/download_models.py hand_landmarker.task
+# Si le suivi détaillé ralentit trop le PC :
+python .\app_live_cv.py --no-hands
+```
+
+Le passage du bras devant le corps est aussi moins restreint : la limite visuelle
+vers l’intérieur passe de −15° à −65°. Les mouvements du poignet et des doigts
+restent lissés et bornés. Les modèles utilisateur n’ont que trois chaînes de
+doigts, donc leur reproduction est approximative. Le modèle de main améliore
+l’orientation locale, **pas la distance globale entre la main et le torse**.
+Cette distance dépend encore de l’estimation 3D du modèle de pose.
+
+Une petite vidéo aide au cadrage. **Voir la caméra / Voir les avatars** ou **V**
+change la vue sans interrompre la séance. L’aide et les commandes habituelles
+fonctionnent dans les deux vues. Le rendu 3D est recalculé à la résolution de la
+fenêtre, y compris en plein écran.
+
+Les dépendances sont ajoutées à `requirements.txt` et aux contraintes Windows :
+
+```powershell
+python -m pip install -r requirements.txt -c constraints-windows-py313.txt
+python .\app_live_cv.py
+
+# Mode caméra seul si le pilote graphique ne permet pas le rendu 3D
+python .\app_live_cv.py --no-avatars
+```
+
+Les trois personnages locaux sont chargés depuis **`alo/`**. Leurs textures sont
+intégrées aux GLB. Les transformations de scène redondantes des exports sont
+contournées en utilisant directement les matrices de liaison du squelette : les
+bras tournent sans les étirements du premier essai d’import. Les proportions du
+personnage sont conservées ; le mouvement ne change pas la longueur des os.
+Voir [les fichiers attendus et les limites du rendu](docs/avatar-assets.md).
+Sans les trois fichiers, le rendu utilise les mannequins procéduraux de secours.
+Sous Windows, le runtime vocal ONNX est préchargé avant le moteur 3D pour éviter
+un arrêt natif pendant l’initialisation de Piper.
+Le visage n’est pas requis par le retargeting. Les épaules doivent être visibles.
+Les bras sans main exploitable sont ramenés au repos pour l’affichage uniquement.
+Le ventre et les jambes restent stables. La géométrie 3D des bras est pilotée
+par les positions dans l’image et une profondeur monoculaire estimée, avec
+correction du format et lissage : **ce n’est pas une mesure physique fiable
+de la profondeur**. Le rendu ne modifie jamais les mesures
+ni le verdict. Les limites du détecteur MediaPipe restent présentes.
+
+Cette vue 3D est disponible dans l’application OpenCV ; Streamlit conserve sa
+vue caméra. Le suivi du corps complet, la profondeur réelle et une déformation
+anatomique de l’épaule restent hors du périmètre de cette version.
+
+Pour vérifier les modèles et générer des aperçus sans webcam :
+
+```powershell
+python -m tools.preview_avatars
+```
+
 ## Mise à jour : comptage, suivi et affichage
 
 **Pour un patient sur ce PC :** double-cliquez sur **`Ouvrir Mouvement.cmd`**.
@@ -106,7 +214,7 @@ Les exports conservent les réglages, la calibration et l'identifiant du modèle
 L'évaluation affiche la couverture et des résultats par participant/condition,
 sans prétendre prouver l'absence de biais.
 
-Voir [la démarche de validation et la préparation de l'avatar](docs/validation-and-avatar.md).
+Voir [la démarche de validation et les limites de l’avatar](docs/validation-and-avatar.md).
 Le personnage animé est prévu pour une étape ultérieure ; le moteur de suivi est
 déjà séparé du rendu pour permettre cette évolution.
 

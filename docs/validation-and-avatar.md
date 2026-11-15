@@ -1,4 +1,4 @@
-# Reliability, evaluation and the future avatar
+# Reliability, evaluation and the avatar prototype
 
 ## What the program actually knows
 
@@ -114,23 +114,59 @@ by Git. No representative dataset is bundled, so no accuracy or fairness claim i
 made. A future evaluation should also include confidence intervals and independent
 angle/count annotations rather than just the current binary clip labels.
 
-## Avatar integration later
+## Avatar integration — native prototype
 
-`FrameAnalysis` separates observations and coaching from rendering. An avatar
-renderer can consume its normalized landmarks, phase, fresh metrics, hold progress
-and coaching cue, while the existing processor continues to count and evaluate.
+`FrameAnalysis` separates observations and coaching from rendering. The native
+OpenCV application now embeds an offscreen Panda3D scene next to the existing
+French guidance, voice and repetition counter. Local textured GLBs provide the
+doctor and male/female user characters; original procedural mannequins remain
+available when those files are absent. See [asset setup](avatar-assets.md).
 
-Suggested implementation:
+Implemented behavior:
 
-1. Add a clearly labeled **demonstration coach** that animates the prescribed
-   movement, alongside or instead of the camera preview.
-2. Optionally add a **your movement** avatar retargeted from observed joints.
-   Preserve uncertainty: fade missing limbs, pause on tracking loss, and do not
-   invent an ideal pose that looks like a real observation.
-3. Keep avatar animation, facial encouragement and smoothing out of the scoring
-   path. Never measure the ideal demonstration avatar to grade the user.
-4. Use the same coaching events for speech bubbles, text and voice; respect mute
-   and reduced-motion settings. Clearly identify demonstration versus observation.
+1. The coach demonstrates a slow raise / hold / lower cycle before starting.
+   During active movement it follows exercise phases, measured arm-angle pace,
+   and the configured target and hold duration, keeping an ideal straight elbow.
+   Calibration and lost tracking return it to rest. Pausing
+   freezes its animation. This is a visual example, not a clinical prescription.
+2. `src/avatar_motion.py` maps visible image shoulders, elbows and wrists onto
+   the user mannequin, correcting image aspect ratio. Display-only One Euro
+   angle filters, teleport rejection, angular speed limits and fixed hinge frames
+   stabilize the movement; the rendered arms are mirrored with sides exchanged.
+   Assessment retains the original anatomical side and original observations.
+   A missing hand lowers that arm to a complete resting pose instead of hiding
+   geometry. A separate render-only pose retains continuity while the observation
+   remains missing. Partial/rest labels distinguish this fallback from tracking.
+   No face or hip is required.
+   Arm depth optionally uses confidence-gated shoulder-relative world-landmark
+   estimates. Forward angles are smoothed and bounded, with gradual torso-front
+   clearance for crossing hands. This is approximate monocular visualization,
+   not recovered full-body motion or reliable physical depth. Clavicles accompany elevation and the upper
+   chest follows the filtered shoulder-line tilt. Belly, pelvis and legs remain
+   fixed, with a blend into the chest. Cosmetic breathing, a tiny chest sway and
+   head turns up to 3 degrees add life without requiring face tracking. These
+   animations pause with the session and never become measured movement.
+3. Avatar joints and animation are never passed back to assessment. Original
+   detector observations continue to drive the existing repetition processor.
+   The demo cannot create a repetition or a successful result.
+   Optional Hand Landmarker observations supply local palm orientation and finger
+   bends, with body-wrist matching before mirroring. They may confirm a wrist in
+   the render copy only. They never modify assessment or establish global arm
+   depth. User meshes have only three independent finger chains, limiting fidelity.
+4. Existing French text and conservative audio use the original coaching events.
+   A camera thumbnail helps positioning; a rectangular button switches to the full
+   camera view without resetting tracking. `--no-avatars` avoids loading Panda3D
+   when the graphics driver is unsuitable. Streamlit retains its camera view.
 
-The animated character and assets are future work. The current dashboard improves
-guidance and reserves the rendering boundary without pretending an avatar exists.
+Panda3D renders the scene. The supplied GLBs use bind-space skinning to avoid
+the deformation caused by their redundant FBX scene transforms. Original asset
+files are not modified. A gender selector changes only appearance. Future work
+includes depth validation, observed torso motion and personalized pacing.
+A camera cannot
+establish unobserved movement; hidden joints must remain explicitly unavailable.
+
+Validation includes synthetic retargeting, missing-joint, face-independent,
+pause, phase and aspect-ratio tests, plus a local Windows offscreen-render check
+at multiple sizes. These checks verify software behavior, not tracking accuracy
+across body shapes, lighting conditions or clinical populations. Live webcam
+usability and synchronization still need evaluation with real users.

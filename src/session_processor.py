@@ -1,6 +1,6 @@
 """One analysis pipeline for camera, Streamlit and recorded video.
 
-FrameAnalysis is a presentation-neutral contract: a future avatar can consume
+FrameAnalysis is a presentation-neutral contract: the avatar can consume
 the same observed joints, phase, target and cue without influencing assessment.
 """
 from dataclasses import asdict, dataclass, field
@@ -35,6 +35,8 @@ class FrameAnalysis:
     new_evaluation: Optional[RepetitionEvaluation] = None
     missing_metrics: tuple = ()
     angle_reference: str = "torso"
+    world_landmarks: list = field(default_factory=list)  # Fresh estimated depth, optional for rendering.
+    hands: dict = field(default_factory=dict)  # Independent hand model; display only.
 
 
 def repetition_log(evaluation):
@@ -130,6 +132,7 @@ class SessionProcessor:
             if self.calibrator.is_calibrating:
                 self.calibrator.start(self.arm, now)
         frame = FrameAnalysis(now, landmarks or [], metrics={k: None for k in ("abduction", "lean", "shrug", "elbow", "drift")})
+        frame.world_landmarks=list(world_landmarks or [])
         if not landmarks or len(landmarks) < 33:
             if self.calibrator.is_calibrating:
                 self.calibrator.update(None, self.arm, now)
