@@ -6,11 +6,27 @@ from pathlib import Path
 import re
 import wave
 
+import numpy as np
+
 VOICE_DIRECTORY = Path(__file__).resolve().parents[1] / "models" / "voices"
 
 
+def willy_voice(frames, pitch):
+    """Willy's cartoon voice: raise pitch and timbre together, like a sped-up tape.
+
+    The text is synthesized `pitch` times slower first, so after resampling the
+    speaking pace stays exactly the configured one. int16 mono in, int16 out.
+    """
+    samples = np.frombuffer(frames, dtype=np.int16).astype(np.float32)
+    if pitch <= 1 or samples.size < 2:
+        return frames
+    positions = np.arange(int(samples.size / pitch)) * pitch
+    shifted = np.interp(positions, np.arange(samples.size), samples)
+    return np.clip(np.round(shifted), -32768, 32767).astype(np.int16).tobytes()
+
+
 class PiperFrenchSpeech:
-    def __init__(self, voice="fr_FR-siwis-medium", length_scale=1.30, volume=.85):
+    def __init__(self, voice="fr_FR-siwis-medium", length_scale=1.30, volume=.85, willy_pitch=1.0):
         if not re.fullmatch(r"fr_FR-[a-zA-Z0-9_]+-(?:low|medium|high)", voice):
             raise ValueError("Choose a French Piper voice name")
         path = VOICE_DIRECTORY / f"{voice}.onnx"
@@ -31,8 +47,9 @@ class PiperFrenchSpeech:
             session=ort.InferenceSession(str(path), sess_options=options, providers=["CPUExecutionProvider"]),
             config=PiperConfig.from_dict(config), download_dir=VOICE_DIRECTORY,
         )
-        self.settings = SynthesisConfig(length_scale=length_scale, volume=volume, normalize_audio=True)
-        self.label = f"Piper / francais local / {voice}"
+        self.willy_pitch = max(1., float(willy_pitch))
+        self.settings = SynthesisConfig(length_scale=length_scale * self.willy_pitch, volume=volume, normalize_audio=True)
+        self.label = f"Piper / francais local / {voice}" + (" / voix de Willy" if self.willy_pitch > 1 else "")
         self._cache = OrderedDict()
 
     def synthesize(self, text):
@@ -44,6 +61,15 @@ class PiperFrenchSpeech:
         with wave.open(buffer, "wb") as wav:
             self.voice.synthesize_wav(text, wav, syn_config=self.settings)
         data = buffer.getvalue()
+        if self.willy_pitch > 1:
+            with wave.open(io.BytesIO(data), "rb") as source:
+                params, frames = source.getparams(), source.readframes(source.getnframes())
+            if params.sampwidth == 2 and params.nchannels == 1:
+                buffer = io.BytesIO()
+                with wave.open(buffer, "wb") as wav:
+                    wav.setparams(params)
+                    wav.writeframes(willy_voice(frames, self.willy_pitch))
+                data = buffer.getvalue()
         self._cache[text] = data
         if len(self._cache) > 32:
             self._cache.popitem(last=False)
@@ -99,12 +125,13 @@ class WindowsFrenchSpeech:
         self.engine.stop()
 
 
-def create_speech_backend(backend="auto", voice="fr_FR-siwis-medium", length_scale=1.30, volume=.85, speech_rate=130):
+def create_speech_backend(backend="auto", voice="fr_FR-siwis-medium", length_scale=1.30, volume=.85, speech_rate=130,
+                          willy_pitch=1.0):
     if backend not in ("auto", "piper", "system"):
         raise ValueError("Audio backend must be auto, piper or system")
     if backend in ("auto", "piper"):
         try:
-            return PiperFrenchSpeech(voice, length_scale, volume)
+            return PiperFrenchSpeech(voice, length_scale, volume, willy_pitch)
         except (ImportError, OSError, ValueError, RuntimeError) as error:
             if backend == "piper":
                 raise

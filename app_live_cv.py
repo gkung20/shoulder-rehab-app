@@ -155,7 +155,8 @@ def main(argv=None):
                 display = render_dashboard(frame, analysis, processor, fps, mirror,
                     audio.enabled, audio.status_message,mode=controls.mode,details=controls.details,
                     help_visible=controls.help_visible,output_size=output_size,
-                    avatar_stage=avatar_stage,avatars=controls.avatars,avatar_gender=controls.avatar_gender)
+                    avatar_stage=avatar_stage,avatars=controls.avatars,avatar_gender=controls.avatar_gender,
+                    speaking=audio.speaking)
                 viewport=canvas_viewport(CANVAS_SIZE,*output_size)
                 cv2.imshow(window_name, display)
                 key = cv2.waitKey(1) & 0xFF

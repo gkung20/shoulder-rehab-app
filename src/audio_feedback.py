@@ -62,7 +62,7 @@ class AudioCoach:
     def __init__(self, enabled=True, speech_rate=130, min_interval_sec=8.,
                  repeat_cooldown_sec=40., backend="auto", voice="fr_FR-siwis-medium",
                  length_scale=1.30, volume=.85, guidance_mode="essential",
-                 warning_persistence_sec=1.5, announce_every_reps=5):
+                 warning_persistence_sec=1.5, announce_every_reps=5, willy_pitch=1.30):
         self.enabled = enabled
         self.speech_rate = speech_rate
         self.min_interval_sec = min_interval_sec
@@ -74,6 +74,8 @@ class AudioCoach:
         self.guidance_mode = guidance_mode
         self.warning_persistence_sec = warning_persistence_sec
         self.announce_every_reps = announce_every_reps
+        self.willy_pitch = willy_pitch
+        self.speaking = False  # True while a sentence plays: Willy moves his mouth
         self._setup_announced = False
         self._warning_text = None
         self._warning_since = None
@@ -96,7 +98,8 @@ class AudioCoach:
         return cls(enabled=enabled, **asdict(settings))
 
     def _make_backend(self):
-        return create_speech_backend(self.backend, self.voice, self.length_scale, self.volume, self.speech_rate)
+        return create_speech_backend(self.backend, self.voice, self.length_scale, self.volume, self.speech_rate,
+                                     willy_pitch=self.willy_pitch)
 
     def _start_worker(self):
         self._stop_event.clear()
@@ -121,7 +124,11 @@ class AudioCoach:
                         if not self.enabled or self._stop_event.is_set():
                             continue
                         self._playback_cancel.clear()
-                    engine.say(item.text, self._playback_cancel)
+                    self.speaking = True
+                    try:
+                        engine.say(item.text, self._playback_cancel)
+                    finally:
+                        self.speaking = False
                 finally:
                     self._queue.task_done()
         except Exception as error:
@@ -272,10 +279,10 @@ def main():
     from src.speech import PiperFrenchSpeech
     parser = argparse.ArgumentParser(description="Créer un extrait de la voix française locale")
     parser.add_argument("--preview", default="output/voix_francaise.wav", help="Fichier WAV à générer")
-    parser.add_argument("--text", default="Bonjour ! Je suis votre coach. Levez doucement le bras sur le côté. Très bien ! Maintenant, redescendez tranquillement.")
+    parser.add_argument("--text", default="Bonjour ! Je suis Willy, votre guide. Levez doucement le bras sur le côté. Très bien ! Maintenant, redescendez tranquillement.")
     args = parser.parse_args()
     config = ExerciseConfig.from_yaml().audio
-    voice = PiperFrenchSpeech(config.voice, config.length_scale, config.volume)
+    voice = PiperFrenchSpeech(config.voice, config.length_scale, config.volume, willy_pitch=config.willy_pitch)
     try:
         path = Path(args.preview)
         path.parent.mkdir(parents=True, exist_ok=True)

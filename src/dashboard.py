@@ -10,6 +10,7 @@ from src.patient_controls import patient_buttons
 from src.state_machine import ExercisePhase
 from src.visualizer import draw_skeleton
 from src.window_viewport import canvas_viewport
+from src.willy import shared_guide
 
 CANVAS_SIZE=(1280,840)  # Logical layout coordinates, not a fixed-resolution bitmap.
 BG=(250,250,249)
@@ -132,9 +133,23 @@ def _button(p,button):
     p.text((left+(right-left-text_width)/2,top+(bottom-top-size)/2-3),button.label,size,color,button.primary)
 
 
+WILLY_BOX=(1040,440,1248,716)  # Right column, beside the repetition count: visible in every view.
+
+
+def _draw_willy(canvas,p,willy,analysis,mode,processor,mirror,speaking):
+    """Willy, the guide, is always on screen; he only reflects state already computed."""
+    guide=willy if willy is not None else shared_guide()
+    if guide is None:
+        return
+    guide.update(analysis,mode,processor,mirror=mirror,speaking=speaking)
+    x1,y1,x2,y2=p.box(WILLY_BOX)
+    sprite=guide.render(x2-x1,y2-y1)
+    canvas.paste(Image.fromarray(sprite,"RGBA"),(x1,y1),Image.fromarray(sprite[...,3]))
+
+
 def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_enabled=True,audio_status="",
                      *,mode="running",details=False,help_visible=False,show_controls=True,output_size=None,
-                     avatar_stage=None,avatars=True,avatar_gender="male"):
+                     avatar_stage=None,avatars=True,avatar_gender="male",willy=None,speaking=False):
     width,height=output_size or CANVAS_SIZE
     if width <= 0 or height <= 0:
         width,height=CANVAS_SIZE
@@ -192,7 +207,7 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
     p.rule(920,444,1248,444)
     p.text((920,466),"RÉPÉTITIONS",12,MUTED)
     p.text((912,484),str(count),min(100,round(260/max(1,len(str(count))))))
-    p.text((920,610),"Comptées au retour au repos",14,MUTED)
+    p.wrap((920,596),"Comptées au retour au repos",150,14,MUTED,max_lines=2)
     if analysis.calibration_progress and mode == "running":
         progress,_=analysis.calibration_progress
     elif analysis.phase == ExercisePhase.HOLD and mode == "running":
@@ -201,10 +216,10 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
     else:
         progress=0
     if progress:
-        p.rule(920,654,1248,654,LINE,2)
-        p.rule(920,654,920+328*progress,654,TEXT,2)
+        p.rule(920,654,1030,654,LINE,2)
+        p.rule(920,654,920+110*progress,654,TEXT,2)
     if audio_enabled and "indisponible" in audio_status.lower():
-        p.wrap((920,678),"Son indisponible. Suivez le texte.",320,13,MUTED,max_lines=2)
+        p.wrap((920,670),"Son indisponible. Suivez le texte.",115,13,MUTED,max_lines=3)
 
     phases=[("Repos",ExercisePhase.REST),("Lever",ExercisePhase.RISING),
             ("Maintenir",ExercisePhase.HOLD),("Redescendre",ExercisePhase.LOWERING)]
@@ -239,7 +254,8 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
     if help_visible:
         p.rect((52,152,840,582),fill=BG,outline=LINE)
         p.text((82,175),"Comment faire",27)
-        tips=["Choisissez votre avatar et le bras suivi en haut de l’écran.",
+        tips=["Willy, votre guide, reste à droite de l’écran et bouge avec vous.",
+              "Choisissez votre avatar et le bras suivi en haut de l’écran.",
               "Montrez les deux épaules et le coude du bras suivi.",
               "Commencez, puis gardez le bras baissé quelques instants.",
               "Suivez le coach et le texte : lever, maintenir, redescendre.",
@@ -248,6 +264,7 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
         for index,tip in enumerate(tips,1):
             p.text((82,y),f"0{index}",13,FAINT)
             y=p.wrap((120,y-4),tip,684,19,max_lines=2)+22
+    _draw_willy(canvas,p,willy,analysis,mode,processor,mirror,speaking)
     p.rule(32,732,1248,732)
     if show_controls:
         for button in patient_buttons(mode,processor.arm,audio_enabled,details,help_visible,avatars,avatar_gender):

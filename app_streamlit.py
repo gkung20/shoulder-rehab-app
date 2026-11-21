@@ -10,6 +10,7 @@ from src.live_session import LiveSession
 from src.dashboard import render_dashboard
 from src.session_processor import repetition_log
 from src.report_generator import generate_clinical_pdf_report
+from src.willy import willy_portrait
 
 st.set_page_config(page_title="Mouvement — ma séance",page_icon="🦾",layout="wide")
 if "rules_engine" not in st.session_state:
@@ -34,6 +35,9 @@ base=ExerciseConfig.from_yaml()
 running=st.session_state.is_running
 st.title("Séance d’épaule")
 st.caption("Choisissez un bras, puis commencez. Prototype éducatif : arrêtez en cas de douleur.")
+_willy=willy_portrait(220,250)
+if _willy is not None:  # Willy, the guide, stays in the sidebar on every screen.
+    st.sidebar.image(_willy,caption="Willy, votre guide",width=150)
 st.sidebar.title("Ma séance")
 arm_label=st.sidebar.radio("Quel bras souhaitez-vous travailler ?",["Bras droit","Bras gauche"],disabled=running)
 arm="right" if arm_label == "Bras droit" else "left"
@@ -146,7 +150,8 @@ with live_tab:
             audio=getattr(runtime,"audio",None)
             display=render_dashboard(image,analysis,runtime.processor,fps,mirror,
                 audio.enabled if audio else audio_enabled,audio.status_message if audio else "",
-                mode="paused" if getattr(runtime,"paused",False) else "running",details=show_details,show_controls=False)
+                mode="paused" if getattr(runtime,"paused",False) else "running",details=show_details,show_controls=False,
+                speaking=getattr(audio,"speaking",False))
             st.image(cv2.cvtColor(display,cv2.COLOR_BGR2RGB),channels="RGB",use_container_width=True)
             if analysis.new_evaluation:
                 st.session_state.repetition_logs.append(repetition_log(analysis.new_evaluation))

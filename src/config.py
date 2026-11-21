@@ -74,6 +74,7 @@ class AudioConfig:
     guidance_mode: str = "essential"
     warning_persistence_sec: float = 1.5
     announce_every_reps: int = 5
+    willy_pitch: float = 1.30  # Willy's cartoon voice: >1 raises pitch and timbre; 1 = natural voice
 
 
 @dataclass
@@ -124,7 +125,8 @@ class ExerciseConfig:
                 or not .5 <= audio.length_scale <= 2 or not 0 <= audio.volume <= 1
                 or not 80 <= audio.speech_rate <= 250 or audio.min_interval_sec < 0 or audio.repeat_cooldown_sec < 0
                 or audio.warning_persistence_sec < 0 or not isinstance(audio.announce_every_reps, int)
-                or isinstance(audio.announce_every_reps, bool) or audio.announce_every_reps < 1):
+                or isinstance(audio.announce_every_reps, bool) or audio.announce_every_reps < 1
+                or not math.isfinite(audio.willy_pitch) or not 1 <= audio.willy_pitch <= 1.6):
             raise ValueError("Invalid French audio settings")
         camera = self.camera
         if (any(not isinstance(v, int) or isinstance(v, bool) for v in (camera.index, camera.width, camera.height, camera.fps))

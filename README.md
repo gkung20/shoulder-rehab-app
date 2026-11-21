@@ -1,5 +1,13 @@
 # 🦾 Assistant Intelligent de Réhabilitation : Abduction Active de l'Épaule
 
+## Willy, le guide toujours présent
+
+**Willy**, un petit robot guide, reste visible à droite de l’écran dans toutes
+les vues : il salue avant la séance, lève le bras avec le patient (en miroir),
+fête les répétitions réussies et bouge la bouche quand la voix parle. La voix
+française devient la **voix de Willy** (style dessin animé, `audio.willy_pitch`).
+Il ne modifie aucune mesure. Détails : [docs/willy.md](docs/willy.md).
+
 ## Coach médecin 3D et avatars homme / femme
 
 Dans **`app_live_cv.py`**, le médecin et un personnage utilisateur texturé apparaissent côte à côte dans la

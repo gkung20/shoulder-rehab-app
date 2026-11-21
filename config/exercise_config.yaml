@@ -22,6 +22,7 @@ audio:
   guidance_mode: essential        # Text guides each phase; voice only helps when useful
   warning_persistence_sec: 1.5     # Ignore brief posture flickers
   announce_every_reps: 5          # No announcement after every movement
+  willy_pitch: 1.30               # Willy's cartoon voice (Piper only); 1.0 = natural voice
 
 camera:
   index: 0                       # Select an external/virtual wide camera with 1, 2, etc.
