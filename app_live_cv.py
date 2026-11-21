@@ -64,7 +64,7 @@ def main(argv=None):
     window_name = "Mouvement - Coach epaule"
     avatar_stage=None
     hand_detector=None
-    print("L/R bras | C calibration | A audio | S bilan | M miroir | V avatars/camera | Q quitter")
+    print("L/R bras | C calibration | A audio | S bilan | M miroir | V avatars/camera | G silhouette | Q quitter")
     print("Deux epaules pour commencer ; coude actif visible pour compter. Visage non requis par l'application.")
     try:
         # AvatarStage preloads the voice runtime, then initializes graphics before
@@ -92,7 +92,7 @@ def main(argv=None):
                         return
                     action=dashboard_action_at(*point,mode=controls.mode,arm=processor.arm,
                         audio_enabled=audio.enabled,details=controls.details,help_visible=controls.help_visible,
-                        avatars=controls.avatars,avatar_gender=controls.avatar_gender)
+                        avatars=controls.avatars,avatar_gender=controls.avatar_gender,silhouette=controls.silhouette)
                     if action:
                         actions.append(action)
             cv2.setMouseCallback(window_name,on_mouse)
@@ -156,14 +156,14 @@ def main(argv=None):
                     audio.enabled, audio.status_message,mode=controls.mode,details=controls.details,
                     help_visible=controls.help_visible,output_size=output_size,
                     avatar_stage=avatar_stage,avatars=controls.avatars,avatar_gender=controls.avatar_gender,
-                    speaking=audio.speaking)
+                    speaking=audio.speaking,silhouette=controls.silhouette)
                 viewport=canvas_viewport(CANVAS_SIZE,*output_size)
                 cv2.imshow(window_name, display)
                 key = cv2.waitKey(1) & 0xFF
                 if key in (ord('q'), ord('Q'), 27) or cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
                     break
                 shortcuts={ord('l'):"arm_left",ord('r'):"arm_right",ord('a'):"audio",ord('s'):"finish",
-                           ord('m'):"mirror",ord('h'):"help",ord('d'):"details",ord('v'):"avatars"}
+                           ord('m'):"mirror",ord('h'):"help",ord('d'):"details",ord('v'):"avatars",ord('g'):"silhouette"}
                 if 65 <= key <= 90:
                     key+=32
                 if key == ord('c') and controls.mode == "running":

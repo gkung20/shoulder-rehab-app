@@ -8,6 +8,19 @@ fête les répétitions réussies et bouge la bouche quand la voix parle. La voi
 française devient la **voix de Willy** (style dessin animé, `audio.willy_pitch`).
 Il ne modifie aucune mesure. Détails : [docs/willy.md](docs/willy.md).
 
+## Silhouette guide en vue caméra
+
+En vue caméra (**Voir la caméra** ou **V**), un petit bouton **Silhouette** en
+haut à droite de la vidéo (ou la touche **G**) affiche une silhouette
+transparente. Elle montre **où se placer** et fait le mouvement au rythme du
+coach (repos, lever, maintenir, redescendre), avec le bras choisi, en miroir.
+Une étiquette indique l’étape à suivre. Quand le suivi voit les deux épaules,
+le contour devient **vert** (« Bien placé ») ou **orange** avec un conseil :
+approchez-vous, reculez, décalez-vous vers la gauche/droite, montez ou baissez
+la caméra. Dans Streamlit : interrupteur **Silhouette guide** dans la barre
+latérale. Aide visuelle uniquement : la silhouette n’intervient ni dans le
+comptage ni dans l’évaluation.
+
 ## Coach médecin 3D et avatars homme / femme
 
 Dans **`app_live_cv.py`**, le médecin et un personnage utilisateur texturé apparaissent côte à côte dans la

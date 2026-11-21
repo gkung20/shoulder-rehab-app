@@ -11,6 +11,7 @@ from src.state_machine import ExercisePhase
 from src.visualizer import draw_skeleton
 from src.window_viewport import canvas_viewport
 from src.willy import shared_guide
+from src.silhouette import SilhouetteGuide, silhouette_frame
 
 CANVAS_SIZE=(1280,840)  # Logical layout coordinates, not a fixed-resolution bitmap.
 BG=(250,250,249)
@@ -147,9 +148,34 @@ def _draw_willy(canvas,p,willy,analysis,mode,processor,mirror,speaking):
     canvas.paste(Image.fromarray(sprite,"RGBA"),(x1,y1),Image.fromarray(sprite[...,3]))
 
 
+_SILHOUETTE=SilhouetteGuide()
+
+
+def _pill(p,xy,text,size=16,dot=None,center=False):
+    font=p.font(size,True)
+    width=p.draw.textlength(text,font=font)/p.sx+(30 if dot else 0)+28
+    x,y=xy
+    if center:
+        x-=width/2
+    p.rect((x,y,x+width,y+size+20),fill=(255,255,255),radius=14)
+    if dot:
+        cx,cy=p.point(x+20,y+(size+20)/2)
+        r=max(2,round(6*p.scale))
+        p.draw.ellipse((cx-r,cy-r,cx+r,cy+r),fill=dot)
+    p.text((x+14+(26 if dot else 0),y+7),text,size,TEXT,True)
+
+
+def _silhouette_labels(p,guide_text):
+    instruction,placement,alignment=guide_text
+    dot=(70,160,214) if alignment is None else (60,170,80) if alignment[0] else (245,140,40)
+    _pill(p,(46,144),placement,15,dot)
+    _pill(p,(446,546),instruction,18,center=True)
+
+
 def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_enabled=True,audio_status="",
                      *,mode="running",details=False,help_visible=False,show_controls=True,output_size=None,
-                     avatar_stage=None,avatars=True,avatar_gender="male",willy=None,speaking=False):
+                     avatar_stage=None,avatars=True,avatar_gender="male",willy=None,speaking=False,
+                     silhouette=False):
     width,height=output_size or CANVAS_SIZE
     if width <= 0 or height <= 0:
         width,height=CANVAS_SIZE
@@ -169,6 +195,9 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
         draw_skeleton(video,analysis.landmarks,processor.arm,None)
     if mirror:
         video=cv2.flip(video,1)
+    guide_text=None
+    if silhouette and not use_avatars and not help_visible:
+        guide_text=silhouette_frame(video,analysis,mode,processor,mirror,_SILHOUETTE)
     # Resample only the camera, directly into its final physical-pixel viewport.
     x1,y1,x2,y2=p.box((32,132,860,602))
     p.rect((32,132,860,602),fill=(33,36,39))
@@ -178,6 +207,8 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
     resized=cv2.resize(video,(video_width,video_height),interpolation=cv2.INTER_AREA if scale < 1 else cv2.INTER_CUBIC)
     canvas.paste(Image.fromarray(cv2.cvtColor(resized,cv2.COLOR_BGR2RGB)),
                  (x1+(x2-x1-video_width)//2,y1+(y2-y1-video_height)//2))
+    if guide_text is not None:
+        _silhouette_labels(p,guide_text)
     if use_avatars:
         scene,tracked=avatar_stage.render(analysis,processor,mode,(vw,vh),(x2-x1,y2-y1))
         canvas.paste(Image.fromarray(scene),(x1,y1))
@@ -256,6 +287,7 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
         p.text((82,175),"Comment faire",27)
         tips=["Willy, votre guide, reste à droite de l’écran et bouge avec vous.",
               "Choisissez votre avatar et le bras suivi en haut de l’écran.",
+              "Vue caméra : « Silhouette » (touche G) montre où vous placer et le geste à suivre.",
               "Montrez les deux épaules et le coude du bras suivi.",
               "Commencez, puis gardez le bras baissé quelques instants.",
               "Suivez le coach et le texte : lever, maintenir, redescendre.",
@@ -267,7 +299,7 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
     _draw_willy(canvas,p,willy,analysis,mode,processor,mirror,speaking)
     p.rule(32,732,1248,732)
     if show_controls:
-        for button in patient_buttons(mode,processor.arm,audio_enabled,details,help_visible,avatars,avatar_gender):
+        for button in patient_buttons(mode,processor.arm,audio_enabled,details,help_visible,avatars,avatar_gender,silhouette):
             _button(p,button)
     else:
         p.text((32,766),"Utilisez les commandes de la page pour mettre en pause ou terminer.",16,MUTED)

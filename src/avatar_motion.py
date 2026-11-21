@@ -6,7 +6,12 @@ from src.avatar_filter import SafeAvatarArms,mirrored_pose,LimitedAngle,arm_angl
 
 
 def demonstration(elapsed, arm="right", target=90., hold=1.):
-    """A slow rest / raise / hold / lower cycle, in degrees."""
+    """A slow rest / raise / hold / lower cycle, as an arm pose."""
+    return arm_pose(demonstration_angle(elapsed,target,hold),arm)
+
+
+def demonstration_angle(elapsed, target=90., hold=1.):
+    """A slow rest / raise / hold / lower cycle, in degrees (shared by the coach and the silhouette)."""
     hold=max(.5, hold)
     t=max(0., elapsed) % (6.5+hold)
     if t < 1.5:
@@ -17,7 +22,7 @@ def demonstration(elapsed, arm="right", target=90., hold=1.):
         angle=target
     else:
         angle=target*(.5+.5*math.cos(math.pi*(t-4.-hold)/2.5))
-    return arm_pose(angle,arm)
+    return angle
 
 
 def arm_pose(angle,arm):

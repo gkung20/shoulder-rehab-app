@@ -12,10 +12,11 @@ class PatientButton:
     primary: bool = False
 
 
-def patient_buttons(mode="running", arm="right", audio_enabled=True, details=False, help_visible=False, avatars=True, avatar_gender="male"):
+def patient_buttons(mode="running", arm="right", audio_enabled=True, details=False, help_visible=False, avatars=True, avatar_gender="male",
+                    silhouette=False):
     primary = {"ready": ("start", "Commencer"), "running": ("pause", "Faire une pause"),
                "paused": ("resume", "Reprendre"), "finished": ("restart", "Nouvelle séance")}[mode]
-    return [
+    buttons = [
         PatientButton("avatar_male", "Homme", (424,22,550,76), selected=avatar_gender == "male"),
         PatientButton("avatar_female", "Femme", (558,22,684,76), selected=avatar_gender == "female"),
         PatientButton("arm_right", "Bras droit", (728,22,876,76), mode in ("ready","paused"), arm == "right"),
@@ -28,6 +29,11 @@ def patient_buttons(mode="running", arm="right", audio_enabled=True, details=Fal
         PatientButton("help", "Fermer l’aide" if help_visible else "Aide", (830,750,998,806), selected=help_visible),
         PatientButton("quit", "Fermer", (1096,750,1248,806)),
     ]
+    if not avatars and not help_visible:
+        # Small toggle in the camera view's top-right corner.
+        buttons.append(PatientButton("silhouette", "Masquer la silhouette" if silhouette else "Silhouette",
+                                     (632 if silhouette else 712,144,848,184), selected=silhouette))
+    return buttons
 
 
 def dashboard_action_at(x, y, **state):
@@ -45,6 +51,7 @@ class PatientControls:
     help_visible: bool = False
     avatars: bool = True
     avatar_gender: str = "male"
+    silhouette: bool = False
 
     def apply(self, action):
         """Return whether an action is valid; resource effects belong to the app."""
@@ -60,6 +67,9 @@ class PatientControls:
             return True
         if action == "avatars":
             self.avatars = not self.avatars
+            return True
+        if action == "silhouette":
+            self.silhouette = not self.silhouette
             return True
         if action in ("avatar_male","avatar_female"):
             self.avatar_gender=action.removeprefix("avatar_")

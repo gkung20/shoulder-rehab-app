@@ -39,6 +39,8 @@ _willy=willy_portrait(220,250)
 if _willy is not None:  # Willy, the guide, stays in the sidebar on every screen.
     st.sidebar.image(_willy,caption="Willy, votre guide",width=150)
 st.sidebar.title("Ma séance")
+show_silhouette=st.sidebar.toggle("Silhouette guide",value=False,
+    help="Une silhouette transparente montre où vous placer et fait le mouvement à suivre.")
 arm_label=st.sidebar.radio("Quel bras souhaitez-vous travailler ?",["Bras droit","Bras gauche"],disabled=running)
 arm="right" if arm_label == "Bras droit" else "left"
 voice_choice=st.sidebar.selectbox("Accompagnement vocal",["Voix discrète","Sans voix","Guidage complet"],disabled=running)
@@ -151,7 +153,7 @@ with live_tab:
             display=render_dashboard(image,analysis,runtime.processor,fps,mirror,
                 audio.enabled if audio else audio_enabled,audio.status_message if audio else "",
                 mode="paused" if getattr(runtime,"paused",False) else "running",details=show_details,show_controls=False,
-                speaking=getattr(audio,"speaking",False))
+                speaking=getattr(audio,"speaking",False),silhouette=show_silhouette)
             st.image(cv2.cvtColor(display,cv2.COLOR_BGR2RGB),channels="RGB",use_container_width=True)
             if analysis.new_evaluation:
                 st.session_state.repetition_logs.append(repetition_log(analysis.new_evaluation))
