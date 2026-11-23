@@ -5,7 +5,8 @@ stored in the repository: only the rendered frames are. Each frame shows the
 body facing the patient with the screen-right arm raised to one angle
 (0-160 deg, every 5 deg) like a well-performed lateral raise: in the scapular
 plane, elbow soft (as in the A-pose), shoulder blade rotating with a 2:1 scapulohumeral rhythm
-after 30 deg and no shrug. The app flips the frames for the left side. Pixels hold
+after 30 deg and no shrug. Skinning uses harmonic weights (the deltoid moves with the humerus)
+followed by delta mush around the shoulders, which removes creases at the top of the shoulder. The app flips the frames for the left side. Pixels hold
 channels the app recolours at runtime:
     R = diffuse shading, G = fresnel rim, B = unused, A = coverage.
 
@@ -101,11 +102,17 @@ def skin_weights(vertices, faces):
     dist = np.linalg.norm(rel, axis=1)
     x = local[:, 0]
     beyond_elbow = along > 30.          # forearm and hand: up to 14 cm off the humerus axis; thighs >= 25 cm
+    y = local[:, 1]
     on_arm = (along > 13.) & (radial < np.where(beyond_elbow, 17., 8.))
+    # The deltoid wraps the humeral head and moves with it; the trapezius and upper chest stay put.
+    # This puts the skin transition where it belongs (acromion line on top, axillary folds below)
+    # instead of half-rotating the shoulder cap, which made it bunch up like a pad.
+    on_arm |= (x > 23.5) & (y > 124.) & (dist < 14.)
     trunk = ((dist > 17.) & ((radial > np.where(beyond_elbow, 21., 12.)) | (along < 0.))) | (x < 8.)
+    trunk |= (x < 16.5) & (y > 132.) & ~on_arm
     arm = harmonic(laplacian, on_arm, trunk & ~on_arm)
     shoulder = on_arm | (dist < 7.)
-    still = (x < 7.) | (local[:, 1] > 160.) | ((dist > 24.) & ~on_arm)
+    still = (x < 7.) | (y > 160.) | ((dist > 24.) & ~on_arm)
     girdle = np.maximum(harmonic(laplacian, shoulder, still & ~shoulder), arm)
     return arm.astype(np.float32), girdle.astype(np.float32)
 
@@ -117,6 +124,78 @@ def shoulder_angles(elevation, rest=REST_DEG):
     return girdle, elevation - girdle - rest
 
 
+def rodrigues(points, axis, angle, centre):
+    """Rotate each point about `axis` (unit, per point) through `centre` by its own `angle` (radians)."""
+    v = points - centre
+    cos, sin = np.cos(angle)[:, None], np.sin(angle)[:, None]
+    return centre + v * cos + np.cross(axis, v) * sin + axis * np.einsum("ij,ij->i", axis, v)[:, None] * (1 - cos)
+
+
+def pose_vertices(vertices, arm, girdle, active_deg, other_deg=OTHER_ARM_DEG):
+    """Skin the body: humerus in the scapular plane, then the shoulder girdle (both blended per vertex)."""
+    out = vertices.astype(np.float64).copy()
+    side = np.where(vertices[:, 0] >= 0, 1., -1.)
+    phi = np.radians(SCAPULAR_PLANE_DEG)
+    for s, deg in ((1., active_deg), (-1., other_deg)):
+        m = side == s
+        lift, gh = shoulder_angles(deg)
+        axis = np.tile([-np.sin(phi), 0., s * np.cos(phi)], (m.sum(), 1))
+        out[m] = rodrigues(out[m], axis, np.radians(gh) * arm[m], np.array([s * JOINT[0], JOINT[1], JOINT[2]]))
+        axis = np.tile([0., 0., s], (m.sum(), 1))
+        out[m] = rodrigues(out[m], axis, np.radians(lift) * girdle[m], np.array([s * STERNO[0], STERNO[1], STERNO[2]]))
+    return out
+
+
+class DeltaMush:
+    """Delta mush (Mancewicz et al., 2014), the production fix for skinning creases.
+
+    The posed mesh is smoothed, then each vertex's rest-pose detail (its offset from the smoothed
+    rest mesh, stored in a local tangent frame) is added back in the posed frame. Pinches and kinks
+    vanish while muscles and surface detail are kept. Applied around the shoulders only.
+    """
+
+    def __init__(self, vertices, faces, iterations=35, strength=.5):
+        from scipy import sparse
+        n = len(vertices)
+        edges = np.concatenate([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]])
+        adjacency = sparse.csr_matrix((np.ones(2 * len(edges)), (np.r_[edges[:, 0], edges[:, 1]],
+                                                                 np.r_[edges[:, 1], edges[:, 0]])), shape=(n, n))
+        adjacency.data[:] = 1.
+        self.average = sparse.diags(1. / np.asarray(adjacency.sum(axis=1)).ravel()) @ adjacency
+        self.neighbour = np.array([row[0] for row in adjacency.tolil().rows])
+        self.faces, self.iterations, self.strength = faces, iterations, strength
+        rest = vertices.astype(np.float64)
+        smooth = self._smooth(rest)
+        t, b, n_ = self._frames(smooth)
+        offset = rest - smooth
+        self.delta = np.stack([np.einsum("ij,ij->i", offset, f) for f in (t, b, n_)], axis=1)
+        local = np.abs(rest[:, 0:1]) * [1, 0, 0] + rest * [0, 1, 1]
+        self.mask = (1 - smoothstep(24., 34., np.linalg.norm(local - np.array(JOINT), axis=1)))[:, None]
+
+    def _smooth(self, points):
+        for _ in range(self.iterations):
+            points = (1 - self.strength) * points + self.strength * (self.average @ points)
+        return points
+
+    def _frames(self, points):
+        f = self.faces
+        face_normal = np.cross(points[f[:, 1]] - points[f[:, 0]], points[f[:, 2]] - points[f[:, 0]])
+        normal = np.zeros_like(points)
+        for k in range(3):
+            np.add.at(normal, f[:, k], face_normal)
+        normal /= np.linalg.norm(normal, axis=1, keepdims=True) + 1e-12
+        tangent = points[self.neighbour] - points
+        tangent -= normal * np.einsum("ij,ij->i", tangent, normal)[:, None]
+        tangent /= np.linalg.norm(tangent, axis=1, keepdims=True) + 1e-12
+        return tangent, np.cross(normal, tangent), normal
+
+    def __call__(self, posed):
+        smooth = self._smooth(posed)
+        t, b, n_ = self._frames(smooth)
+        rebuilt = smooth + self.delta[:, :1] * t + self.delta[:, 1:2] * b + self.delta[:, 2:] * n_
+        return posed + self.mask * (rebuilt - posed)
+
+
 SETUP = """
 window.setupBody = (data, W, H, view) => {
   const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H; document.body.appendChild(canvas);
@@ -124,10 +203,8 @@ window.setupBody = (data, W, H, view) => {
   r.setPixelRatio(1); r.setSize(W, H, false); r.setClearColor(0x000000, 0);
   const cam = new THREE.OrthographicCamera(view[0], view[1], view[3], view[2], -500, 500);
   cam.position.set(0, 0, 200); cam.lookAt(0, 0, 0);
-  const base = new Float32Array(data.positions);
-  const wArm = new Float32Array(data.arm), wGirdle = new Float32Array(data.girdle);
   const geo = new THREE.BufferGeometry();
-  const pos = new THREE.BufferAttribute(new Float32Array(base), 3);
+  const pos = new THREE.BufferAttribute(new Float32Array(data.positions), 3);
   geo.setAttribute('position', pos); geo.setIndex(data.indices);
   const mat = new THREE.ShaderMaterial({
     vertexShader: `varying vec3 vN; varying vec3 vV;
@@ -141,29 +218,9 @@ window.setupBody = (data, W, H, view) => {
         gl_FragColor = vec4(diff, rim, 0., 1.); }`,
   });
   const scene = new THREE.Scene(); scene.add(new THREE.Mesh(geo, mat));
-  // Rodrigues rotation of v (array of 3) about unit axis k by angle a, around pivot c.
-  const rot = (v, k, a, c) => {
-    if (Math.abs(a) < 1e-6) return v;
-    const x = v[0]-c[0], y = v[1]-c[1], z = v[2]-c[2], cs = Math.cos(a), sn = Math.sin(a);
-    const d = k[0]*x + k[1]*y + k[2]*z;
-    const cx = k[1]*z - k[2]*y, cy = k[2]*x - k[0]*z, cz = k[0]*y - k[1]*x;
-    return [c[0] + x*cs + cx*sn + k[0]*d*(1-cs), c[1] + y*cs + cy*sn + k[1]*d*(1-cs), c[2] + z*cs + cz*sn + k[2]*d*(1-cs)];
-  };
-  const D = Math.PI / 180, rest = data.rest * D, phi = data.plane * D;
-  window.renderAngle = (deg, otherDeg) => {
-    const pose = {1: data.angles[deg], [-1]: data.angles[otherDeg]};
-    for (let i = 0; i < wArm.length; i++) {
-      let v = [base[3*i], base[3*i+1], base[3*i+2]];
-      const side = v[0] >= 0 ? 1 : -1, [girdle, gh] = pose[side];
-      const J = [side*data.joint[0], data.joint[1], data.joint[2]];
-      const S = [side*data.sterno[0], data.sterno[1], data.sterno[2]];
-      // 1. glenohumeral elevation in the scapular plane (axis tilted so the arm travels forward of the body)
-      if (wArm[i] > 0) v = rot(v, [-Math.sin(phi), 0, side*Math.cos(phi)], gh * D * wArm[i], J);
-      // 2. shoulder girdle: small upward rotation about the sternoclavicular joint
-      if (wGirdle[i] > 0) v = rot(v, [0, 0, side], girdle * D * wGirdle[i], S);
-      pos.array[3*i] = v[0]; pos.array[3*i+1] = v[1]; pos.array[3*i+2] = v[2];
-    }
-    pos.needsUpdate = true; geo.computeVertexNormals();
+  // Vertices are posed in Python (skinning + delta mush); the page only shades and renders them.
+  window.renderPositions = (p) => {
+    pos.array.set(p); pos.needsUpdate = true; geo.computeVertexNormals();
     r.render(scene, cam);
     return canvas.toDataURL('image/png');
   };
@@ -191,11 +248,8 @@ def main():
     from playwright.sync_api import sync_playwright
     vertices, faces = load_obj(args.obj)
     arm, girdle = skin_weights(vertices, faces)
-    poses = sorted(set(ANGLES) | {OTHER_ARM_DEG})
-    data = {"positions": vertices.ravel().tolist(), "indices": faces.ravel().tolist(),
-            "arm": arm.tolist(), "girdle": girdle.tolist(),
-            "joint": JOINT, "sterno": STERNO, "rest": REST_DEG, "plane": SCAPULAR_PLANE_DEG,
-            "angles": {str(a): shoulder_angles(a) for a in poses}}
+    mush = DeltaMush(vertices, faces)
+    data = {"positions": vertices.ravel().tolist(), "indices": faces.ravel().tolist()}
     x0, x1, y0, y1 = VIEW
     width, height = round((x1 - x0) * PX_PER_CM), round((y1 - y0) * PX_PER_CM)
     to_px = lambda x, y: [(x - x0) * PX_PER_CM, (y1 - y) * PX_PER_CM]
@@ -210,7 +264,8 @@ def main():
         page.add_script_tag(content=SETUP)
         page.evaluate("([d, w, h, v]) => setupBody(d, w, h, v)", [data, width, height, list(VIEW)])
         for angle in ANGLES:
-            url = page.evaluate("([a, o]) => renderAngle(String(a), String(o))", [angle, OTHER_ARM_DEG])
+            posed = mush(pose_vertices(vertices, arm, girdle, angle)).astype(np.float32)
+            url = page.evaluate("p => renderPositions(p)", posed.ravel().tolist())
             image = Image.open(io.BytesIO(base64.b64decode(url.split(",", 1)[1]))).convert("RGBA")
             image.save(OUT / f"arm_{angle:03d}.png", optimize=True)
         browser.close()
