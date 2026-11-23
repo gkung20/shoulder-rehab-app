@@ -8,7 +8,7 @@ from src.config import ExerciseConfig
 from src.dashboard import render_dashboard
 from src.patient_controls import PatientControls, dashboard_action_at, patient_buttons
 from src.session_processor import FrameAnalysis, SessionProcessor
-from src.silhouette import SilhouetteGuide, layout, patient_alignment, silhouette_mask
+from src.silhouette import SilhouetteGuide, draw_silhouette, layout, patient_alignment, silhouette_coverage
 
 
 def _landmarks(width, height, scale=1., shift=0., mirror=True):
@@ -35,14 +35,31 @@ def test_alignment_advice():
     assert patient_alignment([], w, h) is None
 
 
-def test_silhouette_raises_the_active_arm():
+def test_3d_silhouette_raises_the_active_arm():
     w, h = 640, 360
-    down, up = silhouette_mask(w, h, "R", 0.), silhouette_mask(w, h, "R", 90.)
+    down, up = silhouette_coverage(w, h, "R", 5.), silhouette_coverage(w, h, "R", 90.)
     ideal = layout(w, h)
-    row = int(ideal["sy"] + .06 * ideal["sw"])
+    row = int(ideal["sy"])
     far_right = int(ideal["cx"] + ideal["sw"] * 1.4)
-    assert up[row, far_right] > 0 and down[row, far_right] == 0
-    assert silhouette_mask(w, h, "L", 90.)[row, w - far_right] > 0
+    assert up[row - 3:row + 4, far_right].max() > .5 and down[row - 3:row + 4, far_right].max() == 0
+    assert silhouette_coverage(w, h, "L", 90.)[row - 3:row + 4, w - far_right].max() > .5
+
+
+def test_3d_silhouette_sits_on_the_ideal_shoulders_and_stays_see_through():
+    w, h = 1280, 720
+    ideal = layout(w, h)
+    cover = silhouette_coverage(w, h, "R", 5.)
+    for sign in (-1, 1):  # both shoulder joints are inside the body
+        assert cover[int(ideal["sy"]), int(ideal["cx"] + sign * ideal["sw"] / 2)] > .9
+    frame = np.full((h, w, 3), 200, np.uint8)
+    frame[::2, ::2] = 0  # a textured background must still show through the torso
+    before = frame.copy()
+    draw_silhouette(frame, 5., "R")
+    torso = (slice(int(ideal["sy"] + ideal["sw"] * .4), int(ideal["sy"] + ideal["sw"] * .6)),
+             slice(int(ideal["cx"] - 10), int(ideal["cx"] + 10)))
+    changed, kept = frame[torso].astype(int), before[torso].astype(int)
+    assert np.abs(changed - kept).mean() > 5
+    assert changed[::2, ::2].mean() < changed[1::2, 1::2].mean() - 40  # background pattern still visible
 
 
 def test_guide_follows_the_demo_cycle_and_freezes_in_pause():

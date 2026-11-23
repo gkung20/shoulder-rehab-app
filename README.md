@@ -11,8 +11,8 @@ Il ne modifie aucune mesure. Détails : [docs/willy.md](docs/willy.md).
 ## Silhouette guide en vue caméra
 
 En vue caméra (**Voir la caméra** ou **V**), un petit bouton **Silhouette** en
-haut à droite de la vidéo (ou la touche **G**) affiche une silhouette
-transparente. Elle montre **où se placer** et fait le mouvement au rythme du
+haut à droite de la vidéo (ou la touche **G**) affiche une **silhouette 3D
+transparente** (corps entier, bleu translucide avec contour lumineux). Elle montre **où se placer** et fait le mouvement au rythme du
 coach (repos, lever, maintenir, redescendre), avec le bras choisi, en miroir.
 Une étiquette indique l’étape à suivre. Quand le suivi voit les deux épaules,
 le contour devient **vert** (« Bien placé ») ou **orange** avec un conseil :
@@ -20,6 +20,11 @@ approchez-vous, reculez, décalez-vous vers la gauche/droite, montez ou baissez
 la caméra. Dans Streamlit : interrupteur **Silhouette guide** dans la barre
 latérale. Aide visuelle uniquement : la silhouette n’intervient ni dans le
 comptage ni dans l’évaluation.
+
+Les images de la silhouette (`assets/silhouette/`, 33 poses de 0 à 160°) sont
+pré-rendues depuis un modèle 3D de corps (`Male-low.OBJ`, non inclus dans le
+dépôt). Pour les régénérer : `python tools/silhouette_frames/render_frames.py
+chemin/vers/Male-low.OBJ` (Playwright + Chromium requis).
 
 ## Coach médecin 3D et avatars homme / femme
 
