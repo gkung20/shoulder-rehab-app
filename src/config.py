@@ -66,6 +66,7 @@ class PoseConfig:
 class AudioConfig:
     backend: str = "auto"  # Local Piper first, then a French Windows voice only.
     voice: str = "fr_FR-tom-medium"  # male base voice of Willy's cartoon voice
+    voice_en: str = "en_US-ryan-medium"  # English base voice (the approved sample's voice)
     length_scale: float = 1.30
     volume: float = 0.85
     speech_rate: int = 130
@@ -120,6 +121,7 @@ class ExerciseConfig:
         import re
         if (audio.backend not in ("auto", "piper", "system")
                 or not re.fullmatch(r"fr_FR-[a-zA-Z0-9_]+-(?:low|medium|high)", audio.voice)
+                or not re.fullmatch(r"en_(?:US|GB)-[a-zA-Z0-9_]+-(?:x_low|low|medium|high)", audio.voice_en)
                 or audio.guidance_mode not in ("essential", "complete")
                 or any(not math.isfinite(v) for v in (audio.length_scale, audio.volume, audio.speech_rate, audio.min_interval_sec, audio.repeat_cooldown_sec, audio.warning_persistence_sec))
                 or not .5 <= audio.length_scale <= 2 or not 0 <= audio.volume <= 1

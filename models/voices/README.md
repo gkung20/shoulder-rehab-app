@@ -1,6 +1,11 @@
-# French neural voice (Willy's voice)
+# Willy's neural voices (French and English)
 
-The default is `fr_FR-tom-medium` (male), run locally with Piper and turned into
+Willy speaks French with `fr_FR-tom-medium` and English with `en_US-ryan-medium`
+(`audio.voice_en`, the base voice of the approved sample). Both get the same effect.
+Download the English one with `python models/download_models.py voice-en`; without it,
+an installed English Windows voice (David, Zira) is used, never a French one.
+
+The French default is `fr_FR-tom-medium` (male), run locally with Piper and turned into
 **Willy's voice**: pitch and timbre raised 1.45x plus a light 6 Hz vibrato, the
 "Cartoon buddy" voice approved for Willy (see `docs/willy.md`). No camera images,
 measurements or coaching text are sent to a speech service. Speech is synthetic;
@@ -55,6 +60,9 @@ Sources and attribution:
   French (France), one male speaker. Its training data is published under
   **AGPLv3** (https://git.bksp.space/Tjiho/French-tts-model-piper): check that
   license before any commercial distribution.
+- [Ryan medium model card](https://huggingface.co/rhasspy/piper-voices/blob/main/en/en_US/ryan/medium/MODEL_CARD),
+  English (US), one male speaker. Its dataset licence is **non-commercial**: check it
+  before distributing the app.
 - [Siwis medium model card](https://huggingface.co/rhasspy/piper-voices/blob/main/fr/fr_FR/siwis/medium/MODEL_CARD)
   (optional fallback), French (France), one speaker, dataset under CC-BY 4.0.
 - [Piper Python API](https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/API_PYTHON.md).

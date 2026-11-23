@@ -91,7 +91,7 @@ def patient_alignment(landmarks, width, height, mirror=True, min_visibility=.5):
         return False, "Baissez un peu la caméra"
     if dy < -.4:
         return False, "Montez un peu la caméra"
-    return True, "Bien placé"
+    return True, "Bonne position"  # no word that changes with the patient's gender
 
 
 class _Frames:

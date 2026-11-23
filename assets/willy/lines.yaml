@@ -1,0 +1,873 @@
+# Everything Willy says, in English and French.
+#
+# Source: the doc "Willy: onboarding scenarios and lines (EN/FR)". Change the wording here,
+# never in the Python code. Each line has:
+#   moment  when it plays (documentation only)
+#   anim    Willy's animation: wave, idle, point, demo, nod, cheer, calm, mirror
+#   en, fr  the line; {n}, {k}, {c}, {name}, {tip}/{conseil} are filled in by the app,
+#           and {a / b} picks one option (for example {right / left})
+#   one     optional singular form, used when the count is 1
+#
+# French uses "vous" and avoids words that change with the patient's gender.
+
+# --- Scenario 1: welcome and language (home screen) ---------------------------------
+S1.01:
+  moment: App opens
+  anim: wave
+  en: "Hi! I'm Willy."
+  fr: "Bonjour ! Je suis Willy."
+S1.02:
+  moment: Language buttons appear
+  anim: point
+  en: "Which language do you prefer?"
+  fr: "Quelle langue préférez-vous ?"
+S1.03:
+  moment: Language chosen
+  anim: nod
+  en: "Great, let's continue in English."
+  fr: "Parfait, on continue en français."
+S1.04:
+  moment: First use detected
+  anim: idle
+  en: "I'm your rehab buddy. I'll help you do your shoulder exercise safely."
+  fr: "Je suis votre compagnon de rééducation. Je vais vous aider à faire votre exercice d'épaule en sécurité."
+S1.05:
+  moment: Tour offer
+  anim: point
+  en: "It's your first time here, so let me show you around. It takes about 7 minutes."
+  fr: "C'est votre première visite : je vais vous montrer l'application. Cela prend environ 7 minutes."
+S1.06:
+  moment: Tour buttons appear
+  anim: idle
+  en: "You can skip it and watch it later from Help."
+  fr: "Vous pouvez la passer et la revoir plus tard depuis Aide."
+S1.07:
+  moment: Patient skips
+  anim: wave
+  en: "No problem! Press Help whenever you want the tour."
+  fr: "Pas de souci ! Appuyez sur Aide quand vous voulez la visite."
+S1.08:
+  moment: Patient starts the tour
+  anim: cheer
+  en: "Let's go!"
+  fr: "C'est parti !"
+
+# --- Scenario 2: safety and privacy (cannot be skipped) ------------------------------
+S2.01:
+  moment: Step opens
+  anim: calm
+  en: "Before we start, two quick safety rules."
+  fr: "Avant de commencer, deux règles de sécurité."
+S2.02:
+  moment: Rule 1
+  anim: calm
+  en: "Move gently. A light stretch is fine, but never push into pain."
+  fr: "Bougez doucement. Un léger étirement, c'est normal, mais jamais jusqu'à la douleur."
+S2.03:
+  moment: Rule 2, the Pause button glows
+  anim: point
+  en: "If you feel sharp pain, dizziness or shortness of breath, stop and press Pause."
+  fr: "Si vous ressentez une douleur vive, un vertige ou un essoufflement, arrêtez-vous et appuyez sur Faire une pause."
+S2.04:
+  moment: Role
+  anim: idle
+  en: "Your physiotherapist's advice comes first. I guide you; I don't replace them."
+  fr: "Les conseils de votre kinésithérapeute passent en premier. Je vous guide, je ne le remplace pas."
+S2.05:
+  moment: Camera promise
+  anim: idle
+  en: "I use the camera only to see your arm. The video stays on this computer."
+  fr: "J'utilise la caméra seulement pour voir votre bras. La vidéo reste sur cet ordinateur."
+S2.06:
+  moment: Confirm button appears
+  anim: nod
+  en: "Is that all clear?"
+  fr: "C'est clair pour vous ?"
+S2.07:
+  moment: Patient confirms
+  anim: nod
+  en: "Thank you!"
+  fr: "Merci !"
+
+# --- Scenario 3: profile setup --------------------------------------------------------
+S3.01:
+  moment: Step opens
+  anim: idle
+  en: "Let's set things up for you."
+  fr: "Réglons l'application pour vous."
+S3.02:
+  moment: Name field appears
+  anim: point
+  en: "What should I call you? You can skip this."
+  fr: "Comment dois-je vous appeler ? Vous pouvez passer cette étape."
+S3.03:
+  moment: Name entered
+  anim: wave
+  en: "Nice to meet you, {name}!"
+  fr: "Enchanté, {name} !"
+S3.04:
+  moment: Arm buttons glow
+  anim: point
+  en: "Which shoulder are we working on?"
+  fr: "Quelle épaule allons-nous travailler ?"
+S3.05:
+  moment: Arm chosen
+  anim: nod
+  en: "Got it: your {right / left} arm."
+  fr: "C'est noté : votre bras {droit / gauche}."
+S3.06:
+  moment: Avatar buttons glow
+  anim: point
+  en: "Pick the coach who will show you the movement."
+  fr: "Choisissez le coach qui vous montrera le mouvement."
+S3.07:
+  moment: Sound check plays
+  anim: idle
+  en: "Can you hear me well? If not, turn up your computer's volume."
+  fr: "Vous m'entendez bien ? Sinon, montez le volume de votre ordinateur."
+S3.08:
+  moment: Sound button glows
+  anim: point
+  en: "This button turns my voice on or off."
+  fr: "Ce bouton active ou coupe ma voix."
+S3.09:
+  moment: Sound turned off
+  anim: calm
+  en: "OK, I'll stay quiet. My words stay in my bubble."
+  fr: "D'accord, je me tais. Mes phrases restent dans ma bulle."
+S3.10:
+  moment: Step done
+  anim: cheer
+  en: "All set!"
+  fr: "Tout est prêt !"
+
+# --- Scenario 4: camera and placement -------------------------------------------------
+S4.01:
+  moment: Camera view opens
+  anim: point
+  en: "Now let's set up the camera."
+  fr: "Maintenant, réglons la caméra."
+S4.02:
+  moment: Framing
+  anim: idle
+  en: "Step back until your head, both shoulders and elbows are on screen."
+  fr: "Reculez jusqu'à voir votre tête, vos deux épaules et vos coudes à l'écran."
+S4.03:
+  moment: Lighting
+  anim: idle
+  en: "Make sure the room is bright, with no strong light behind you."
+  fr: "Vérifiez que la pièce est bien éclairée, sans forte lumière derrière vous."
+S4.04:
+  moment: Silhouette appears
+  anim: point
+  en: "See this blue shape? Stand so your body fits inside it."
+  fr: "Vous voyez cette forme bleue ? Placez-vous pour que votre corps rentre dedans."
+S4.05:
+  moment: Too far
+  anim: point
+  en: "Come a little closer."
+  fr: "Approchez-vous un peu."
+S4.06:
+  moment: Too close
+  anim: point
+  en: "Take a small step back."
+  fr: "Reculez d'un petit pas."
+S4.07:
+  moment: Off to one side
+  anim: point
+  en: "Move a little to your {left / right}."
+  fr: "Décalez-vous un peu vers votre {gauche / droite}."
+S4.08:
+  moment: Camera too high or low
+  anim: point
+  en: "{Raise / Lower} the camera a little."
+  fr: "{Montez / Baissez} un peu la caméra."
+S4.09:
+  moment: Outline turns green
+  anim: cheer
+  en: "Perfect, that's the right spot!"
+  fr: "Parfait, c'est la bonne position !"
+S4.10:
+  moment: Silhouette button glows
+  anim: point
+  en: "This button shows or hides the silhouette whenever you like."
+  fr: "Ce bouton affiche ou masque la silhouette quand vous voulez."
+S4.11:
+  moment: Nobody seen for 10 s
+  anim: calm
+  en: "I can't see you yet. Check that the camera is on and facing you."
+  fr: "Je ne vous vois pas encore. Vérifiez que la caméra est allumée et tournée vers vous."
+
+# --- Scenario 5: screen tour ------------------------------------------------------------
+S5.01:
+  moment: Avatar view opens, screen dims
+  anim: wave
+  en: "Let me show you around the screen."
+  fr: "Je vous fais visiter l'écran."
+S5.02:
+  moment: Top bar lights up
+  anim: point
+  en: "Up here are the settings you chose: coach, arm and sound."
+  fr: "En haut, les réglages que vous avez choisis : coach, bras et son."
+S5.03:
+  moment: Arm buttons glow
+  anim: point
+  en: "The arm can only be changed before you start or during a pause."
+  fr: "Le bras se change seulement avant de commencer ou pendant une pause."
+S5.04:
+  moment: Coach panel (left) lights up
+  anim: point
+  en: "On the left, the coach shows the movement at your pace."
+  fr: "À gauche, le coach montre le mouvement à votre rythme."
+S5.05:
+  moment: Patient avatar (right) lights up
+  anim: point
+  en: "On the right, your avatar copies your movements live."
+  fr: "À droite, votre avatar reproduit vos mouvements en direct."
+S5.06:
+  moment: Camera thumbnail lights up
+  anim: point
+  en: "This small window shows your camera, to check your framing."
+  fr: "Cette petite fenêtre montre votre caméra, pour vérifier le cadrage."
+S5.07:
+  moment: View button glows
+  anim: point
+  en: "This button switches between the avatars and the camera view."
+  fr: "Ce bouton alterne entre les avatars et la vue caméra."
+S5.08:
+  moment: Guidance text lights up
+  anim: point
+  en: "Here, read what to do at each moment."
+  fr: "Ici, lisez ce qu'il faut faire à chaque instant."
+S5.09:
+  moment: Repetition counter lights up
+  anim: point
+  en: "This big number counts your movements, once your arm is back down."
+  fr: "Ce grand chiffre compte vos mouvements, une fois le bras redescendu."
+S5.10:
+  moment: Progress line lights up
+  anim: point
+  en: "This little line fills up during setup, then while you hold."
+  fr: "Cette petite ligne se remplit pendant le réglage, puis pendant le maintien."
+S5.11:
+  moment: Step strip lights up
+  anim: point
+  en: "Down here are the four steps. The current one is underlined."
+  fr: "En bas, les quatre étapes. L'étape en cours est soulignée."
+S5.12:
+  moment: Result line lights up
+  anim: point
+  en: "After each movement, a short note appears just below."
+  fr: "Après chaque mouvement, une courte note apparaît juste en dessous."
+S5.13:
+  moment: Main button glows
+  anim: point
+  en: "This big button starts the session, pauses it and resumes it."
+  fr: "Ce grand bouton lance la séance, la met en pause et la reprend."
+S5.14:
+  moment: Finish button glows
+  anim: point
+  en: "This one ends the session and shows your results."
+  fr: "Celui-ci termine la séance et affiche votre bilan."
+S5.15:
+  moment: Measurements button glows
+  anim: point
+  en: "This one shows the detailed measurements, if you'd like to see them."
+  fr: "Celui-ci affiche les mesures détaillées, si vous voulez les voir."
+S5.16:
+  moment: Help button glows
+  anim: point
+  en: "Not sure? Open the help. You can replay this tour from there."
+  fr: "Un doute ? Ouvrez l'aide. Vous pourrez y revoir cette visite."
+S5.17:
+  moment: Close button glows
+  anim: point
+  en: "And this one closes the app when you're done."
+  fr: "Et celui-ci ferme l'application quand vous avez fini."
+S5.18:
+  moment: Willy's corner lights up
+  anim: wave
+  en: "And I stay right here, moving with you."
+  fr: "Et moi, je reste ici, à bouger avec vous."
+S5.19:
+  moment: Screen back to normal
+  anim: cheer
+  en: "That's the whole screen. Now, let me show you the movement!"
+  fr: "Voilà pour l'écran. Maintenant, je vous montre le mouvement !"
+
+# --- Scenario 6: exercise demo ----------------------------------------------------------
+S6.01:
+  moment: Willy steps forward
+  anim: point
+  en: "Here is your exercise: raising your arm out to the side."
+  fr: "Voici votre exercice : lever le bras sur le côté."
+S6.02:
+  moment: "Demo pose: rest"
+  anim: demo
+  en: "Start with your arm relaxed along your body."
+  fr: "Commencez le bras détendu, le long du corps."
+S6.03:
+  moment: "Demo pose: rising"
+  anim: demo
+  en: "Raise it slowly out to the side, elbow straight."
+  fr: "Levez-le lentement sur le côté, coude tendu."
+S6.04:
+  moment: Shoulder highlighted
+  anim: demo
+  en: "Keep your shoulder low. Don't lift it toward your ear."
+  fr: "Gardez l'épaule basse, sans la remonter vers l'oreille."
+S6.05:
+  moment: Trunk highlighted
+  anim: demo
+  en: "Keep your body straight, without leaning to the other side."
+  fr: "Gardez le buste droit, sans pencher de l'autre côté."
+S6.06:
+  moment: Arm highlighted
+  anim: demo
+  en: "Keep your arm out to the side, not in front of you."
+  fr: "Gardez le bras sur le côté, pas devant vous."
+S6.07:
+  moment: "Demo pose: hold at shoulder height"
+  anim: demo
+  en: "Stop at about shoulder height. That's your target zone."
+  fr: "Arrêtez-vous à peu près à hauteur d'épaule : c'est votre zone cible."
+S6.08:
+  moment: Hold
+  anim: demo
+  en: "Hold it there for a short moment."
+  fr: "Tenez la position un court instant."
+S6.09:
+  moment: "Demo pose: lowering"
+  anim: demo
+  en: "Then lower your arm slowly, all the way down."
+  fr: "Puis redescendez lentement le bras, jusqu'en bas."
+S6.10:
+  moment: Back at rest
+  anim: nod
+  en: "Arm back down: that movement counts."
+  fr: "Bras redescendu : ce mouvement compte."
+S6.11:
+  moment: Full movement at tempo
+  anim: demo
+  en: "Count to two going up, hold briefly, then count to two going down."
+  fr: "Montez en comptant jusqu'à deux, tenez, puis redescendez en comptant jusqu'à deux."
+S6.12:
+  moment: Willy counts during the loop
+  anim: demo
+  en: "One… two… hold… one… two."
+  fr: "Un… deux… on tient… un… deux."
+S6.13:
+  moment: Loop ends
+  anim: calm
+  en: "Move gently. If it hurts, stop and rest."
+  fr: "Bougez en douceur. Si ça fait mal, arrêtez-vous et reposez-vous."
+S6.14:
+  moment: Coach panel lights up
+  anim: point
+  en: "The coach on the left will do it with you every time."
+  fr: "Le coach, à gauche, le fera avec vous à chaque fois."
+S6.15:
+  moment: Watch again and Next appear
+  anim: cheer
+  en: "Your turn now!"
+  fr: "À vous maintenant !"
+
+# --- Scenario 7: calibration and first guided movements --------------------------------
+S7.01:
+  moment: Main button glows
+  anim: point
+  en: "Whenever you like, press this button to start."
+  fr: "Quand vous voulez, appuyez sur ce bouton pour commencer."
+S7.02:
+  moment: Calibration starts
+  anim: calm
+  en: "First, keep your arm down and still for a few seconds."
+  fr: "D'abord, gardez le bras baissé et immobile quelques secondes."
+S7.03:
+  moment: Progress line fills
+  anim: idle
+  en: "I'm learning your posture. Watch the little line fill up."
+  fr: "J'apprends votre posture. Regardez la petite ligne se remplir."
+S7.04:
+  moment: Shoulders found, elbow missing
+  anim: point
+  en: "I can see your shoulders. Now show me your elbow too."
+  fr: "Je vois vos épaules. Montrez-moi aussi votre coude."
+S7.05:
+  moment: Arm raised during calibration
+  anim: calm
+  en: "Lower your arm first, then we'll begin."
+  fr: "Baissez d'abord le bras, puis nous commencerons."
+S7.06:
+  moment: Tracking lost
+  anim: calm
+  en: "I can't see you anymore. Show both shoulders and your elbow."
+  fr: "Je ne vous vois plus. Montrez vos deux épaules et votre coude."
+S7.07:
+  moment: Calibration done
+  anim: nod
+  en: "All set! Let's do the first one together."
+  fr: "C'est réglé ! Faisons le premier ensemble."
+S7.08:
+  moment: Movement 1, at rest
+  anim: demo
+  en: "Slowly raise your arm out to the side."
+  fr: "Levez doucement le bras sur le côté."
+S7.09:
+  moment: Movement 1, rising
+  anim: mirror
+  en: "Good, keep going up, gently."
+  fr: "Bien, continuez à monter, doucement."
+S7.10:
+  moment: Movement 1, close to the zone
+  anim: mirror
+  en: "Almost there. A little higher, without forcing."
+  fr: "Vous y êtes presque. Un peu plus haut, sans forcer."
+S7.11:
+  moment: Movement 1, in the zone
+  anim: mirror
+  en: "Right there! Hold it…"
+  fr: "Juste là ! Tenez…"
+S7.12:
+  moment: Movement 1, hold time reached
+  anim: nod
+  en: "And now, lower slowly."
+  fr: "Et maintenant, redescendez lentement."
+S7.13:
+  moment: Movement 1, lowering
+  anim: mirror
+  en: "Slowly… all the way down."
+  fr: "Doucement… jusqu'en bas."
+S7.14:
+  moment: Movement 1 counted, correct
+  anim: cheer
+  en: "One! That's exactly it."
+  fr: "Un ! C'est exactement ça."
+S7.15:
+  moment: Movement 1 counted, to correct
+  anim: nod
+  en: "One! Next time, {tip}."
+  fr: "Un ! La prochaine fois, {conseil}."
+S7.16:
+  moment: Movement 1 counted, not fully measured
+  anim: calm
+  en: "One! I couldn't check everything. Stay well in the frame."
+  fr: "Un ! Je n'ai pas pu tout vérifier. Restez bien dans l'image."
+S7.17:
+  moment: Movement 2 starts
+  anim: idle
+  en: "Let's do another one. This time, I'll say less."
+  fr: "On en fait un autre. Cette fois, je parle moins."
+S7.18:
+  moment: Movement 3 starts
+  anim: idle
+  en: "One more, at your own pace. I'm watching."
+  fr: "Encore un, à votre rythme. Je vous regarde."
+S7.19:
+  moment: Movement 3 counted
+  anim: cheer
+  en: "You've got it! Keep going at your own pace."
+  fr: "Vous avez compris ! Continuez à votre rythme."
+
+# --- Scenario 8: pause, finish, results and closing (first time each) ------------------
+S8.01:
+  moment: Movement 4 counted, Pause button glows
+  anim: point
+  en: "Need a break? Press this button anytime."
+  fr: "Besoin d'une pause ? Appuyez sur ce bouton quand vous voulez."
+S8.02:
+  moment: First pause
+  anim: calm
+  en: "Take your time. Nothing is counted during a pause."
+  fr: "Prenez votre temps. Rien n'est compté pendant la pause."
+S8.03:
+  moment: Paused for 10 s, main button glows
+  anim: point
+  en: "To carry on, press this button again."
+  fr: "Pour continuer, appuyez de nouveau sur ce bouton."
+S8.04:
+  moment: Movement 8 counted, Finish button glows
+  anim: point
+  en: "When you're done, this button ends the session."
+  fr: "Quand vous avez fini, ce bouton termine la séance."
+S8.05:
+  moment: Session finished
+  anim: cheer
+  en: "Well done! Your session is over."
+  fr: "Bravo ! Votre séance est terminée."
+S8.06:
+  moment: Result line lights up
+  anim: point
+  en: "You did {n} movements today."
+  fr: "Vous avez fait {n} mouvements aujourd'hui."
+  one:
+    en: "You did 1 movement today."
+    fr: "Vous avez fait 1 mouvement aujourd'hui."
+S8.07:
+  moment: Some movements not fully measured
+  anim: calm
+  en: "{k} of them couldn't be fully measured, often because of the framing."
+  fr: "{k} n'ont pas pu être entièrement mesurés, souvent à cause du cadrage."
+  one:
+    en: "1 of them couldn't be fully measured, often because of the framing."
+    fr: "1 n'a pas pu être entièrement mesuré, souvent à cause du cadrage."
+S8.08:
+  moment: At least one correct movement
+  anim: cheer
+  en: "{c} of them were spot on."
+  fr: "{c} étaient parfaits."
+  one:
+    en: "1 of them was spot on."
+    fr: "1 était parfait."
+S8.09:
+  moment: Most frequent error
+  anim: point
+  en: "Your tip for next time: {tip}."
+  fr: "Votre conseil pour la prochaine fois : {conseil}."
+S8.10:
+  moment: Measurements button glows
+  anim: point
+  en: "For the details, this button shows your measurements."
+  fr: "Pour les détails, ce bouton affiche vos mesures."
+S8.11:
+  moment: New session button glows
+  anim: point
+  en: "If your plan includes another set, this button starts a new session."
+  fr: "Si votre programme prévoit une autre série, ce bouton lance une nouvelle séance."
+S8.12:
+  moment: After the results
+  anim: wave
+  en: "Next time, I'll just say hello and we'll get to work."
+  fr: "La prochaine fois, je vous dis bonjour et on s'y met."
+S8.13:
+  moment: After the results
+  anim: point
+  en: "You can replay the tour anytime from the help."
+  fr: "Vous pouvez revoir la visite à tout moment depuis l'aide."
+S8.14:
+  moment: Close button pressed
+  anim: wave
+  en: "Rest well, and see you next session!"
+  fr: "Reposez-vous bien, et à la prochaine séance !"
+
+# --- Everyday: opening the app ----------------------------------------------------------
+E1.01:
+  moment: App opens (morning, afternoon, evening)
+  anim: wave
+  en: "{Good morning / Good afternoon / Good evening}! Shall we do your exercises?"
+  fr: "{Bonjour / Bonjour / Bonsoir} ! On fait vos exercices ?"
+E1.02:
+  moment: Last session was yesterday
+  anim: nod
+  en: "Good to see you again. Same exercise as last time."
+  fr: "Content de vous revoir. Même exercice que la dernière fois."
+E1.03:
+  moment: No session for 3 days or more
+  anim: calm
+  en: "It's been a few days. Let's start gently."
+  fr: "Cela fait quelques jours. Reprenons en douceur."
+E1.04:
+  moment: A session was already done today
+  anim: calm
+  en: "You've already done today's session. Check your plan before doing more."
+  fr: "Vous avez déjà fait la séance du jour. Vérifiez votre programme avant d'en refaire une."
+E1.05:
+  moment: Language switched
+  anim: idle
+  en: "I'll speak English from now on."
+  fr: "Je parle français à partir de maintenant."
+E1.06:
+  moment: Several days in a row
+  anim: cheer
+  en: "{n} days in a row. Great job!"
+  fr: "{n} jours d'affilée. Bravo !"
+
+# --- Everyday: pain check (proposed, not used by the app yet) -------------------------
+E2.01:
+  moment: Before the main button
+  anim: calm
+  en: "Before we start: how is your shoulder today?"
+  fr: "Avant de commencer : comment va votre épaule aujourd'hui ?"
+E2.02:
+  moment: 0 to 10 scale appears
+  anim: point
+  en: "Choose a score from 0, no pain, to 10, the worst possible."
+  fr: "Choisissez une note de 0, aucune douleur, à 10, la pire possible."
+E2.03:
+  moment: Low score
+  anim: nod
+  en: "Thank you. Let's go, gently."
+  fr: "Merci. On y va, en douceur."
+E2.04:
+  moment: Medium score
+  anim: calm
+  en: "Let's go easy today. Stop if the pain increases."
+  fr: "Allons-y doucement aujourd'hui. Arrêtez si la douleur augmente."
+E2.05:
+  moment: High score
+  anim: calm
+  en: "That's a lot of pain. Better to skip today's session."
+  fr: "C'est une forte douleur. Mieux vaut ne pas faire la séance aujourd'hui."
+E2.06:
+  moment: After E2.05
+  anim: calm
+  en: "Please tell your physiotherapist about it."
+  fr: "Parlez-en à votre kinésithérapeute, s'il vous plaît."
+E2.07:
+  moment: It hurts / J'ai mal pressed during a session
+  anim: calm
+  en: "Stop and rest your arm. I've paused the session."
+  fr: "Arrêtez-vous et reposez votre bras. J'ai mis la séance en pause."
+E2.08:
+  moment: After E2.07
+  anim: calm
+  en: "If the pain doesn't settle, contact your physiotherapist or doctor."
+  fr: "Si la douleur ne passe pas, contactez votre kinésithérapeute ou votre médecin."
+
+# --- Everyday: setup and framing --------------------------------------------------------
+E3.01:
+  moment: Setup, once per session
+  anim: calm
+  en: "Get comfortable. Keep your arm at rest."
+  fr: "Installez-vous confortablement. Gardez le bras au repos."
+E3.02:
+  moment: Both shoulders needed
+  anim: point
+  en: "Show both shoulders and keep your arm at rest."
+  fr: "Montrez vos deux épaules et gardez le bras au repos."
+E3.03:
+  moment: Shoulders unclear
+  anim: point
+  en: "I can't quite see your shoulders. Adjust the framing a little."
+  fr: "Je ne distingue pas bien vos épaules. Ajustez légèrement le cadrage."
+E3.04:
+  moment: Shoulders found, elbow missing
+  anim: point
+  en: "Ready. Now show the elbow of your working arm."
+  fr: "C'est prêt. Montrez maintenant le coude du bras suivi."
+E3.05:
+  moment: Arm up during calibration
+  anim: calm
+  en: "Keep your arm down while I get set up."
+  fr: "Gardez le bras baissé pendant le réglage."
+E3.06:
+  moment: Arm up before a movement
+  anim: calm
+  en: "Lower your arm first, then start the movement."
+  fr: "Baissez d'abord le bras, puis commencez la répétition."
+E3.07:
+  moment: Nobody detected
+  anim: calm
+  en: "I can't see you anymore. Adjust the framing to show your shoulders."
+  fr: "Je ne vous distingue plus. Ajustez le cadrage pour montrer vos épaules."
+E3.08:
+  moment: Shoulders and elbow needed
+  anim: point
+  en: "Show both shoulders and the elbow of your working arm."
+  fr: "Montrez les deux épaules et le coude du bras suivi."
+E3.09:
+  moment: Nobody facing the camera
+  anim: point
+  en: "Stand facing the camera."
+  fr: "Placez-vous face à la caméra."
+
+# --- Everyday: during a movement --------------------------------------------------------
+E4.01:
+  moment: Ready, arm at rest
+  anim: idle
+  en: "Whenever you like, gently raise your arm to the side."
+  fr: "Quand vous voulez, levez doucement le bras sur le côté."
+E4.02:
+  moment: Rising
+  anim: mirror
+  en: "Raise your arm gently, without forcing."
+  fr: "Montez le bras doucement, sans forcer."
+E4.03:
+  moment: Almost in the zone
+  anim: mirror
+  en: "Almost there. Reach your target zone."
+  fr: "Vous y êtes presque. Rejoignez votre zone cible."
+E4.04:
+  moment: In the zone
+  anim: mirror
+  en: "Hold this position for a moment."
+  fr: "Gardez cette position un petit instant."
+E4.05:
+  moment: Hold done
+  anim: nod
+  en: "Good! Now lower gently."
+  fr: "Bien ! Maintenant, redescendez doucement."
+E4.06:
+  moment: Lowering
+  anim: calm
+  en: "Lower slowly, no rush."
+  fr: "Redescendez doucement, sans vous précipiter."
+E4.07:
+  moment: Shoulder rising
+  anim: calm
+  en: "Keep your shoulder down, relaxed."
+  fr: "Gardez l'épaule basse, sans forcer."
+E4.08:
+  moment: Trunk leaning
+  anim: calm
+  en: "Keep your body upright."
+  fr: "Gardez le buste droit."
+E4.09:
+  moment: Elbow bending
+  anim: calm
+  en: "Keep your arm straight, but not stiff."
+  fr: "Gardez le bras tendu, sans le raidir."
+E4.10:
+  moment: Arm drifting forward
+  anim: calm
+  en: "Keep your arm out to the side."
+  fr: "Gardez le bras sur le côté du corps."
+E4.11:
+  moment: Too high
+  anim: calm
+  en: "A little lower. Come back into your target zone."
+  fr: "Un peu moins haut. Revenez doucement dans la zone cible."
+
+# --- Everyday: after each movement -------------------------------------------------------
+E5.01:
+  moment: Correct
+  anim: cheer
+  en: "Well done! Movement {n} is spot on."
+  fr: "Bravo ! Répétition {n} validée."
+E5.02:
+  moment: Correct, variant
+  anim: cheer
+  en: "Perfect, that's {n}!"
+  fr: "Parfait, et de {n} !"
+E5.03:
+  moment: Correct, variant
+  anim: cheer
+  en: "Nice and smooth. That's {n}!"
+  fr: "Bien fluide. Et de {n} !"
+E5.04:
+  moment: Not fully measured
+  anim: nod
+  en: "Movement {n} done. I couldn't check everything."
+  fr: "Répétition {n} terminée. Je n'ai pas pu tout vérifier."
+E5.05:
+  moment: To correct
+  anim: nod
+  en: "Movement {n} done. {Tip}"
+  fr: "Répétition {n} terminée. {Conseil}"
+E5.10:
+  moment: Too low
+  anim: nod
+  en: "Try to reach your target zone, without forcing."
+  fr: "Essayez de rejoindre votre zone cible, sans forcer."
+E5.11:
+  moment: Too high
+  anim: nod
+  en: "Don't raise it quite so high."
+  fr: "Levez un peu moins haut."
+E5.12:
+  moment: Shoulder shrug
+  anim: nod
+  en: "Keep your shoulder down."
+  fr: "Gardez l'épaule basse."
+E5.13:
+  moment: Trunk lean
+  anim: nod
+  en: "Keep your body upright."
+  fr: "Gardez le buste droit."
+E5.14:
+  moment: Elbow bent
+  anim: nod
+  en: "Keep your arm straight."
+  fr: "Gardez le bras tendu."
+E5.15:
+  moment: Arm in front of the body
+  anim: nod
+  en: "Keep your arm out to the side, not in front."
+  fr: "Gardez le bras bien sur le côté, pas devant."
+E5.16:
+  moment: Jerky movement
+  anim: nod
+  en: "Try a smoother, steadier movement."
+  fr: "Essayez un mouvement plus fluide et régulier."
+E5.17:
+  moment: Raised too fast
+  anim: nod
+  en: "Take more time to raise your arm."
+  fr: "Prenez plus de temps pour monter le bras."
+E5.18:
+  moment: Hold too short
+  anim: nod
+  en: "Hold the top position a little longer."
+  fr: "Gardez la position un peu plus longtemps."
+E5.19:
+  moment: Lowered too fast
+  anim: nod
+  en: "Lower your arm more slowly."
+  fr: "Redescendez plus doucement."
+E5.20:
+  moment: Any other case
+  anim: nod
+  en: "Let's take the next one gently."
+  fr: "Reprenons doucement le mouvement."
+
+# --- Everyday: milestones and status -----------------------------------------------------
+E6.01:
+  moment: Every 5 movements
+  anim: nod
+  en: "{n} movements done. Keep going at your own pace."
+  fr: "{n} mouvements effectués. Continuez à votre rythme."
+  one:
+    en: "1 movement done. Keep going at your own pace."
+    fr: "1 mouvement effectué. Continuez à votre rythme."
+E6.02:
+  moment: 3 spot-on movements in a row
+  anim: cheer
+  en: "Three spot on in a row!"
+  fr: "Trois parfaits d'affilée !"
+E6.03:
+  moment: Session goal reached (needs a session plan, not used yet)
+  anim: cheer
+  en: "That's today's goal. Well done!"
+  fr: "Objectif du jour atteint. Bravo !"
+E6.04:
+  moment: No movement for 30 s during a session
+  anim: idle
+  en: "Still there? Take a break if you need one."
+  fr: "Toujours là ? Faites une pause si besoin."
+E6.05:
+  moment: Sound turned off
+  anim: idle
+  en: "I'll stay quiet. My bubble keeps showing the steps."
+  fr: "Je me tais. Ma bulle continue d'afficher les étapes."
+E6.06:
+  moment: Sound turned back on
+  anim: wave
+  en: "I'm back!"
+  fr: "Me revoilà !"
+E6.07:
+  moment: Voice not available (bubble only)
+  anim: idle
+  en: "My voice isn't working. Follow my bubble."
+  fr: "Ma voix ne fonctionne pas. Suivez ma bulle."
+E6.08:
+  moment: Camera stops
+  anim: calm
+  en: "The camera stopped. Check its cable, then reopen the app."
+  fr: "La caméra ne répond plus. Vérifiez son branchement, puis rouvrez l'application."
+
+# --- Everyday: end of session and closing ------------------------------------------------
+E7.01:
+  moment: Session ended with fewer than 5 movements
+  anim: calm
+  en: "A short session today, and that's okay. Rest well."
+  fr: "Séance courte aujourd'hui, et c'est très bien. Reposez-vous bien."
+E7.02:
+  moment: More spot-on movements than last time
+  anim: cheer
+  en: "More spot-on movements than last time!"
+  fr: "Plus de mouvements parfaits que la dernière fois !"
+E7.03:
+  moment: Close pressed
+  anim: wave
+  en: "Goodbye! Take care of that shoulder. See you next time."
+  fr: "Au revoir ! Prenez soin de cette épaule. À la prochaine !"

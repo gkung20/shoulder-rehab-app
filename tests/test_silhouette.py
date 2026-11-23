@@ -26,7 +26,7 @@ def _landmarks(width, height, scale=1., shift=0., mirror=True):
 
 def test_alignment_advice():
     w, h = 1280, 720
-    assert patient_alignment(_landmarks(w, h), w, h) == (True, "Bien placé")
+    assert patient_alignment(_landmarks(w, h), w, h) == (True, "Bonne position")
     assert patient_alignment(_landmarks(w, h, scale=.6), w, h)[1] == "Approchez-vous un peu"
     assert patient_alignment(_landmarks(w, h, scale=1.5), w, h)[1] == "Reculez un peu"
     # Patient appears too far to the screen's left; in a mirror they step to their right.

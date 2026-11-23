@@ -1,6 +1,11 @@
-"""Local webcam coach with shared analysis and a readable dashboard."""
+"""Local webcam coach with shared analysis and a readable dashboard.
+
+The app opens on Willy's home screen. The first time, Willy runs the guided tour (in English
+or French); afterwards he greets the patient and the session starts from his Start button.
+"""
 import sys
 import argparse
+import time
 from dataclasses import replace
 from collections import deque
 import cv2
@@ -14,6 +19,13 @@ from src.patient_controls import PatientControls, dashboard_action_at
 from src.window_viewport import native_window_size, canvas_viewport, enable_high_dpi
 from src.avatar_stage import AvatarStage
 from src.hand_detector import HandDetector,MODEL_PATH as HAND_MODEL_PATH
+from src.home_screen import render_home
+from src.rules_engine import FeedbackLevel
+from src.silhouette import patient_alignment
+from src.user_profile import Profile
+from src.willy import shared_guide
+from src.willy_lines import shared_script
+from src.willy_tour import Moment, TOUR_ACTIONS, WillyDirector
 
 
 def show_startup_error(error):
@@ -48,7 +60,10 @@ def main(argv=None):
     parser.add_argument("--model", choices=("lite", "full", "heavy"), help="Modele : full par defaut")
     parser.add_argument("--no-avatars", action="store_true", help="Vue camera seule, sans moteur 3D")
     parser.add_argument("--no-hands", action="store_true", help="Desactiver le suivi detaille des mains")
+    parser.add_argument("--tour", action="store_true", help="Rejouer la visite guidee de Willy / replay Willy's tour")
+    parser.add_argument("--skip-home", action="store_true", help="Ouvrir directement la seance, sans l'accueil de Willy")
     args = parser.parse_args(argv)
+    profile = Profile.load()
     config = ExerciseConfig.from_yaml()
     overrides = {name: getattr(args, arg) for name,arg in (("index","camera"),("width","width"),("height","height"),("zoom","zoom")) if getattr(args,arg) is not None}
     try:
@@ -56,9 +71,9 @@ def main(argv=None):
                          pose=replace(config.pose, model=args.model or config.pose.model))
     except ValueError as exc:
         parser.error(str(exc))
-    processor = SessionProcessor(config)
+    processor = SessionProcessor(config, profile.arm or "right")
     mirror = True
-    controls = PatientControls(avatars=not args.no_avatars)
+    controls = PatientControls(avatars=not args.no_avatars, avatar_gender=profile.avatar_gender or "male")
     actions = deque()
     now_sec = 0.
     window_name = "Mouvement - Coach epaule"
@@ -78,9 +93,18 @@ def main(argv=None):
             print("[MAINS] Modele optionnel absent : python models/download_models.py hand_landmarker.task")
         c = config.camera
         with VideoCaptureManager(camera_index=c.index, width=c.width, height=c.height, target_fps=c.fps,
-                                 zoom=c.zoom, mirror=False) as cap, PoseDetector(model_variant=config.pose.model) as detector, AudioCoach.from_config(config.audio, enabled=True) as audio:
+                                 zoom=c.zoom, mirror=False) as cap, PoseDetector(model_variant=config.pose.model) as detector, \
+                AudioCoach.from_config(config.audio, enabled=profile.audio_enabled, language=profile.language or "fr") as audio:
             print(cap.status_message)
             processor.model_info = detector.model_info.copy()
+            guide = shared_guide()
+            director = WillyDirector(profile, audio, guide, has_avatars=not args.no_avatars)
+            if args.skip_home:
+                director.screen = "dashboard"
+            elif args.tour:
+                director.replay_tour()
+            else:
+                director.open()
             # Paint at the client area's actual pixels; Win32 must not enlarge a UI bitmap.
             cv2.namedWindow(window_name, cv2.WINDOW_NORMAL | cv2.WINDOW_FREERATIO)
             cv2.resizeWindow(window_name, *window_size())
@@ -90,9 +114,13 @@ def main(argv=None):
                     point=viewport.canvas_point(x,y)
                     if point is None:
                         return
-                    action=dashboard_action_at(*point,mode=controls.mode,arm=processor.arm,
-                        audio_enabled=audio.enabled,details=controls.details,help_visible=controls.help_visible,
-                        avatars=controls.avatars,avatar_gender=controls.avatar_gender,silhouette=controls.silhouette)
+                    # Willy's buttons (home screen, tour bubble) are on top of the session controls.
+                    action=director.overlay.action_at(*point)
+                    if action is None and director.screen == "dashboard":
+                        action=dashboard_action_at(*point,mode=controls.mode,arm=processor.arm,
+                            audio_enabled=audio.enabled,details=controls.details,help_visible=controls.help_visible,
+                            avatars=controls.avatars,avatar_gender=controls.avatar_gender,silhouette=controls.silhouette,
+                            language=director.language)
                     if action:
                         actions.append(action)
             cv2.setMouseCallback(window_name,on_mouse)
@@ -101,11 +129,22 @@ def main(argv=None):
             while True:
                 while actions:
                     action=actions.popleft()
+                    if action in TOUR_ACTIONS or director.screen == "home" or action in ("language","quit"):
+                        director.notify(action)
+                        quitting=quitting or action == "quit"
+                        continue
+                    if not director.permits(action):
+                        continue
                     old_mode=controls.mode
                     if not controls.apply(action):
                         continue
-                    if action == "quit":
-                        quitting=True
+                    if action == "replay_tour":
+                        director.session_recorded(processor.rules_engine.session)
+                        processor.finish()
+                        processor=SessionProcessor(config,processor.arm)
+                        processor.model_info=detector.model_info.copy()
+                        controls.mode="ready"
+                        audio.silence()
                     elif action == "start":
                         processor.recalibrate(timestamp_sec=now_sec)
                         audio.begin_session()
@@ -115,6 +154,7 @@ def main(argv=None):
                     elif action == "resume" and processor.calibrator.is_calibrating:
                         processor.recalibrate(timestamp_sec=now_sec)
                     elif action == "restart":
+                        director.session_recorded(processor.rules_engine.session)
                         processor=SessionProcessor(config,processor.arm)
                         processor.model_info=detector.model_info.copy()
                         audio.silence()
@@ -123,6 +163,8 @@ def main(argv=None):
                         audio.silence()
                     elif action == "audio":
                         audio.toggle()
+                        profile.audio_enabled=audio.enabled is not False
+                        profile.save()
                     elif action == "avatars" and controls.avatars and avatar_stage is None:
                         avatar_stage=AvatarStage()
                         avatar_stage.set_user_gender(controls.avatar_gender)
@@ -130,43 +172,77 @@ def main(argv=None):
                         avatar_stage.set_user_gender(controls.avatar_gender)
                     elif action == "mirror":
                         mirror=not mirror
-                if quitting:
+                    director.notify(action)
+                if quitting and director.ready_to_close(time.monotonic()):
                     break
                 success, frame, timestamp_ms, fps = cap.read_frame()
                 if not success or frame is None:
-                    show_startup_error("La caméra ne répond plus. Vérifiez son branchement, puis ouvrez à nouveau Mouvement.")
+                    show_startup_error(shared_script().text("E6.08",director.language))
                     break
                 now_sec=timestamp_ms/1000.
                 h, w = frame.shape[:2]
-                if controls.mode == "running":
+                alignment=None
+                if director.screen == "dashboard" and controls.mode == "running":
                     landmarks = detector.detect(frame, timestamp_ms)
                     analysis = processor.process(landmarks, detector.last_world_landmarks, w, h, now_sec)
                     if hand_detector is not None:
                         analysis.hands=hand_detector.detect(frame,timestamp_ms,landmarks)
-                    audio.speak_cue(analysis.cue)
-                    if analysis.new_evaluation:
+                    # During the first guided movements, Willy's tour speaks the phases and results itself.
+                    if not director.coaching or analysis.cue.level == FeedbackLevel.WARNING:
+                        audio.speak_cue(analysis.cue)
+                    if analysis.new_evaluation and not director.coaching:
                         audio.speak_evaluation(analysis.new_evaluation)
+                elif director.wants_tracking:
+                    # Camera setup of the tour: find the shoulders to check the placement, count nothing.
+                    landmarks = detector.detect(frame, timestamp_ms)
+                    analysis=FrameAnalysis(now_sec,landmarks=landmarks or [],metrics={},status=controls.mode.upper())
+                    alignment=patient_alignment(analysis.landmarks,w,h,mirror)
                 else:
                     analysis=FrameAnalysis(now_sec,metrics={},status=controls.mode.upper())
+                director.update(Moment(time.monotonic(),controls.mode,analysis,processor,alignment,mirror,
+                                       audio.enabled is not False))
+                # The tour shows the view it is talking about.
+                if director.want_avatars is not None and controls.avatars != director.want_avatars:
+                    controls.apply("avatars")
+                    if controls.avatars and avatar_stage is None:
+                        avatar_stage=AvatarStage()
+                        avatar_stage.set_user_gender(controls.avatar_gender)
+                if director.want_silhouette is not None and controls.silhouette != director.want_silhouette:
+                    controls.apply("silhouette")
                 if audio.status_message != last_audio_status:
                     print(f"[AUDIO] {audio.status_message}")
                     last_audio_status = audio.status_message
                 output_size=native_window_size(window_name,CANVAS_SIZE)
-                display = render_dashboard(frame, analysis, processor, fps, mirror,
-                    audio.enabled, audio.status_message,mode=controls.mode,details=controls.details,
-                    help_visible=controls.help_visible,output_size=output_size,
-                    avatar_stage=avatar_stage,avatars=controls.avatars,avatar_gender=controls.avatar_gender,
-                    speaking=audio.speaking,silhouette=controls.silhouette)
+                if director.screen == "home":
+                    display = render_home(director, guide, output_size, speaking=audio.speaking is True)
+                else:
+                    display = render_dashboard(frame, analysis, processor, fps, mirror,
+                        audio.enabled, audio.status_message,mode=controls.mode,details=controls.details,
+                        help_visible=controls.help_visible,output_size=output_size,
+                        avatar_stage=avatar_stage,avatars=controls.avatars,avatar_gender=controls.avatar_gender,
+                        speaking=audio.speaking,silhouette=controls.silhouette,willy=guide,
+                        lang=director.language,overlay=director.overlay)
                 viewport=canvas_viewport(CANVAS_SIZE,*output_size)
                 cv2.imshow(window_name, display)
                 key = cv2.waitKey(1) & 0xFF
-                if key in (ord('q'), ord('Q'), 27) or cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
+                if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
                     break
+                if key != 255 and director.type_key(key):
+                    continue  # the patient is typing a first name
+                if key in (ord('q'), ord('Q'), 27):
+                    break
+                if key in (13, 32) and (director.screen == "home" or director.primary_action()):
+                    primary=director.primary_action()
+                    if primary:
+                        actions.append(primary)
+                    continue
+                if director.screen == "home":
+                    continue
                 shortcuts={ord('l'):"arm_left",ord('r'):"arm_right",ord('a'):"audio",ord('s'):"finish",
                            ord('m'):"mirror",ord('h'):"help",ord('d'):"details",ord('v'):"avatars",ord('g'):"silhouette"}
                 if 65 <= key <= 90:
                     key+=32
-                if key == ord('c') and controls.mode == "running":
+                if key == ord('c') and controls.mode == "running" and director.permits("calibrate"):
                     processor.recalibrate(timestamp_sec=now_sec)
                     audio.silence()
                 elif key == 32:
@@ -177,6 +253,8 @@ def main(argv=None):
         show_startup_error(exc)
         return 1
     finally:
+        if 'director' in locals():
+            director.session_recorded(processor.rules_engine.session)
         if hand_detector is not None:
             hand_detector.close()
         if avatar_stage is not None:

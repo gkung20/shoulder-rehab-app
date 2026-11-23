@@ -12,8 +12,12 @@ class PatientButton:
     primary: bool = False
 
 
+LANGUAGE_BUTTON = (264, 22, 404, 76)
+
+
 def patient_buttons(mode="running", arm="right", audio_enabled=True, details=False, help_visible=False, avatars=True, avatar_gender="male",
-                    silhouette=False):
+                    silhouette=False, language="fr"):
+    """Every button of the patient screen. Labels are French; the screen translates them when drawing."""
     primary = {"ready": ("start", "Commencer"), "running": ("pause", "Faire une pause"),
                "paused": ("resume", "Reprendre"), "finished": ("restart", "Nouvelle séance")}[mode]
     buttons = [
@@ -28,7 +32,11 @@ def patient_buttons(mode="running", arm="right", audio_enabled=True, details=Fal
         PatientButton("details", "Masquer les mesures" if details else "Mesures", (630,750,814,806), selected=details),
         PatientButton("help", "Fermer l’aide" if help_visible else "Aide", (830,750,998,806), selected=help_visible),
         PatientButton("quit", "Fermer", (1096,750,1248,806)),
+        # The other language, written in that language: always readable by whoever needs it.
+        PatientButton("language", "Français" if language == "en" else "English", LANGUAGE_BUTTON),
     ]
+    if help_visible:
+        buttons.append(PatientButton("replay_tour", "Revoir la visite", (82,526,330,572)))
     if not avatars and not help_visible:
         # Small toggle in the camera view's top-right corner.
         buttons.append(PatientButton("silhouette", "Masquer la silhouette" if silhouette else "Silhouette",
@@ -81,4 +89,7 @@ class PatientControls:
             return True
         if action in ("arm_left","arm_right"):
             return self.mode in ("ready","paused")
-        return action in ("audio","quit","mirror")
+        if action == "replay_tour":
+            self.help_visible = False
+            return True
+        return action in ("audio","quit","mirror","language")

@@ -1,4 +1,4 @@
-"""Non-blocking French coaching, using a local neural voice and fresh guidance."""
+"""Non-blocking coaching in Willy's voice, in French or English, with fresh guidance."""
 from collections import OrderedDict
 from dataclasses import asdict, dataclass
 import logging
@@ -11,38 +11,19 @@ import unicodedata
 
 from src.rules_engine import FeedbackLevel, LiveFeedback, RepetitionEvaluation
 from src.speech import create_speech_backend
+from src.willy_lines import LANGUAGES, Line, cue_line_id, result_line, shared_script
 
 LOGGER = logging.getLogger(__name__)
 
 
 def spoken_french(message):
-    """Keep screen-compatible ASCII out of pronunciation; stabilize countdown cues."""
-    key = unicodedata.normalize("NFKD", message).encode("ascii", "ignore").decode().strip().lower()
-    phrases = {
-        "pret : levez le bras sur le cote": "Quand vous êtes prêt, levez doucement le bras sur le côté.",
-        "montez lentement le bras...": "Montez le bras doucement, sans forcer.",
-        "presque ! rejoignez votre zone cible": "Vous y êtes presque. Rejoignez votre zone cible.",
-        "maintenez dans la zone cible, puis redescendez": "Gardez cette position un petit instant.",
-        "bien ! redescendez doucement jusqu'au repos": "Bien ! Maintenant, redescendez doucement.",
-        "controlez la descente lentement": "Redescendez doucement, sans vous précipiter.",
-        "gardez l'epaule basse !": "Gardez l'épaule basse, sans forcer.",
-        "gardez le tronc droit !": "Gardez le buste droit.",
-        "gardez le bras tendu !": "Gardez le bras tendu, sans le raidir.",
-        "gardez le bras dans le plan du corps !": "Gardez le bras sur le côté du corps.",
-        "un peu moins haut : revenez dans la zone cible": "Un peu moins haut. Revenez doucement dans la zone cible.",
-        "epaules pretes : montrez le coude du bras actif pour compter": "C'est prêt. Montrez maintenant le coude du bras suivi.",
-        "baissez le bras avant de commencer une repetition": "Baissez d'abord le bras, puis commencez la répétition.",
-        "baissez le bras pour terminer la calibration": "Gardez le bras baissé pendant la calibration.",
-        "montrez les deux epaules, gardez le bras au repos": "Montrez vos deux épaules et gardez le bras au repos.",
-    }
-    if key in phrases:
-        return phrases[key]
-    if key.startswith(("restez au repos encore", "images valides :")):
-        return "Gardez le bras au repos pendant la calibration."
-    if key.startswith("calibration en attente"):
-        return "Je ne distingue pas bien vos épaules. Ajustez légèrement le cadrage."
-    if key.startswith("aucun squelette detecte"):
-        return "Je ne vous distingue plus. Ajustez le cadrage pour montrer vos épaules."
+    """Keep screen-compatible ASCII out of pronunciation; stabilize countdown cues.
+
+    Live messages that Willy has a line for use that line's French wording (assets/willy/lines.yaml).
+    """
+    line_id = cue_line_id(message)
+    if line_id is not None:
+        return shared_script().text(line_id, "fr")
     # Unknown cues remain French text, with common ASCII-only words restored.
     replacements = {"epaules":"épaules", "epaule":"épaule", "coude":"coude", "pret":"prêt",
         "repetez":"répétez", "repetition":"répétition", "controlez":"contrôlez", "serre":"serré",
@@ -56,13 +37,26 @@ class _SpeechItem:
     text: str
     created_at: float
     result: bool = False
+    language: str | None = None  # None: the coach's current language
+    ttl: float | None = None     # seconds before a waiting sentence is dropped as stale
+
+
+_UNAVAILABLE = {"fr": "Voix française indisponible : voir la console", "en": "English voice unavailable: see the console"}
+_LOADING = {"fr": "Chargement de la voix française…", "en": "Loading the English voice…"}
 
 
 class AudioCoach:
     def __init__(self, enabled=True, speech_rate=130, min_interval_sec=8.,
                  repeat_cooldown_sec=40., backend="auto", voice="fr_FR-tom-medium",
                  length_scale=1.30, volume=.85, guidance_mode="essential",
-                 warning_persistence_sec=1.5, announce_every_reps=5, willy_pitch=1.45):
+                 warning_persistence_sec=1.5, announce_every_reps=5, willy_pitch=1.45,
+                 voice_en="en_US-ryan-medium", language="fr"):
+        self._lang_available = {}
+        self.language = language if language in LANGUAGES else "fr"
+        self.voice_en = voice_en
+        self.script = shared_script()
+        self.last_line = None      # Willy's latest line (src.willy_lines.Line), shown in his bubble
+        self.last_line_at = float("-inf")
         self.enabled = enabled
         self.speech_rate = speech_rate
         self.min_interval_sec = min_interval_sec
@@ -80,7 +74,7 @@ class AudioCoach:
         self._warning_text = None
         self._warning_since = None
         self.available = None
-        self.status_message = "Audio désactivé" if not enabled else "Chargement de la voix française…"
+        self.status_message = "Audio désactivé" if not enabled else _LOADING[self.language]
         self.last_error = ""
         self._queue = queue.Queue(maxsize=2)
         self._stop_event = threading.Event()
@@ -94,23 +88,63 @@ class AudioCoach:
             self._start_worker()
 
     @classmethod
-    def from_config(cls, settings, enabled=True):
-        return cls(enabled=enabled, **asdict(settings))
+    def from_config(cls, settings, enabled=True, language="fr"):
+        return cls(enabled=enabled, language=language, **asdict(settings))
+
+    @property
+    def available(self):
+        """Whether Willy's voice works in the current language (None: not tried yet)."""
+        return self._lang_available.get(self.language)
+
+    @available.setter
+    def available(self, value):
+        self._lang_available[self.language] = value
+
+    @property
+    def busy(self):
+        """True while Willy is talking or has a sentence waiting."""
+        return bool(self.speaking) or not self._queue.empty()
 
     def _make_backend(self):
-        return create_speech_backend(self.backend, self.voice, self.length_scale, self.volume, self.speech_rate,
-                                     willy_pitch=self.willy_pitch)
+        return self._backend_for(self.language)
+
+    def _backend_for(self, language):
+        return create_speech_backend(self.backend, self.voice_en if language == "en" else self.voice,
+                                     self.length_scale, self.volume, self.speech_rate,
+                                     willy_pitch=self.willy_pitch, language=language)
 
     def _start_worker(self):
         self._stop_event.clear()
-        self._thread = threading.Thread(target=self._worker_loop, name="french-coach", daemon=True)
+        self._thread = threading.Thread(target=self._worker_loop, name="willy-voice", daemon=True)
         self._thread.start()
 
-    def _worker_loop(self):
-        engine = None
+    def _engine_for(self, engines, language):
+        """The voice for one language, created the first time it is needed; None if it cannot work."""
+        if language in engines:
+            return engines[language]
         try:
+            engine = self._make_backend() if language == self.language else self._backend_for(language)
+        except Exception as error:
+            self._lang_available[language] = False
+            self.last_error = str(error)
+            if language == self.language:
+                self.status_message = _UNAVAILABLE[language]
+            LOGGER.warning("Voice unavailable (%s): %s", language, error)
+            engines[language] = None
+            return None
+        engines[language] = engine
+        self._lang_available[language] = True
+        if language == self.language:
+            self.status_message = engine.label
+        return engine
+
+    def _worker_loop(self):
+        engines = {}
+        try:
+            language = self.language
             engine = self._make_backend()
-            self.available = True
+            engines[language] = engine
+            self._lang_available[language] = True
             self.status_message = engine.label
             while not self._stop_event.is_set():
                 try:
@@ -118,12 +152,16 @@ class AudioCoach:
                 except queue.Empty:
                     continue
                 try:
-                    if time.monotonic() - item.created_at > (8. if item.result else 4.):
+                    ttl = item.ttl if item.ttl is not None else (8. if item.result else 4.)
+                    if time.monotonic() - item.created_at > ttl:
                         continue
                     with self._lock:
                         if not self.enabled or self._stop_event.is_set():
                             continue
                         self._playback_cancel.clear()
+                    engine = self._engine_for(engines, item.language or self.language)
+                    if engine is None:
+                        continue
                     self.speaking = True
                     try:
                         engine.say(item.text, self._playback_cancel)
@@ -134,10 +172,12 @@ class AudioCoach:
         except Exception as error:
             self.available = False
             self.last_error = str(error)
-            self.status_message = "Voix française indisponible : voir la console"
-            LOGGER.warning("Audio français indisponible : %s", error)
+            self.status_message = _UNAVAILABLE[self.language]
+            LOGGER.warning("Audio indisponible : %s", error)
         finally:
-            if engine is not None:
+            for engine in engines.values():
+                if engine is None:
+                    continue
                 try:
                     engine.close()
                 except Exception:
@@ -156,75 +196,119 @@ class AudioCoach:
         if latest_result is not None:
             self._queue.put_nowait(latest_result)
 
-    def speak(self, message, priority=False, force=False):
-        text = spoken_french(message) if message else ""
+    def _admit(self, text, force, now):
+        """Cooldowns shared by the voice and the bubble (caller holds the lock)."""
+        last_time = self._last_spoken_cues.get(text, float("-inf"))
+        if not force and now-last_time < self.repeat_cooldown_sec:
+            return False
+        if not force and now-self._last_speech_time < self.min_interval_sec:
+            return False
+        self._last_speech_time = now
+        self._last_spoken_cues[text] = now
+        if len(self._last_spoken_cues) > 64:
+            self._last_spoken_cues.popitem(last=False)
+        return True
+
+    def speak(self, message, priority=False, force=False, line=None):
+        """Say one sentence, respecting the cooldowns. With `line`, Willy's bubble shows it even with the sound off.
+
+        Returns True only when the sentence was queued for the voice.
+        """
+        if line is not None:
+            text = line.text
+        else:
+            text = spoken_french(message) if message and self.language == "fr" else (message or "")
         now = time.monotonic()
         with self._lock:
-            if not self.enabled or self.available is False or self._closed or not text:
+            if self._closed or not text:
                 return False
-            last_time = self._last_spoken_cues.get(text, float("-inf"))
-            if not force and now-last_time < self.repeat_cooldown_sec:
+            audible = self.enabled and self.available is not False
+            if not audible and line is None:
                 return False
-            if not force and now-self._last_speech_time < self.min_interval_sec:
+            if not self._admit(text, force, now):
+                return False
+            if line is not None:
+                self.last_line, self.last_line_at = line, now
+            if not audible:
                 return False
             if priority or force:
                 self._playback_cancel.set()  # Stop an obsolete instruction for a correction/result.
             # New phases replace old queued instructions; keep at most one pending result.
             self._clear_pending(keep_result=not force)
             self._queue.put_nowait(_SpeechItem(text, now, result=force))
-            self._last_speech_time = now
-            self._last_spoken_cues[text] = now
-            if len(self._last_spoken_cues) > 64:
-                self._last_spoken_cues.popitem(last=False)
             return True
+
+    def say(self, text, language=None, interrupt=True, ttl=20.):
+        """A line of the tour: no cooldown, but it waits for nothing older than `ttl` seconds.
+
+        `interrupt` stops what Willy is saying; without it the line follows the current one.
+        """
+        language = language if language in LANGUAGES else self.language
+        now = time.monotonic()
+        with self._lock:
+            if self._closed or not text or not self.enabled or self._lang_available.get(language) is False:
+                return False
+            if interrupt:
+                self._playback_cancel.set()
+                self._clear_pending()
+            try:
+                self._queue.put_nowait(_SpeechItem(text, now, result=True, language=language, ttl=ttl))
+            except queue.Full:
+                return False
+            # Everyday cues wait a moment after a tour line instead of talking over it.
+            self._last_speech_time = now
+            return True
+
+    def show(self, line):
+        """Put a line in Willy's bubble without saying it."""
+        with self._lock:
+            self.last_line, self.last_line_at = line, time.monotonic()
+
+    def _cue_line(self, message):
+        line_id = cue_line_id(message)
+        return None if line_id is None else self.script.line(line_id, self.language)
 
     def speak_cue(self, feedback: LiveFeedback):
         if feedback is None:
             return False
+        line = self._cue_line(feedback.message)
         if self.guidance_mode == "essential":
-            text = spoken_french(feedback.message)
+            text = line.text if line is not None else spoken_french(feedback.message)
             now = time.monotonic()
             if feedback.level == FeedbackLevel.WARNING:
                 if text != self._warning_text:
                     self._warning_text, self._warning_since = text, now
                 if now - self._warning_since < self.warning_persistence_sec:
                     return False
-                return self.speak(text, priority=True)
+                if line is None and self.language != "fr":
+                    return False
+                return self.speak(feedback.message, priority=True, line=line)
             self._warning_text = self._warning_since = None
             # One setup instruction per session. Exercise phases stay on screen.
             key = unicodedata.normalize("NFKD", feedback.message).encode("ascii", "ignore").decode().lower()
             setup = any(part in key for part in ("calibration", "epaules", "au repos encore", "images valides"))
             if self._setup_announced or not setup:
                 return False
-            accepted = self.speak("Installez-vous confortablement. Gardez le bras au repos.")
-            if accepted:
+            setup_line = self.script.line("E3.01", self.language)
+            accepted = self.speak(None, line=setup_line)
+            if accepted or self.last_line is setup_line:
                 self._setup_announced = True
             return accepted
-        return self.speak(feedback.message, priority=feedback.level == FeedbackLevel.WARNING)
+        if line is None:
+            if self.language != "fr":
+                return False
+            return self.speak(feedback.message, priority=feedback.level == FeedbackLevel.WARNING)
+        return self.speak(None, priority=feedback.level == FeedbackLevel.WARNING, line=line)
 
     def speak_evaluation(self, result: RepetitionEvaluation):
+        line = result_line(self.script, result, self.language)
         if self.guidance_mode == "essential":
             if result.rep_index % self.announce_every_reps:
+                self.show(line)  # the bubble shows every result; the voice keeps to milestones
                 return False
-            return self.speak(f"{result.rep_index} mouvements effectués. Continuez à votre rythme.")
-        if result.status_label == "INDETERMINE":
-            message = f"Répétition {result.rep_index} terminée. Posture partiellement évaluée."
-        elif result.is_correct:
-            message = f"Bravo ! Répétition {result.rep_index} validée."
-        else:
-            advice = {
-                "Haussement d'epaule excessif": "Gardez l'épaule basse.",
-                "Inclinaison du tronc": "Gardez le buste droit.",
-                "Coude plie": "Gardez le bras tendu.",
-                "Amplitude insuffisante": "Essayez de rejoindre votre zone cible, sans forcer.",
-                "Elevation excessive": "Levez un peu moins haut.",
-                "Montee trop rapide": "Prenez plus de temps pour monter le bras.",
-                "Maintien trop court": "Gardez la position un peu plus longtemps.",
-                "Descente trop rapide": "Redescendez plus doucement.",
-            }
-            first = result.errors[0].category if result.errors else ""
-            message = f"Répétition {result.rep_index} terminée. " + advice.get(first, "Reprenons doucement le mouvement.")
-        return self.speak(message, priority=True, force=True)
+            milestone = self.script.line("E6.01", self.language, n=result.rep_index)
+            return self.speak(None, line=milestone)
+        return self.speak(None, priority=True, force=True, line=line)
 
     def silence(self):
         """Cancel speech for a pause, keeping the user's voice preference."""
@@ -240,6 +324,22 @@ class AudioCoach:
         with self._lock:
             self._last_spoken_cues.clear()
             self._last_speech_time = float("-inf")
+
+    def set_language(self, language):
+        """Switch Willy's language; the matching voice loads on his next sentence."""
+        if language not in LANGUAGES or language == self.language:
+            return False
+        with self._lock:
+            self.language = language
+            self._playback_cancel.set()
+            self._clear_pending()
+            self._warning_text = self._warning_since = None
+            self._last_spoken_cues.clear()
+            if self.enabled:
+                self.status_message = _LOADING[language] if self.available is None else self.status_message
+        if self.enabled and not self._closed and (self._thread is None or not self._thread.is_alive()):
+            self._start_worker()
+        return True
 
     def toggle(self):
         with self._lock:

@@ -6,12 +6,15 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from src.audio_feedback import spoken_french
+from src.i18n import tr
 from src.patient_controls import patient_buttons
 from src.state_machine import ExercisePhase
 from src.visualizer import draw_skeleton
 from src.window_viewport import canvas_viewport
 from src.willy import shared_guide
 from src.silhouette import SilhouetteGuide, silhouette_frame
+from src.willy_lines import cue_line_id, shared_script
+from src.willy_overlay import bubble_layout, dim_outside, draw_bubble, ring, ring_zone
 
 CANVAS_SIZE=(1280,840)  # Logical layout coordinates, not a fixed-resolution bitmap.
 BG=(250,250,249)
@@ -32,8 +35,12 @@ def _font(size,bold=False):
 
 
 class _Painter:
-    """Scale coordinates and font sizes before rasterizing; never enlarge UI pixels."""
-    def __init__(self,image,viewport):
+    """Scale coordinates and font sizes before rasterizing; never enlarge UI pixels.
+
+    Text is written in French; with lang="en" every string is drawn in English (src.i18n).
+    """
+    def __init__(self,image,viewport,lang="fr"):
+        self.lang=lang
         self.image=image
         self.draw=ImageDraw.Draw(image)
         self.v=viewport
@@ -51,10 +58,11 @@ class _Painter:
         return _font(round(size*self.scale),bold)
 
     def text(self,xy,value,size=18,color=TEXT,bold=False):
-        self.draw.text(self.point(*xy),str(value),font=self.font(size,bold),fill=color)
+        self.draw.text(self.point(*xy),tr(str(value),self.lang),font=self.font(size,bold),fill=color)
 
     def wrap(self,xy,value,width,size=18,color=TEXT,bold=False,max_lines=3):
         x,y=xy
+        value=tr(str(value),self.lang)
         font=self.font(size,bold)
         lines=[]
         line=""
@@ -88,11 +96,12 @@ class _Painter:
         self.draw.line((*self.point(x1,y1),*self.point(x2,y2)),fill=color,width=max(1,round(width*self.scale)))
 
 
-def patient_guidance(analysis,mode,processor):
+def patient_guidance(analysis,mode,processor,lang="fr"):
+    """(title, body, status) for the guidance column; French, translated when drawn in English."""
     if mode == "ready":
         return "Installez-vous", "Gardez les deux épaules et le coude visibles. Choisissez votre bras, puis commencez.", "AVANT DE COMMENCER"
     if mode == "paused":
-        return "En pause", "Le comptage est arrêté. Reprenez lorsque vous êtes prêt.", "SÉANCE EN PAUSE"
+        return "En pause", "Le comptage est arrêté. Reprenez quand vous voulez.", "SÉANCE EN PAUSE"
     if mode == "finished":
         return "Séance terminée", "Consultez les mesures ou commencez une nouvelle séance.", "BILAN"
     if analysis.status == "CALIBRATION":
@@ -104,7 +113,9 @@ def patient_guidance(analysis,mode,processor):
     if analysis.status == "REPOS REQUIS":
         return "Baissez le bras", "Repartez de la position de repos.", "POSITION DE DÉPART"
     if analysis.cue.level.value == "WARNING":
-        return spoken_french(analysis.cue.message).split(".")[0], "Ajustez doucement la position, sans forcer.", "AJUSTEMENT"
+        line_id=cue_line_id(analysis.cue.message)
+        title=(shared_script().text(line_id,lang) if line_id and lang == "en" else spoken_french(analysis.cue.message))
+        return title.split(".")[0], "Ajustez doucement la position, sans forcer.", "AJUSTEMENT"
     if analysis.phase == ExercisePhase.RISING:
         return "Levez le bras", "Montez doucement sur le côté, vers votre zone de mouvement.", "EN COURS"
     if analysis.phase == ExercisePhase.HOLD:
@@ -118,6 +129,7 @@ def patient_guidance(analysis,mode,processor):
 
 def _button(p,button):
     left,top,right,bottom=button.bounds
+    label=tr(button.label,p.lang)
     size=17 if button.primary else 16
     color=TEXT if button.enabled or button.selected else FAINT
     if button.primary:
@@ -130,28 +142,73 @@ def _button(p,button):
             fill=BG
         p.rect(button.bounds,fill=fill,outline=outline,radius=4)
     font=p.font(size,button.primary)
-    text_width=p.draw.textlength(button.label,font=font)/p.sx
-    p.text((left+(right-left-text_width)/2,top+(bottom-top-size)/2-3),button.label,size,color,button.primary)
+    text_width=p.draw.textlength(label,font=font)/p.sx
+    p.text((left+(right-left-text_width)/2,top+(bottom-top-size)/2-3),label,size,color,button.primary)
 
 
 WILLY_BOX=(1040,440,1248,716)  # Right column, beside the repetition count: visible in every view.
+WILLY_STAGE_BOX=(470,142,836,600)  # The exercise demo: Willy steps into the large panel.
 
 
-def _draw_willy(canvas,p,willy,analysis,mode,processor,mirror,speaking):
+def _draw_willy(canvas,p,willy,analysis,mode,processor,mirror,speaking,box=WILLY_BOX):
     """Willy, the guide, is always on screen; he only reflects state already computed."""
     guide=willy if willy is not None else shared_guide()
     if guide is None:
-        return
+        return None
+    guide.point_side="R" if box == WILLY_STAGE_BOX else "L"  # point toward the bubble / the screen
     guide.update(analysis,mode,processor,mirror=mirror,speaking=speaking)
-    x1,y1,x2,y2=p.box(WILLY_BOX)
+    x1,y1,x2,y2=p.box(box)
     sprite=guide.render(x2-x1,y2-y1)
-    canvas.paste(Image.fromarray(sprite,"RGBA"),(x1,y1),Image.fromarray(sprite[...,3]))
+    _paste_willy(canvas,sprite,(x1,y1))
+    return guide
+
+
+def _paste_willy(canvas,sprite,xy):
+    canvas.paste(Image.fromarray(sprite,"RGBA"),xy,Image.fromarray(sprite[...,3]))
+
+
+def willy_point(guide,name,box=WILLY_BOX):
+    """A body point of Willy drawn in `box`, in logical screen coordinates."""
+    if guide is None:
+        return (box[0]+box[2])/2,box[1]+40
+    x,y=guide.anchor(name,box[2]-box[0],box[3]-box[1])
+    return box[0]+x,box[1]+y
+
+
+GUIDANCE_COLUMN=(894,104,1262,442)
+
+
+def _draw_overlay(canvas,p,overlay,guide,box):
+    """The tour's spotlight, then Willy's bubble on top."""
+    if overlay.compact:
+        # An everyday line: over the lower right of the large panel, clear of the count and of Willy.
+        candidates,width,size=[(870,596,"bottom-right"),(870,150,"top-right")],340,19
+    elif overlay.willy_big:
+        candidates,width,size=[(1250,432,"bottom-right"),(1250,140,"top-right")],372,20
+    else:
+        candidates=[(1250,432,"bottom-right"),(1010,600,"bottom-right"),(1010,144,"top-right"),(40,600,"bottom-left")]
+        width,size=372,20
+    if overlay.bubble and not overlay.compact:
+        rect,_,_=bubble_layout(p,overlay,candidates,width,size)
+        if rect[0] >= 860:
+            p.rect(GUIDANCE_COLUMN,fill=BG)  # Willy talks here: the guidance text steps aside
+    if overlay.spotlight is not None and not overlay.dim:
+        ring_zone(p,overlay.spotlight)  # during exercise: point at the button without darkening the screen
+    elif overlay.spotlight is not None:
+        dim_outside(canvas,p,overlay.spotlight)
+        if guide is not None:  # Willy stays bright: he is the one talking
+            x1,y1,x2,y2=p.box(box)
+            _paste_willy(canvas,guide.render(x2-x1,y2-y1),(x1,y1))
+    if overlay.highlight and guide is not None:
+        ring(p,willy_point(guide,overlay.highlight,box),radius=30 if overlay.highlight == "trunk" else 26)
+    draw_bubble(canvas,p,overlay,candidates,willy_point(guide,"mouth",box),width=width,size=size)
 
 
 _SILHOUETTE=SilhouetteGuide()
 
 
 def _pill(p,xy,text,size=16,dot=None,center=False):
+    text=tr(text,p.lang)
     font=p.font(size,True)
     width=p.draw.textlength(text,font=font)/p.sx+(30 if dot else 0)+28
     x,y=xy
@@ -175,13 +232,14 @@ def _silhouette_labels(p,guide_text):
 def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_enabled=True,audio_status="",
                      *,mode="running",details=False,help_visible=False,show_controls=True,output_size=None,
                      avatar_stage=None,avatars=True,avatar_gender="male",willy=None,speaking=False,
-                     silhouette=False):
+                     silhouette=False,lang="fr",overlay=None):
+    """The patient screen. `overlay` (src.willy_overlay.Overlay) adds Willy's bubble and the tour's spotlight."""
     width,height=output_size or CANVAS_SIZE
     if width <= 0 or height <= 0:
         width,height=CANVAS_SIZE
     viewport=canvas_viewport(CANVAS_SIZE,width,height)
     canvas=Image.new("RGB",(width,height),BG)
-    p=_Painter(canvas,viewport)
+    p=_Painter(canvas,viewport,lang)
     p.text((32,17),"mouvement",30)
     p.text((34,60),"Épaule / séance guidée",14,MUTED)
     p.rule(32,98,1248,98)
@@ -230,7 +288,7 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
                else "Main absente : bras au repos",12,MUTED)
 
     p.rule(892,132,892,706)
-    title,body,status=patient_guidance(analysis,mode,processor)
+    title,body,status=patient_guidance(analysis,mode,processor,lang)
     p.text((920,132),status,11,MUTED)
     end=p.wrap((916,178),title,330,37,max_lines=3)
     p.wrap((920,end+18),body,322,18,MUTED,max_lines=4)
@@ -296,14 +354,20 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
         for index,tip in enumerate(tips,1):
             p.text((82,y),f"0{index}",13,FAINT)
             y=p.wrap((120,y-4),tip,684,19,max_lines=2)+22
-    _draw_willy(canvas,p,willy,analysis,mode,processor,mirror,speaking)
+    big=overlay is not None and overlay.willy_big
+    willy_box=WILLY_STAGE_BOX if big else WILLY_BOX
+    if big:
+        p.rect((446,132,860,602),fill=(236,244,242))
+    guide=_draw_willy(canvas,p,willy,analysis,mode,processor,mirror,speaking,willy_box)
     p.rule(32,732,1248,732)
     if show_controls:
-        for button in patient_buttons(mode,processor.arm,audio_enabled,details,help_visible,avatars,avatar_gender,silhouette):
+        for button in patient_buttons(mode,processor.arm,audio_enabled,details,help_visible,avatars,avatar_gender,silhouette,lang):
             _button(p,button)
     else:
         p.text((32,766),"Utilisez les commandes de la page pour mettre en pause ou terminer.",16,MUTED)
         arm="Bras droit" if processor.arm == "right" else "Bras gauche"
         p.text((920,37),f"{arm} · Son {'activé' if audio_enabled else 'coupé'}",15,MUTED)
     p.text((32,819),"Prototype éducatif · Mesures estimées. Arrêtez en cas de douleur.",11,MUTED)
+    if overlay is not None:
+        _draw_overlay(canvas,p,overlay,guide,willy_box)
     return cv2.cvtColor(np.asarray(canvas),cv2.COLOR_RGB2BGR)

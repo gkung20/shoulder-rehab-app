@@ -12,8 +12,9 @@ pose:
   model: full                    # full = default; lite for slower PCs; heavy is optional
 
 audio:
-  backend: auto                  # Local neural Piper, then French Windows voice if available
+  backend: auto                  # Local neural Piper, then a Windows voice in the same language
   voice: fr_FR-tom-medium        # Male French voice: the base of Willy's voice
+  voice_en: en_US-ryan-medium    # Male English voice for Willy in English (non-commercial licence)
   length_scale: 1.30              # Slower French voice; greater = slower
   volume: 0.85
   speech_rate: 130                # Used only by the Windows voice fallback

@@ -1,7 +1,8 @@
 """Download everything the app needs once, then it runs 100% offline.
 
-    python models/download_models.py            # pose model + hand model + Willy's voice
-    python models/download_models.py voice      # only Willy's voice (French Piper "tom")
+    python models/download_models.py            # pose model + hand model + Willy's two voices
+    python models/download_models.py voice      # only Willy's French voice (Piper "tom")
+    python models/download_models.py voice-en   # only Willy's English voice (Piper "ryan")
     python models/download_models.py pose_landmarker_lite.task
 
 MediaPipe models come from Google's model storage; the voice from the Piper voices repository.
@@ -48,10 +49,11 @@ def download_model(model_name: str = "pose_landmarker_full.task") -> Path:
 
 
 WILLY_VOICE = "fr_FR-tom-medium"
+WILLY_ENGLISH_VOICE = "en_US-ryan-medium"  # licence: non-commercial, check before distributing
 
 
 def download_voice(name: str = WILLY_VOICE) -> Path:
-    """Willy's base voice (male French Piper voice, ~64 MB), into models/voices."""
+    """One of Willy's base voices (male Piper voice, ~64 MB), into models/voices."""
     from piper.download_voices import download_voice as piper_download
     voices = Path(__file__).resolve().parent / "voices"
     voices.mkdir(parents=True, exist_ok=True)
@@ -66,11 +68,13 @@ def download_voice(name: str = WILLY_VOICE) -> Path:
 
 
 if __name__ == "__main__":
-    targets = sys.argv[1:] or ["pose_landmarker_full.task", "hand_landmarker.task", "voice"]
+    targets = sys.argv[1:] or ["pose_landmarker_full.task", "hand_landmarker.task", "voice", "voice-en"]
     for target in targets:
         if target == "voice":
             download_voice()
-        elif target.startswith("fr_FR-"):
+        elif target == "voice-en":
+            download_voice(WILLY_ENGLISH_VOICE)
+        elif target.startswith(("fr_FR-", "en_US-", "en_GB-")):
             download_voice(target)
         else:
             download_model(target)

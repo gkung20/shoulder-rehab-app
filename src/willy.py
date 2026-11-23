@@ -24,6 +24,10 @@ ARM_STEP = 10
 ARM_MAX = 160
 WAVE_ELBOWS = (-40, -20, 0, 20, 40)
 CALM_STATUSES = ("CALIBRATION", "SUIVI PERDU", "POSITION A AJUSTER", "EPAULES PRETES", "REPOS REQUIS")
+# Points of Willy's body in sprite-canvas pixels, for highlights and the bubble's tail.
+ANCHORS = {"head": (282., 150.), "mouth": (282., 230.), "shoulder_L": (172., 352.), "shoulder_R": (388., 352.),
+           "trunk": (280., 440.), "arm_L": (100., 357.), "arm_R": (460., 357.)}
+ACTS = ("wave", "idle", "point", "demo", "nod", "cheer", "calm", "mirror")
 
 
 @dataclass
@@ -74,6 +78,28 @@ class WillyGuide:
         self._last_time = None
         self._cache_key = None
         self._cache = None
+        # What Willy acts out for his current line (outside a running session, where he mirrors the patient).
+        self._act = None
+        self._act_since = 0.
+        self.demo_angle = 0.     # arm angle of the "demo" act, set by the tour every frame
+        self.demo_side = "R"
+        self.point_side = "L"    # Willy points with the arm on the screen's left: toward the app
+
+    def perform(self, act, now=None):
+        """Start an act for the line Willy is saying: wave, idle, point, demo, nod, cheer, calm, mirror."""
+        if act not in ACTS:
+            act = "idle"
+        self._act = None if act == "mirror" else act
+        self._act_since = time.monotonic() if now is None else now
+
+    def anchor(self, name, width, height):
+        """Where a body point lands when Willy is rendered into width x height (bob ignored)."""
+        x, y = ANCHORS[name]
+        left, top, right, bottom = self.crop
+        cw, ch = right - left, bottom - top
+        scale = min(width / cw, height / ch)
+        ox, oy = (width - round(cw * scale)) // 2, height - round(ch * scale)
+        return ox + (x - left) * scale, oy + (y - top) * scale
 
     # ------------------------------------------------------------------ state
     def update(self, analysis, mode, processor, mirror=True, speaking=False, now=None):
@@ -121,6 +147,8 @@ class WillyGuide:
                 pose.tilt = 6.
 
         celebrating = now < self._celebrate_until
+        if self._act is not None and mode != "running":
+            target, pose, happy, wave, celebrating = self._acted(now, target, pose)
         if celebrating and self._celebrate_happy:
             target = {"L": 150., "R": 150.}
             pose.bob = -abs(math.sin(now * 9.)) * 14.
@@ -144,6 +172,26 @@ class WillyGuide:
         pose.mouth = self._talk(now) if speaking else "smile"
         self.pose = pose
         return pose
+
+    def _acted(self, now, target, pose):
+        """Pose for the current act: (arm targets, pose, happy eyes, waving, celebrating)."""
+        act, age = self._act, now - self._act_since
+        target, pose = {"L": 0., "R": 0.}, WillyPose()
+        happy = wave = celebrating = False
+        if act == "wave":
+            wave = age < 2.6
+            happy = wave
+        elif act == "point":
+            target[self.point_side] = 70.
+        elif act == "cheer" and age < 1.8:
+            celebrating, self._celebrate_happy = True, True
+            self._celebrate_until = max(self._celebrate_until, self._act_since + 1.8)
+        elif act == "nod" and age < 1.4:
+            pose.tilt = math.sin(age * 10.) * 6.
+        elif act == "demo":
+            target[self.demo_side] = float(np.clip(self.demo_angle, 0, ARM_MAX))
+            happy = 80. <= self.demo_angle <= 100.
+        return target, pose, happy, wave, celebrating
 
     def _blink(self, now):
         if now >= self._blink_at:

@@ -1,4 +1,4 @@
-"""Local French speech backends. Neural synthesis never uploads text or video."""
+"""Local speech backends for Willy, in French and English. Neural synthesis never uploads text or video."""
 from collections import OrderedDict
 import io
 import json
@@ -14,7 +14,12 @@ VOICE_DIRECTORY = Path(__file__).resolve().parents[1] / "models" / "voices"
 # Willy's voice is the "Cartoon buddy" the user picked: a male voice (the sample used Piper's
 # Ryan; Tom is its French counterpart), pitch and timbre raised 1.45x, with a light 6 Hz vibrato.
 WILLY_BASE_VOICE = "fr_FR-tom-medium"
+# English Willy: Piper's Ryan, the base of the approved "Cartoon buddy" sample (its licence is
+# non-commercial: check it before distributing the app).
+WILLY_ENGLISH_VOICE = "en_US-ryan-medium"
 WILLY_PITCH = 1.45
+# Piper language codes accepted for each app language.
+PIPER_LANGUAGES = {"fr": ("fr_FR",), "en": ("en_US", "en_GB")}
 VIBRATO_HZ = 6.0
 VIBRATO_DEPTH = .08
 
@@ -72,24 +77,44 @@ def play_wav(data, cancel):
                 stream.write(block)
 
 
+def installed_voices(language="fr"):
+    """Piper voices already downloaded for an app language ("fr" or "en")."""
+    names = set()
+    for code in PIPER_LANGUAGES[language]:
+        names.update(p.name[:-len(".onnx")] for p in VOICE_DIRECTORY.glob(f"{code}-*.onnx")
+                     if p.with_suffix(".onnx.json").is_file())
+    return sorted(names)
+
+
 def installed_french_voices():
-    return sorted(p.name[:-len(".onnx")] for p in VOICE_DIRECTORY.glob("fr_FR-*.onnx")
-                  if p.with_suffix(".onnx.json").is_file())
+    return installed_voices("fr")
 
 
-class PiperFrenchSpeech:
-    def __init__(self, voice=WILLY_BASE_VOICE, length_scale=1.30, volume=.85, willy_pitch=1.0):
-        if not re.fullmatch(r"fr_FR-[a-zA-Z0-9_]+-(?:low|medium|high)", voice):
-            raise ValueError("Choose a French Piper voice name")
+def voice_pattern(language):
+    return r"(?:%s)-[a-zA-Z0-9_]+-(?:x_low|low|medium|high)" % "|".join(PIPER_LANGUAGES[language])
+
+
+class PiperSpeech:
+    """A local Piper voice for one app language, with Willy's cartoon effect on top."""
+    language = "fr"
+
+    def __init__(self, voice=WILLY_BASE_VOICE, length_scale=1.30, volume=.85, willy_pitch=1.0, language=None):
+        self.language = language or self.language
+        if self.language not in PIPER_LANGUAGES:
+            raise ValueError("Language must be fr or en")
+        if not re.fullmatch(voice_pattern(self.language), voice):
+            raise ValueError("Choose a French Piper voice name" if self.language == "fr" else "Choose an English Piper voice name")
         path = VOICE_DIRECTORY / f"{voice}.onnx"
         if not path.is_file() or not path.with_suffix(".onnx.json").is_file():
-            raise FileNotFoundError(f"Voix {voice} manquante. Lancez : python models/download_models.py voice")
+            target = "voice" if self.language == "fr" else "voice-en"
+            raise FileNotFoundError(f"Voix {voice} manquante. Lancez : python models/download_models.py {target}")
         from piper import PiperConfig, PiperVoice, SynthesisConfig
         import onnxruntime as ort
         with open(path.with_suffix(".onnx.json"), encoding="utf-8") as f:
             config = json.load(f)
-        if config.get("language", {}).get("code") != "fr_FR":
-            raise ValueError("Le modele vocal doit etre francais (fr_FR)")
+        if config.get("language", {}).get("code") not in PIPER_LANGUAGES[self.language]:
+            raise ValueError("Le modele vocal doit etre francais (fr_FR)" if self.language == "fr"
+                             else "The voice model must be English (en_US or en_GB)")
         # Leave CPU time for the camera/pose model instead of occupying all cores.
         options = ort.SessionOptions()
         options.intra_op_num_threads = 1
@@ -100,7 +125,8 @@ class PiperFrenchSpeech:
         )
         self.willy_pitch = max(1., float(willy_pitch))
         self.settings = SynthesisConfig(length_scale=length_scale * self.willy_pitch, volume=volume, normalize_audio=True)
-        self.label = f"Piper / francais local / {voice}" + (" / voix de Willy" if self.willy_pitch > 1 else "")
+        kind = "francais local" if self.language == "fr" else "local English"
+        self.label = f"Piper / {kind} / {voice}" + (" / voix de Willy" if self.willy_pitch > 1 else "")
         self._cache = OrderedDict()
 
     def synthesize(self, text):
@@ -128,39 +154,69 @@ class PiperFrenchSpeech:
         self._cache.clear()
 
 
-def french_voice(voices, prefer_male=False):
-    """Never read French instructions with an English default voice.
+class PiperFrenchSpeech(PiperSpeech):
+    language = "fr"
 
-    With prefer_male (Willy's voice is built on a male voice), a male French voice such as
-    Windows "Paul" is chosen when one is installed; otherwise any French voice.
+    def __init__(self, voice=WILLY_BASE_VOICE, length_scale=1.30, volume=.85, willy_pitch=1.0):
+        super().__init__(voice, length_scale, volume, willy_pitch, "fr")
+
+
+class PiperEnglishSpeech(PiperSpeech):
+    language = "en"
+
+    def __init__(self, voice=WILLY_ENGLISH_VOICE, length_scale=1.30, volume=.85, willy_pitch=1.0):
+        super().__init__(voice, length_scale, volume, willy_pitch, "en")
+
+
+_SYSTEM_VOICE_KEYS = {
+    "fr": ("fr-fr", "fr_fr", "frfr", "french", "français", "hortense", "040c"),
+    "en": ("en-us", "en_us", "enus", "en-gb", "en_gb", "engb", "english", "0409", "0809", "david", "zira", "hazel"),
+}
+_MALE_NAMES = {"fr": ("paul",), "en": ("david", "mark", "george", "guy")}
+
+
+def system_voice(voices, language="fr", prefer_male=False):
+    """A system voice for one language only: never read French with an English voice, or the reverse.
+
+    With prefer_male (Willy's voice is built on a male voice), a male voice such as Windows
+    "Paul" (French) or "David" (English) is chosen when one is installed.
     """
-    french = []
+    matching = []
     for voice in voices:
         languages = [x.decode("utf-8", errors="ignore") if isinstance(x, bytes) else str(x)
                      for x in (getattr(voice, "languages", None) or [])]
         description = " ".join([str(voice.name), str(voice.id), *languages]).lower()
-        if any(key in description for key in ("fr-fr", "fr_fr", "frfr", "french", "français", "hortense", "040c")):
-            french.append(voice)
+        if any(key in description for key in _SYSTEM_VOICE_KEYS[language]):
+            matching.append(voice)
     if prefer_male:
-        for voice in french:
+        for voice in matching:
             gender = str(getattr(voice, "gender", "") or "").lower()
-            if gender == "male" or "paul" in str(voice.name).lower():
+            if gender == "male" or any(name in str(voice.name).lower() for name in _MALE_NAMES[language]):
                 return voice
-    return french[0] if french else None
+    return matching[0] if matching else None
 
 
-class WindowsFrenchSpeech:
-    """Fallback French voice. With willy_pitch > 1 the speech is rendered to a temporary WAV,
+def french_voice(voices, prefer_male=False):
+    """Never read French instructions with an English default voice."""
+    return system_voice(voices, "fr", prefer_male)
+
+
+class WindowsSpeech:
+    """Fallback system voice. With willy_pitch > 1 the speech is rendered to a temporary WAV,
     turned into Willy's voice, played, and the file is deleted at once."""
+    language = "fr"
 
-    def __init__(self, speech_rate=130, volume=.85, willy_pitch=1.0):
+    def __init__(self, speech_rate=130, volume=.85, willy_pitch=1.0, language=None):
         import pyttsx3
+        self.language = language or self.language
         self.engine = pyttsx3.init()
         self.willy_pitch = max(1., float(willy_pitch))
-        voice = french_voice(self.engine.getProperty("voices"), prefer_male=self.willy_pitch > 1)
+        voice = system_voice(self.engine.getProperty("voices"), self.language, prefer_male=self.willy_pitch > 1)
         if voice is None:
             self.engine.stop()
-            raise RuntimeError("Aucune voix Windows francaise. Installez la voix Piper ou une voix Windows fr-FR.")
+            if self.language == "fr":
+                raise RuntimeError("Aucune voix Windows francaise. Installez la voix Piper ou une voix Windows fr-FR.")
+            raise RuntimeError("No English Windows voice. Install the English Piper voice or a Windows en-US voice.")
         self.engine.setProperty("voice", voice.id)
         self.speech_rate = speech_rate
         # Slower before the pitch-up, so Willy keeps the configured pace.
@@ -204,10 +260,26 @@ class WindowsFrenchSpeech:
         self.engine.stop()
 
 
+class WindowsFrenchSpeech(WindowsSpeech):
+    language = "fr"
+
+    def __init__(self, speech_rate=130, volume=.85, willy_pitch=1.0):
+        super().__init__(speech_rate, volume, willy_pitch, "fr")
+
+
+class WindowsEnglishSpeech(WindowsSpeech):
+    language = "en"
+
+    def __init__(self, speech_rate=130, volume=.85, willy_pitch=1.0):
+        super().__init__(speech_rate, volume, willy_pitch, "en")
+
+
 def create_speech_backend(backend="auto", voice=WILLY_BASE_VOICE, length_scale=1.30, volume=.85, speech_rate=130,
-                          willy_pitch=1.0):
+                          willy_pitch=1.0, language="fr"):
     if backend not in ("auto", "piper", "system"):
         raise ValueError("Audio backend must be auto, piper or system")
+    if language == "en":
+        return _english_backend(backend, voice, length_scale, volume, speech_rate, willy_pitch)
     if backend in ("auto", "piper"):
         neural_error = None
         # The configured voice first, then any other French Piper voice already downloaded.
@@ -228,3 +300,26 @@ def create_speech_backend(backend="auto", voice=WILLY_BASE_VOICE, length_scale=1
         except Exception as error:
             raise RuntimeError(f"Piper : {neural_error}. Windows : {error}") from error
     return WindowsFrenchSpeech(speech_rate, volume, willy_pitch)
+
+
+def _english_backend(backend, voice, length_scale, volume, speech_rate, willy_pitch):
+    """Willy in English: the configured Piper voice, any English Piper voice, then a Windows voice."""
+    voice = voice or WILLY_ENGLISH_VOICE
+    if backend in ("auto", "piper"):
+        neural_error = None
+        for name in [voice] + [v for v in installed_voices("en") if v != voice]:
+            try:
+                engine = PiperEnglishSpeech(name, length_scale, volume, willy_pitch)
+            except (ImportError, OSError, ValueError, RuntimeError) as error:
+                neural_error = neural_error or error
+                continue
+            if name != voice:
+                print(f"[VOICE] {voice} missing: using {name}. For Willy's voice: python models/download_models.py voice-en")
+            return engine
+        if backend == "piper":
+            raise neural_error
+        try:
+            return WindowsEnglishSpeech(speech_rate, volume, willy_pitch)
+        except Exception as error:
+            raise RuntimeError(f"Piper: {neural_error}. Windows: {error}") from error
+    return WindowsEnglishSpeech(speech_rate, volume, willy_pitch)

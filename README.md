@@ -9,6 +9,32 @@ française devient la **voix de Willy** (« Cartoon buddy » : voix masculine To
 1,45× plus aiguë avec un léger vibrato, `audio.willy_pitch`).
 Il ne modifie aucune mesure. Détails : [docs/willy.md](docs/willy.md).
 
+## Accueil de Willy, visite guidée, anglais et français
+
+`app_live_cv.py` s’ouvre sur **l’écran d’accueil de Willy**. À la première
+ouverture, Willy salue en anglais et en français, fait choisir la langue, puis
+propose la **visite guidée** (environ 7 minutes) : règles de sécurité (jamais
+passées, même avec **Passer**), prénom facultatif, bras, coach et son, réglage de
+la caméra avec la silhouette, tour de l’écran avec une zone éclairée à la fois,
+démonstration du mouvement par Willy, puis les trois premiers mouvements guidés.
+Ensuite, Willy accueille le patient (« Bonjour ! On fait vos exercices ? ») et la
+séance démarre depuis son bouton **Commencer**. Pendant la séance, ce que dit
+Willy s’affiche aussi dans sa **bulle** : l’application reste utilisable son coupé.
+
+- **Langue** : bouton **English / Français** en haut de l’écran ; tous les textes,
+  boutons et consignes passent dans la langue choisie.
+- **Répliques** : toutes dans `assets/willy/lines.yaml` (EN/FR, une ligne par ID
+  du document de scénarios). Modifiez le texte là, jamais dans le code.
+- **Revoir la visite** : bouton dans **Aide**, ou `python app_live_cv.py --tour`.
+  `--skip-home` ouvre directement la séance (tests, démonstrations).
+- **Profil local** (langue, visite faite, prénom, bras, coach, son, jours de
+  séance) : `%APPDATA%\Mouvement\profile.json` sous Windows. Aucune image ni mesure
+  n’y est enregistrée. Supprimez ce fichier pour revoir la toute première ouverture.
+- **Voix anglaise** : `python models/download_models.py voice-en` (Piper
+  « en_US-ryan-medium », base de la voix approuvée, même effet Willy). Sans elle,
+  une voix Windows anglaise (David, Zira) est utilisée. Licence de Ryan : non
+  commerciale, à vérifier avant toute diffusion.
+
 ## Silhouette guide en vue caméra
 
 En vue caméra (**Voir la caméra** ou **V**), un petit bouton **Silhouette** en
@@ -16,7 +42,7 @@ haut à droite de la vidéo (ou la touche **G**) affiche une **silhouette 3D
 transparente** (corps entier, bleu translucide avec contour lumineux). Elle montre **où se placer** et fait le mouvement au rythme du
 coach (repos, lever, maintenir, redescendre), avec le bras choisi, en miroir.
 Une étiquette indique l’étape à suivre. Quand le suivi voit les deux épaules,
-le contour devient **vert** (« Bien placé ») ou **orange** avec un conseil :
+le contour devient **vert** (« Bonne position ») ou **orange** avec un conseil :
 approchez-vous, reculez, décalez-vous vers la gauche/droite, montez ou baissez
 la caméra. Dans Streamlit : interrupteur **Silhouette guide** dans la barre
 latérale. Aide visuelle uniquement : la silhouette n’intervient ni dans le
@@ -417,7 +443,7 @@ python -m venv .env
 python -m pip install -r requirements.txt -c constraints-windows-py313.txt
 
 # Télécharger MediaPipe Full (~9 Mo), le modèle des mains (~8 Mo)
-# et la voix de Willy (Piper « fr_FR-tom-medium », ~64 Mo)
+# et les deux voix de Willy (Piper « fr_FR-tom-medium » et « en_US-ryan-medium », ~64 Mo chacune)
 python models/download_models.py
 ```
 

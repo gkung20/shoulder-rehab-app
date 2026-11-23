@@ -22,6 +22,28 @@ avec `--no-avatars` et dans la page Streamlit (barre latérale + tableau de bord
 Willy ne fait que **refléter** l’analyse : rien de ce qu’il affiche n’entre dans
 le comptage ou l’évaluation.
 
+## Accueil, visite guidée et répliques
+
+| Fichier | Rôle |
+| --- | --- |
+| `assets/willy/lines.yaml` | Toutes les répliques, anglais et français, par ID (S1.01 à S8.14, E1 à E7) |
+| `src/willy_lines.py` | Lit les répliques, remplit `{n}`, `{name}`, `{tip}`, `{droit / gauche}`, singulier |
+| `src/willy_tour.py` | Le « metteur en scène » : visite guidée (scénarios 1 à 7), répliques uniques du scénario 8, lignes du quotidien |
+| `src/home_screen.py` | Écran d’accueil : Willy en grand, sa bulle, les boutons de l’étape |
+| `src/willy_overlay.py` | Bulle, zone éclairée (le reste s’assombrit), boutons Suivant / Passer / Revoir |
+| `src/i18n.py` | Textes de l’écran en anglais |
+| `src/user_profile.py` | Profil local : langue, visite faite, prénom, choix, jours de séance |
+
+Chaque scénario est un générateur Python qui attend un bouton, la fin d’une phrase,
+une action dans l’application ou l’image suivante : le code suit l’ordre du
+document de scénarios. Gestes de Willy pour ses répliques : `wave`, `point` (il
+lève le bras vers ce dont il parle), `nod`, `cheer`, `calm`, `idle`, `demo` (le
+mouvement à 2 s de montée, maintien, 2 s de descente) et `mirror` (il suit le bras
+du patient). Pendant une séance, Willy reste en miroir.
+
+Voix : une par langue, chargée à la première phrase dans cette langue
+(`audio.voice`, `audio.voice_en`), toutes deux avec l’effet de Willy.
+
 ## Voix de Willy
 
 C’est la voix choisie à l’essai : **« Cartoon buddy »**. Même recette, en français :
