@@ -1,6 +1,10 @@
-"""Utility script to download official MediaPipe Pose Landmarker models (.task).
+"""Download everything the app needs once, then it runs 100% offline.
 
-Runs locally once to ensure the application works 100% offline.
+    python models/download_models.py            # pose model + hand model + Willy's voice
+    python models/download_models.py voice      # only Willy's voice (French Piper "tom")
+    python models/download_models.py pose_landmarker_lite.task
+
+MediaPipe models come from Google's model storage; the voice from the Piper voices repository.
 """
 
 from pathlib import Path
@@ -43,6 +47,30 @@ def download_model(model_name: str = "pose_landmarker_full.task") -> Path:
     return dest_path
 
 
+WILLY_VOICE = "fr_FR-tom-medium"
+
+
+def download_voice(name: str = WILLY_VOICE) -> Path:
+    """Willy's base voice (male French Piper voice, ~64 MB), into models/voices."""
+    from piper.download_voices import download_voice as piper_download
+    voices = Path(__file__).resolve().parent / "voices"
+    voices.mkdir(parents=True, exist_ok=True)
+    target = voices / f"{name}.onnx"
+    if target.exists() and target.with_suffix(".onnx.json").exists():
+        print(f"[OK] Voice already exists: {target.name}")
+        return target
+    print(f"[DOWNLOADING] voice {name}...")
+    piper_download(name, voices)
+    print(f"[DONE] Saved voice to: {target}")
+    return target
+
+
 if __name__ == "__main__":
-    target = sys.argv[1] if len(sys.argv) > 1 else "pose_landmarker_full.task"
-    download_model(target)
+    targets = sys.argv[1:] or ["pose_landmarker_full.task", "hand_landmarker.task", "voice"]
+    for target in targets:
+        if target == "voice":
+            download_voice()
+        elif target.startswith("fr_FR-"):
+            download_voice(target)
+        else:
+            download_model(target)

@@ -7,10 +7,10 @@ from src.speech import PiperFrenchSpeech, VOICE_DIRECTORY
 
 
 def test_local_french_voice_produces_valid_audio_and_reuses_cache():
-    if not (VOICE_DIRECTORY / "fr_FR-siwis-medium.onnx").exists():
-        pytest.skip("Download the French voice to exercise real neural synthesis")
+    if not (VOICE_DIRECTORY / "fr_FR-tom-medium.onnx").exists():
+        pytest.skip("Download Willy's voice (python models/download_models.py voice) to exercise real synthesis")
     pytest.importorskip("piper")
-    voice=PiperFrenchSpeech()
+    voice=PiperFrenchSpeech(willy_pitch=1.45)
     try:
         audio=voice.synthesize("Très bien ! Redescendez doucement le bras.")
         assert voice.synthesize("Très bien ! Redescendez doucement le bras.") is audio

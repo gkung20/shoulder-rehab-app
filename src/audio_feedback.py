@@ -60,9 +60,9 @@ class _SpeechItem:
 
 class AudioCoach:
     def __init__(self, enabled=True, speech_rate=130, min_interval_sec=8.,
-                 repeat_cooldown_sec=40., backend="auto", voice="fr_FR-siwis-medium",
+                 repeat_cooldown_sec=40., backend="auto", voice="fr_FR-tom-medium",
                  length_scale=1.30, volume=.85, guidance_mode="essential",
-                 warning_persistence_sec=1.5, announce_every_reps=5, willy_pitch=1.30):
+                 warning_persistence_sec=1.5, announce_every_reps=5, willy_pitch=1.45):
         self.enabled = enabled
         self.speech_rate = speech_rate
         self.min_interval_sec = min_interval_sec
@@ -278,7 +278,7 @@ def main():
     from src.config import ExerciseConfig
     from src.speech import PiperFrenchSpeech
     parser = argparse.ArgumentParser(description="Créer un extrait de la voix française locale")
-    parser.add_argument("--preview", default="output/voix_francaise.wav", help="Fichier WAV à générer")
+    parser.add_argument("--preview", default="output/voix_willy.wav", help="Fichier WAV à générer")
     parser.add_argument("--text", default="Bonjour ! Je suis Willy, votre guide. Levez doucement le bras sur le côté. Très bien ! Maintenant, redescendez tranquillement.")
     args = parser.parse_args()
     config = ExerciseConfig.from_yaml().audio

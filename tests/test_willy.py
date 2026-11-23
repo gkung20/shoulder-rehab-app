@@ -1,4 +1,5 @@
 """Willy, the on-screen guide: always drawn, never part of the measurements."""
+import io
 import numpy as np
 import pytest
 
@@ -97,21 +98,92 @@ def test_portrait_for_streamlit():
     assert portrait.shape == (250, 220, 4)
 
 
-def test_willy_voice_raises_pitch_without_changing_format():
+def test_willy_voice_matches_the_approved_cartoon_recipe():
     rate = 22050
-    t = np.arange(rate) / rate
+    t = np.arange(rate * 2) / rate
     tone = (np.sin(2 * np.pi * 200 * t) * 12000).astype(np.int16)
-    shifted = np.frombuffer(willy_voice(tone.tobytes(), 1.3), np.int16)
-    assert len(shifted) == int(len(tone) / 1.3)
-    spectrum = np.abs(np.fft.rfft(shifted.astype(float)))
+    shifted = np.frombuffer(willy_voice(tone.tobytes(), 1.45, rate), np.int16).astype(float)
+    assert len(shifted) == int(len(tone) / 1.45)
+    spectrum = np.abs(np.fft.rfft(shifted))
     peak = np.fft.rfftfreq(len(shifted), 1 / rate)[spectrum.argmax()]
-    assert peak == pytest.approx(260, abs=3)
+    assert peak == pytest.approx(290, abs=4)          # 200 Hz x 1.45: pitch and timbre up
+    # Light 6 Hz vibrato: the instantaneous pitch wobbles by under 1%.
+    plain = np.frombuffer(willy_voice(tone.tobytes(), 1.45, rate, vibrato=False), np.int16).astype(float)
+    assert np.abs(shifted - plain).max() > 500
+    assert np.abs(shifted).max() <= 12001 and np.abs(shifted).max() > 11000  # loudness kept
     assert willy_voice(tone.tobytes(), 1.0) == tone.tobytes()
+
+
+def test_windows_fallback_prefers_a_male_french_voice_for_willy():
+    from types import SimpleNamespace as V
+    from src.speech import french_voice
+    hortense = V(name="Microsoft Hortense - French", id="fr-FR-Hortense", languages=["fr-FR"], gender=None)
+    paul = V(name="Microsoft Paul - French", id="fr-FR-Paul", languages=["fr-FR"], gender=None)
+    english = V(name="Microsoft David", id="en-US-David", languages=["en-US"], gender="male")
+    assert french_voice([english, hortense, paul], prefer_male=True) is paul
+    assert french_voice([english, hortense]) is hortense
+    assert french_voice([english], prefer_male=True) is None
+
+
+def test_missing_configured_voice_falls_back_to_another_installed_french_voice(monkeypatch):
+    import src.speech as speech
+    built = []
+
+    class Fake:
+        def __init__(self, name, *args):
+            if name == "fr_FR-tom-medium":
+                raise FileNotFoundError(name)
+            built.append(name)
+            self.label = name
+    monkeypatch.setattr(speech, "PiperFrenchSpeech", Fake)
+    monkeypatch.setattr(speech, "installed_french_voices", lambda: ["fr_FR-siwis-medium"])
+    engine = speech.create_speech_backend("auto", "fr_FR-tom-medium", willy_pitch=1.45)
+    assert engine.label == "fr_FR-siwis-medium" and built == ["fr_FR-siwis-medium"]
 
 
 def test_willy_pitch_is_validated():
     from dataclasses import replace
     config = ExerciseConfig.from_yaml()
-    assert config.audio.willy_pitch == pytest.approx(1.3)
+    assert config.audio.willy_pitch == pytest.approx(1.45)
+    assert config.audio.voice == "fr_FR-tom-medium"
     with pytest.raises(ValueError):
         replace(config, audio=replace(config.audio, willy_pitch=3.0))
+
+
+def test_windows_fallback_speaks_with_willys_voice(monkeypatch, tmp_path):
+    import sys
+    import types
+    import wave as wavmod
+    from types import SimpleNamespace as V
+
+    class Engine:
+        def __init__(self):
+            self.props, self.pending = {}, None
+
+        def getProperty(self, name):
+            return [V(name="Microsoft Hortense - French", id="hortense", languages=["fr-FR"], gender=None),
+                    V(name="Microsoft Paul - French", id="paul", languages=["fr-FR"], gender=None)]
+
+        def setProperty(self, name, value):
+            self.props[name] = value
+
+        def save_to_file(self, text, path):
+            self.pending = path
+
+        def runAndWait(self):  # SAPI writes a 22.05 kHz 16-bit mono WAV
+            t = np.arange(22050) / 22050
+            with wavmod.open(self.pending, "wb") as w:
+                w.setnchannels(1); w.setsampwidth(2); w.setframerate(22050)
+                w.writeframes((np.sin(2 * np.pi * 150 * t) * 9000).astype(np.int16).tobytes())
+
+        def stop(self):
+            pass
+
+    monkeypatch.setitem(sys.modules, "pyttsx3", types.SimpleNamespace(init=Engine))
+    from src.speech import WindowsFrenchSpeech
+    voice = WindowsFrenchSpeech(130, .85, willy_pitch=1.45)
+    assert voice.engine.props["voice"] == "paul" and voice.engine.props["rate"] == round(130 / 1.45)
+    assert voice.label.endswith("voix de Willy")
+    with wavmod.open(io.BytesIO(voice._render("Bonjour")), "rb") as w:
+        assert w.getframerate() == 22050 and w.getnchannels() == 1
+        assert w.getnframes() == int(22050 / 1.45)

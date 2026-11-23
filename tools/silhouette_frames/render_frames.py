@@ -4,7 +4,7 @@ The OBJ (body-1/Male-low.OBJ, A-pose, Y up, centimetres, facing +Z) is not
 stored in the repository: only the rendered frames are. Each frame shows the
 body facing the patient with the screen-right arm raised to one angle
 (0-160 deg, every 5 deg) like a well-performed lateral raise: in the scapular
-plane, elbow soft, shoulder blade rotating with a 2:1 scapulohumeral rhythm
+plane, elbow soft (as in the A-pose), shoulder blade rotating with a 2:1 scapulohumeral rhythm
 after 30 deg and no shrug. The app flips the frames for the left side. Pixels hold
 channels the app recolours at runtime:
     R = diffuse shading, G = fresnel rim, B = unused, A = coverage.
@@ -23,13 +23,14 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 OUT = HERE.parents[1] / "assets" / "silhouette"
 CDN = "https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"
-JOINT = (21.5, 141.0, -7.0)     # glenohumeral joint (+x side), cm
-ELBOW = (34.5, 112.0, -9.0)     # elbow joint in the A-pose (+x side)
-STERNO = (3.0, 150.0, 2.0)      # sternoclavicular pivot of the shoulder girdle (+x side)
-REST_DEG = 22.0                 # arm abduction of the A-pose
+# Skeleton of the +x side, measured on the mesh (slice centroids of the upper arm and forearm).
+JOINT = (22.0, 145.0, -10.0)    # glenohumeral joint: centre of the humeral head, under the acromion
+UPPER_ARM = (0.435, -0.894, 0.108)  # humerus direction in the A-pose (26 deg abduction)
+STERNO = (3.0, 150.0, 2.0)      # sternoclavicular pivot of the shoulder girdle
+REST_DEG = 26.0                 # humerus abduction of the A-pose
 OTHER_ARM_DEG = 8               # the arm that is not exercising hangs relaxed
 SCAPULAR_PLANE_DEG = 25.0       # lateral raise in the scapular plane, 20-30 deg in front of the body
-ELBOW_BEND_DEG = 14.0           # "soft" elbow, constant through the raise
+# The A-pose elbow is already soft (~22 deg), as a lateral raise wants: it is kept, not re-bent.
 # Scapulohumeral rhythm: ~pure glenohumeral motion for the first 30 deg, then about 2:1
 # (glenohumeral : scapular upward rotation). The girdle's visible lift is a fraction of that
 # upward rotation, kept small: a good lateral raise keeps the shoulders down (no shrug).
@@ -55,30 +56,58 @@ def smoothstep(a, b, x):
     return t * t * (3 - 2 * t)
 
 
-def skin_weights(v):
-    """Per-vertex weights: arm (follows the humerus), forearm (follows the elbow), girdle (shoulder blade)."""
-    x, y = np.abs(v[:, 0]), v[:, 1]
-    joint = np.array(JOINT[:2], np.float32)
-    # Around the armpit, decide by direction from the shoulder joint: the arm hangs outward,
-    # the side of the chest sits inward. This keeps a clean split and avoids a dragged skin flap.
-    direction = np.degrees(np.arctan2(x - joint[0], joint[1] - y))   # 0 = straight down, + = outward
-    armpit = smoothstep(-7., 3., direction)
-    thighs = smoothstep(25., 31., x)                                  # lower: clear of the thighs
-    # Deltoid cap follows the humerus; the upper trapezius only follows the shoulder blade (girdle).
-    shoulder = smoothstep(15., 30., x) * (1 - smoothstep(146., 158., y) * (1 - smoothstep(20., 30., x)))
-    low, high = smoothstep(100., 110., y), smoothstep(128., 138., y)
-    arm = thighs * (1 - low) + armpit * low
-    arm = arm * (1 - high) + shoulder * high
-    arm *= 1 - smoothstep(158., 166., y)     # never the head or neck
-    arm *= smoothstep(66., 72., y)           # never the legs or feet (fingertips end near 78 cm)
-    # Forearm: distance along the A-pose upper arm, past the elbow.
-    rest = np.radians(REST_DEG)
-    along = (x - joint[0]) * np.sin(rest) + (joint[1] - y) * np.cos(rest)
-    forearm = arm * smoothstep(28., 35., along)
-    # Shoulder girdle: deltoid, upper trapezius and the top of the chest/back move with the scapula.
-    girdle = smoothstep(4., 22., x) * smoothstep(118., 136., y) * (1 - smoothstep(150., 172., y))
-    girdle = np.maximum(girdle, arm)
-    return [w.astype(np.float32) for w in (arm, forearm, girdle)]
+def cotangent_laplacian(vertices, faces):
+    """Symmetric cotangent Laplacian (negative cotangents clamped, so harmonic weights stay in [0, 1])."""
+    from scipy import sparse
+    rows, cols, vals = [], [], []
+    for a, b, c in ((0, 1, 2), (1, 2, 0), (2, 0, 1)):
+        i, j, k = faces[:, a], faces[:, b], faces[:, c]
+        u, w = vertices[i] - vertices[k], vertices[j] - vertices[k]
+        cot = np.einsum("ij,ij->i", u, w) / np.maximum(np.linalg.norm(np.cross(u, w), axis=1), 1e-12)
+        cot = np.maximum(cot, 0.) * .5
+        rows += [i, j]; cols += [j, i]; vals += [cot, cot]
+    n = len(vertices)
+    weights = sparse.csr_matrix((np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))), shape=(n, n))
+    return sparse.diags(np.asarray(weights.sum(axis=1)).ravel()) - weights
+
+
+def harmonic(laplacian, ones, zeros):
+    """Smoothest field over the surface that is 1 on `ones` and 0 on `zeros` (Laplace equation)."""
+    from scipy.sparse.linalg import spsolve
+    n = laplacian.shape[0]
+    fixed = ones | zeros
+    free = ~fixed
+    values = np.zeros(n)
+    values[ones] = 1.
+    rhs = -laplacian[free][:, fixed] @ values[fixed]
+    values[free] = spsolve(laplacian[free][:, free].tocsc(), rhs)
+    return np.clip(values, 0., 1.)
+
+
+def skin_weights(vertices, faces):
+    """Harmonic skin weights for the humerus and the shoulder girdle, both sides.
+
+    Weights are fixed only where the answer is obvious (the arm beyond mid-humerus = 1; the trunk,
+    neck, head and legs = 0) and solved everywhere else on the surface. Because the solution follows
+    the surface, the armpit separates cleanly and the deltoid blends smoothly into the trapezius,
+    which is what a hand-tuned falloff could not do.
+    """
+    laplacian = cotangent_laplacian(vertices, faces)
+    side = np.where(vertices[:, 0] >= 0, 1., -1.)
+    local = vertices * np.stack([side, np.ones_like(side), np.ones_like(side)], axis=1)  # mirror to +x
+    rel = local - np.array(JOINT)
+    along = rel @ np.array(UPPER_ARM)
+    radial = np.linalg.norm(rel - along[:, None] * np.array(UPPER_ARM), axis=1)
+    dist = np.linalg.norm(rel, axis=1)
+    x = local[:, 0]
+    beyond_elbow = along > 30.          # forearm and hand: up to 14 cm off the humerus axis; thighs >= 25 cm
+    on_arm = (along > 13.) & (radial < np.where(beyond_elbow, 17., 8.))
+    trunk = ((dist > 17.) & ((radial > np.where(beyond_elbow, 21., 12.)) | (along < 0.))) | (x < 8.)
+    arm = harmonic(laplacian, on_arm, trunk & ~on_arm)
+    shoulder = on_arm | (dist < 7.)
+    still = (x < 7.) | (local[:, 1] > 160.) | ((dist > 24.) & ~on_arm)
+    girdle = np.maximum(harmonic(laplacian, shoulder, still & ~shoulder), arm)
+    return arm.astype(np.float32), girdle.astype(np.float32)
 
 
 def shoulder_angles(elevation, rest=REST_DEG):
@@ -96,7 +125,7 @@ window.setupBody = (data, W, H, view) => {
   const cam = new THREE.OrthographicCamera(view[0], view[1], view[3], view[2], -500, 500);
   cam.position.set(0, 0, 200); cam.lookAt(0, 0, 0);
   const base = new Float32Array(data.positions);
-  const wArm = new Float32Array(data.arm), wFore = new Float32Array(data.forearm), wGirdle = new Float32Array(data.girdle);
+  const wArm = new Float32Array(data.arm), wGirdle = new Float32Array(data.girdle);
   const geo = new THREE.BufferGeometry();
   const pos = new THREE.BufferAttribute(new Float32Array(base), 3);
   geo.setAttribute('position', pos); geo.setIndex(data.indices);
@@ -127,13 +156,10 @@ window.setupBody = (data, W, H, view) => {
       let v = [base[3*i], base[3*i+1], base[3*i+2]];
       const side = v[0] >= 0 ? 1 : -1, [girdle, gh] = pose[side];
       const J = [side*data.joint[0], data.joint[1], data.joint[2]];
-      const E = [side*data.elbow[0], data.elbow[1], data.elbow[2]];
       const S = [side*data.sterno[0], data.sterno[1], data.sterno[2]];
-      // 1. soft elbow: forearm swings slightly forward (+z) about the elbow
-      if (wFore[i] > 0) v = rot(v, [-Math.cos(rest), -side*Math.sin(rest), 0], data.bend * D * wFore[i], E);
-      // 2. glenohumeral elevation in the scapular plane (axis tilted so the arm travels forward of the body)
+      // 1. glenohumeral elevation in the scapular plane (axis tilted so the arm travels forward of the body)
       if (wArm[i] > 0) v = rot(v, [-Math.sin(phi), 0, side*Math.cos(phi)], gh * D * wArm[i], J);
-      // 3. shoulder girdle: small upward rotation about the sternoclavicular joint
+      // 2. shoulder girdle: small upward rotation about the sternoclavicular joint
       if (wGirdle[i] > 0) v = rot(v, [0, 0, side], girdle * D * wGirdle[i], S);
       pos.array[3*i] = v[0]; pos.array[3*i+1] = v[1]; pos.array[3*i+2] = v[2];
     }
@@ -150,16 +176,25 @@ def main():
     parser.add_argument("obj", type=Path)
     parser.add_argument("--three", help="Local three.min.js (r147) instead of jsDelivr")
     parser.add_argument("--browser", help="Chrome/Chromium executable")
+    parser.add_argument("--joint", help="Override the shoulder joint, x,y,z in cm (for tuning)")
+    parser.add_argument("--angles", help="Render only these angles, comma separated (for tuning)")
+    parser.add_argument("--out", type=Path, help="Output folder (default: assets/silhouette)")
     args = parser.parse_args()
+    global JOINT, ANGLES, OUT
+    if args.joint:
+        JOINT = tuple(float(t) for t in args.joint.split(","))
+    if args.angles:
+        ANGLES = [int(t) for t in args.angles.split(",")]
+    if args.out:
+        OUT = args.out
     from PIL import Image
     from playwright.sync_api import sync_playwright
     vertices, faces = load_obj(args.obj)
-    arm, forearm, girdle = skin_weights(vertices)
+    arm, girdle = skin_weights(vertices, faces)
     poses = sorted(set(ANGLES) | {OTHER_ARM_DEG})
     data = {"positions": vertices.ravel().tolist(), "indices": faces.ravel().tolist(),
-            "arm": arm.tolist(), "forearm": forearm.tolist(), "girdle": girdle.tolist(),
-            "joint": JOINT, "elbow": ELBOW, "sterno": STERNO, "rest": REST_DEG,
-            "plane": SCAPULAR_PLANE_DEG, "bend": ELBOW_BEND_DEG,
+            "arm": arm.tolist(), "girdle": girdle.tolist(),
+            "joint": JOINT, "sterno": STERNO, "rest": REST_DEG, "plane": SCAPULAR_PLANE_DEG,
             "angles": {str(a): shoulder_angles(a) for a in poses}}
     x0, x1, y0, y1 = VIEW
     width, height = round((x1 - x0) * PX_PER_CM), round((y1 - y0) * PX_PER_CM)

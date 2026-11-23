@@ -24,22 +24,32 @@ le comptage ou l’évaluation.
 
 ## Voix de Willy
 
-La voix française Piper locale est transformée en voix de dessin animé
-(hauteur et timbre plus aigus). Le texte est synthétisé plus lentement puis
-rééchantillonné : le débit reste celui de `length_scale`.
+C’est la voix choisie à l’essai : **« Cartoon buddy »**. Même recette, en français :
+
+1. une voix masculine de base : Piper **`fr_FR-tom-medium`** (l’essai utilisait
+   Ryan, sa voix équivalente en anglais) ;
+2. hauteur **et** timbre montés de **1,45×**, comme une bande accélérée ;
+3. un léger **vibrato** à 6 Hz (profondeur 0,08, comme `vibrato=f=6:d=0.08`).
+
+Le texte est synthétisé 1,45× plus lentement avant la transformation : le débit
+reste celui de `length_scale` (lent et clair pour les patients).
 
 ```yaml
 audio:
-  willy_pitch: 1.30   # 1.0 = voix naturelle, jusqu’à 1.6
+  voice: fr_FR-tom-medium
+  willy_pitch: 1.45   # 1.0 = voix naturelle, jusqu’à 1.6
 ```
 
-Écouter un extrait sans caméra :
+Télécharger la voix (avec les modèles MediaPipe) puis écouter un extrait sans caméra :
 
 ```powershell
+python models/download_models.py
 python -m src.audio_feedback --preview output/voix_willy.wav
 ```
 
-La voix Windows de secours (pyttsx3) n’est pas transformée.
+Si la voix Tom manque, l’application prend une autre voix Piper française déjà
+installée, puis la voix Windows française (de préférence masculine, « Paul ») :
+dans tous les cas, la transformation de Willy est appliquée.
 
 ## Rendu
 

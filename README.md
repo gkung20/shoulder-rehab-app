@@ -5,7 +5,8 @@
 **Willy**, un petit robot guide, reste visible à droite de l’écran dans toutes
 les vues : il salue avant la séance, lève le bras avec le patient (en miroir),
 fête les répétitions réussies et bouge la bouche quand la voix parle. La voix
-française devient la **voix de Willy** (style dessin animé, `audio.willy_pitch`).
+française devient la **voix de Willy** (« Cartoon buddy » : voix masculine Tom,
+1,45× plus aiguë avec un léger vibrato, `audio.willy_pitch`).
 Il ne modifie aucune mesure. Détails : [docs/willy.md](docs/willy.md).
 
 ## Silhouette guide en vue caméra
@@ -172,11 +173,12 @@ accepte un cadrage serré : **les deux épaules suffisent pour la calibration**,
 puis le coude du bras actif doit être visible pour compter. Le visage et les
 hanches ne sont plus obligatoires dans les règles de démarrage de l'application.
 
-Le coaching vocal utilise maintenant **Piper et une voix neuronale française
-Siwis** en local. Après installation des dépendances, téléchargez la voix une fois :
+Le coaching vocal utilise **Piper et la voix neuronale française Tom** en local,
+transformée en **voix de Willy**. Après installation des dépendances, téléchargez
+tout une fois (modèles MediaPipe + voix) :
 
 ```powershell
-python -m piper.download_voices fr_FR-siwis-medium --data-dir models/voices
+python models/download_models.py
 ```
 
 Les consignes sont accentuées pour la prononciation, plus courtes, et les anciens
@@ -334,7 +336,7 @@ shoulder-rehab-app/
 │   └── exercise_config.yaml    # Source unique de vérité pour les seuils biomécaniques
 │
 ├── models/
-│   ├── download_models.py      # Script de téléchargement local du modèle MediaPipe (.task)
+│   ├── download_models.py      # Téléchargement local : modèles MediaPipe (.task) et voix de Willy
 │   ├── voices/                 # Documentation et modèle vocal local Siwis (binaires ignorés)
 │   └── pose_landmarker_full.task (Modèle Full par défaut, ignoré par git)
 │
@@ -414,11 +416,9 @@ python -m venv .env
 # Installer les bibliothèques requises (Windows / Python 3.13)
 python -m pip install -r requirements.txt -c constraints-windows-py313.txt
 
-# Télécharger localement MediaPipe Full (environ 9,4 Mo)
+# Télécharger MediaPipe Full (~9 Mo), le modèle des mains (~8 Mo)
+# et la voix de Willy (Piper « fr_FR-tom-medium », ~64 Mo)
 python models/download_models.py
-
-# Télécharger la voix française locale (environ 63 Mo)
-python -m piper.download_voices fr_FR-siwis-medium --data-dir models/voices
 ```
 
 ### 5.3 Exécuter la suite de tests automatisée

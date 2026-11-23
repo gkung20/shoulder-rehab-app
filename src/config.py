@@ -65,7 +65,7 @@ class PoseConfig:
 @dataclass
 class AudioConfig:
     backend: str = "auto"  # Local Piper first, then a French Windows voice only.
-    voice: str = "fr_FR-siwis-medium"
+    voice: str = "fr_FR-tom-medium"  # male base voice of Willy's cartoon voice
     length_scale: float = 1.30
     volume: float = 0.85
     speech_rate: int = 130
@@ -74,7 +74,7 @@ class AudioConfig:
     guidance_mode: str = "essential"
     warning_persistence_sec: float = 1.5
     announce_every_reps: int = 5
-    willy_pitch: float = 1.30  # Willy's cartoon voice: >1 raises pitch and timbre; 1 = natural voice
+    willy_pitch: float = 1.45  # Willy's cartoon voice (the approved "Cartoon buddy"); 1 = natural voice
 
 
 @dataclass

@@ -1,19 +1,25 @@
-# French neural voice
+# French neural voice (Willy's voice)
 
-The default is `fr_FR-siwis-medium`, run locally with Piper. No camera images,
+The default is `fr_FR-tom-medium` (male), run locally with Piper and turned into
+**Willy's voice**: pitch and timbre raised 1.45x plus a light 6 Hz vibrato, the
+"Cartoon buddy" voice approved for Willy (see `docs/willy.md`). No camera images,
 measurements or coaching text are sent to a speech service. Speech is synthetic;
 it is not a recording of a clinician.
 
-Install the requirements, then download the voice once:
+Install the requirements, then download the voice once (with the MediaPipe models):
 
 ```powershell
-python -m piper.download_voices fr_FR-siwis-medium --data-dir models/voices
+python models/download_models.py          # everything
+python models/download_models.py voice    # only the voice
 ```
+
+Any other French Piper voice already in this folder (for example `fr_FR-siwis-medium`)
+is used if Tom is missing, still with Willy's transformation.
 
 Create a WAV sample without opening a camera or playing audio automatically:
 
 ```powershell
-python -m src.audio_feedback --preview output/voix_francaise.wav
+python -m src.audio_feedback --preview output/voix_willy.wav
 ```
 
 The ONNX voice and JSON configuration stay local and are ignored by Git. Frequently
@@ -45,9 +51,12 @@ choices, not clinical timing thresholds.
 Sources and attribution:
 
 - [Piper](https://github.com/OHF-Voice/piper1-gpl), GPL-3.0.
-- [Siwis medium model card](https://huggingface.co/rhasspy/piper-voices/blob/main/fr/fr_FR/siwis/medium/MODEL_CARD),
-  French (France), 22,050 Hz, one speaker. The source dataset is credited there
-  under CC-BY 4.0, with its training lineage described in the model card.
+- [Tom medium model card](https://huggingface.co/rhasspy/piper-voices/blob/main/fr/fr_FR/tom/medium/MODEL_CARD),
+  French (France), one male speaker. Its training data is published under
+  **AGPLv3** (https://git.bksp.space/Tjiho/French-tts-model-piper): check that
+  license before any commercial distribution.
+- [Siwis medium model card](https://huggingface.co/rhasspy/piper-voices/blob/main/fr/fr_FR/siwis/medium/MODEL_CARD)
+  (optional fallback), French (France), one speaker, dataset under CC-BY 4.0.
 - [Piper Python API](https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/API_PYTHON.md).
 
 Keep these upstream license and model-card details with redistributions.
