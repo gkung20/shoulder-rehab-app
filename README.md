@@ -23,7 +23,10 @@ comptage ni dans l’évaluation.
 
 Les images de la silhouette (`assets/silhouette/`, 33 poses de 0 à 160°) sont
 pré-rendues depuis un modèle 3D de corps (`Male-low.OBJ`, non inclus dans le
-dépôt). Pour les régénérer : `python tools/silhouette_frames/render_frames.py
+dépôt). Le geste suit une élévation latérale bien exécutée : bras dans le
+plan de l’omoplate (≈25° en avant du corps), coude légèrement fléchi, épaules
+basses, et rotation de l’omoplate selon le rythme scapulo-huméral (presque tout
+à l’épaule jusqu’à 30°, puis ≈2:1). Pour les régénérer : `python tools/silhouette_frames/render_frames.py
 chemin/vers/Male-low.OBJ` (Playwright + Chromium requis).
 
 ## Coach médecin 3D et avatars homme / femme

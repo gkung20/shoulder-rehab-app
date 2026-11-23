@@ -2,8 +2,10 @@
 
 The OBJ (body-1/Male-low.OBJ, A-pose, Y up, centimetres, facing +Z) is not
 stored in the repository: only the rendered frames are. Each frame shows the
-body facing the patient with the screen-right arm abducted to one angle
-(0-160 deg, every 5 deg); the app flips them for the left side. Pixels hold
+body facing the patient with the screen-right arm raised to one angle
+(0-160 deg, every 5 deg) like a well-performed lateral raise: in the scapular
+plane, elbow soft, shoulder blade rotating with a 2:1 scapulohumeral rhythm
+after 30 deg and no shrug. The app flips the frames for the left side. Pixels hold
 channels the app recolours at runtime:
     R = diffuse shading, G = fresnel rim, B = unused, A = coverage.
 
@@ -21,9 +23,17 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 OUT = HERE.parents[1] / "assets" / "silhouette"
 CDN = "https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"
-JOINT = (21.5, 141.0, -7.0)     # left shoulder joint (+x side), cm
+JOINT = (21.5, 141.0, -7.0)     # glenohumeral joint (+x side), cm
+ELBOW = (34.5, 112.0, -9.0)     # elbow joint in the A-pose (+x side)
+STERNO = (3.0, 150.0, 2.0)      # sternoclavicular pivot of the shoulder girdle (+x side)
 REST_DEG = 22.0                 # arm abduction of the A-pose
-OTHER_ARM_DEG = 8.0             # the arm that is not exercising hangs relaxed
+OTHER_ARM_DEG = 8               # the arm that is not exercising hangs relaxed
+SCAPULAR_PLANE_DEG = 25.0       # lateral raise in the scapular plane, 20-30 deg in front of the body
+ELBOW_BEND_DEG = 14.0           # "soft" elbow, constant through the raise
+# Scapulohumeral rhythm: ~pure glenohumeral motion for the first 30 deg, then about 2:1
+# (glenohumeral : scapular upward rotation). The girdle's visible lift is a fraction of that
+# upward rotation, kept small: a good lateral raise keeps the shoulders down (no shrug).
+GIRDLE_LIFT_PER_SCAPULAR_DEG = .30
 ANGLES = list(range(0, 165, 5))
 VIEW = (-52.0, 100.0, -4.0, 226.0)   # x0, x1, y0, y1 in cm: room for the raised arm
 PX_PER_CM = 3.0
@@ -45,18 +55,37 @@ def smoothstep(a, b, x):
     return t * t * (3 - 2 * t)
 
 
-def arm_weights(v):
-    """How much each vertex follows its arm: 1 on the arms, 0 on the torso, smooth across the shoulders."""
+def skin_weights(v):
+    """Per-vertex weights: arm (follows the humerus), forearm (follows the elbow), girdle (shoulder blade)."""
     x, y = np.abs(v[:, 0]), v[:, 1]
-    # Under the armpit the arm is apart from the torso; lower down, keep clear of the thighs.
-    low = smoothstep(103., 112., y)
-    below = smoothstep(18., 22., x) * low + smoothstep(25., 31., x) * (1 - low)
-    above = smoothstep(14., 24., x)          # shoulder: blend over the deltoid
-    t = smoothstep(117., 129., y)
-    w = below * (1 - t) + above * t
-    w *= 1 - smoothstep(158., 166., y)       # never the head or neck
-    w *= smoothstep(66., 72., y)             # never the legs or feet (fingertips end near 78 cm)
-    return w.astype(np.float32)
+    joint = np.array(JOINT[:2], np.float32)
+    # Around the armpit, decide by direction from the shoulder joint: the arm hangs outward,
+    # the side of the chest sits inward. This keeps a clean split and avoids a dragged skin flap.
+    direction = np.degrees(np.arctan2(x - joint[0], joint[1] - y))   # 0 = straight down, + = outward
+    armpit = smoothstep(-7., 3., direction)
+    thighs = smoothstep(25., 31., x)                                  # lower: clear of the thighs
+    # Deltoid cap follows the humerus; the upper trapezius only follows the shoulder blade (girdle).
+    shoulder = smoothstep(15., 30., x) * (1 - smoothstep(146., 158., y) * (1 - smoothstep(20., 30., x)))
+    low, high = smoothstep(100., 110., y), smoothstep(128., 138., y)
+    arm = thighs * (1 - low) + armpit * low
+    arm = arm * (1 - high) + shoulder * high
+    arm *= 1 - smoothstep(158., 166., y)     # never the head or neck
+    arm *= smoothstep(66., 72., y)           # never the legs or feet (fingertips end near 78 cm)
+    # Forearm: distance along the A-pose upper arm, past the elbow.
+    rest = np.radians(REST_DEG)
+    along = (x - joint[0]) * np.sin(rest) + (joint[1] - y) * np.cos(rest)
+    forearm = arm * smoothstep(28., 35., along)
+    # Shoulder girdle: deltoid, upper trapezius and the top of the chest/back move with the scapula.
+    girdle = smoothstep(4., 22., x) * smoothstep(118., 136., y) * (1 - smoothstep(150., 172., y))
+    girdle = np.maximum(girdle, arm)
+    return [w.astype(np.float32) for w in (arm, forearm, girdle)]
+
+
+def shoulder_angles(elevation, rest=REST_DEG):
+    """Split a humerothoracic elevation into girdle lift and glenohumeral rotation (degrees)."""
+    scapular = max(0., elevation - 30.) / 3.          # 2:1 after the 30 deg setting phase
+    girdle = GIRDLE_LIFT_PER_SCAPULAR_DEG * scapular
+    return girdle, elevation - girdle - rest
 
 
 SETUP = """
@@ -66,7 +95,8 @@ window.setupBody = (data, W, H, view) => {
   r.setPixelRatio(1); r.setSize(W, H, false); r.setClearColor(0x000000, 0);
   const cam = new THREE.OrthographicCamera(view[0], view[1], view[3], view[2], -500, 500);
   cam.position.set(0, 0, 200); cam.lookAt(0, 0, 0);
-  const base = new Float32Array(data.positions), w = new Float32Array(data.weights);
+  const base = new Float32Array(data.positions);
+  const wArm = new Float32Array(data.arm), wFore = new Float32Array(data.forearm), wGirdle = new Float32Array(data.girdle);
   const geo = new THREE.BufferGeometry();
   const pos = new THREE.BufferAttribute(new Float32Array(base), 3);
   geo.setAttribute('position', pos); geo.setIndex(data.indices);
@@ -82,14 +112,30 @@ window.setupBody = (data, W, H, view) => {
         gl_FragColor = vec4(diff, rim, 0., 1.); }`,
   });
   const scene = new THREE.Scene(); scene.add(new THREE.Mesh(geo, mat));
-  const J = data.joint;
-  window.renderAngle = (deg) => {
-    const dR = (deg - data.rest) * Math.PI / 180, dL = (data.other - data.rest) * Math.PI / 180;
-    for (let i = 0; i < w.length; i++) {
-      const side = base[3*i] >= 0 ? 1 : -1, jx = side * J[0];
-      const a = side * (side > 0 ? dR : dL) * w[i], c = Math.cos(a), s = Math.sin(a);
-      const x = base[3*i] - jx, y = base[3*i+1] - J[1];
-      pos.array[3*i] = jx + c*x - s*y; pos.array[3*i+1] = J[1] + s*x + c*y; pos.array[3*i+2] = base[3*i+2];
+  // Rodrigues rotation of v (array of 3) about unit axis k by angle a, around pivot c.
+  const rot = (v, k, a, c) => {
+    if (Math.abs(a) < 1e-6) return v;
+    const x = v[0]-c[0], y = v[1]-c[1], z = v[2]-c[2], cs = Math.cos(a), sn = Math.sin(a);
+    const d = k[0]*x + k[1]*y + k[2]*z;
+    const cx = k[1]*z - k[2]*y, cy = k[2]*x - k[0]*z, cz = k[0]*y - k[1]*x;
+    return [c[0] + x*cs + cx*sn + k[0]*d*(1-cs), c[1] + y*cs + cy*sn + k[1]*d*(1-cs), c[2] + z*cs + cz*sn + k[2]*d*(1-cs)];
+  };
+  const D = Math.PI / 180, rest = data.rest * D, phi = data.plane * D;
+  window.renderAngle = (deg, otherDeg) => {
+    const pose = {1: data.angles[deg], [-1]: data.angles[otherDeg]};
+    for (let i = 0; i < wArm.length; i++) {
+      let v = [base[3*i], base[3*i+1], base[3*i+2]];
+      const side = v[0] >= 0 ? 1 : -1, [girdle, gh] = pose[side];
+      const J = [side*data.joint[0], data.joint[1], data.joint[2]];
+      const E = [side*data.elbow[0], data.elbow[1], data.elbow[2]];
+      const S = [side*data.sterno[0], data.sterno[1], data.sterno[2]];
+      // 1. soft elbow: forearm swings slightly forward (+z) about the elbow
+      if (wFore[i] > 0) v = rot(v, [-Math.cos(rest), -side*Math.sin(rest), 0], data.bend * D * wFore[i], E);
+      // 2. glenohumeral elevation in the scapular plane (axis tilted so the arm travels forward of the body)
+      if (wArm[i] > 0) v = rot(v, [-Math.sin(phi), 0, side*Math.cos(phi)], gh * D * wArm[i], J);
+      // 3. shoulder girdle: small upward rotation about the sternoclavicular joint
+      if (wGirdle[i] > 0) v = rot(v, [0, 0, side], girdle * D * wGirdle[i], S);
+      pos.array[3*i] = v[0]; pos.array[3*i+1] = v[1]; pos.array[3*i+2] = v[2];
     }
     pos.needsUpdate = true; geo.computeVertexNormals();
     r.render(scene, cam);
@@ -108,8 +154,13 @@ def main():
     from PIL import Image
     from playwright.sync_api import sync_playwright
     vertices, faces = load_obj(args.obj)
+    arm, forearm, girdle = skin_weights(vertices)
+    poses = sorted(set(ANGLES) | {OTHER_ARM_DEG})
     data = {"positions": vertices.ravel().tolist(), "indices": faces.ravel().tolist(),
-            "weights": arm_weights(vertices).tolist(), "joint": JOINT, "rest": REST_DEG, "other": OTHER_ARM_DEG}
+            "arm": arm.tolist(), "forearm": forearm.tolist(), "girdle": girdle.tolist(),
+            "joint": JOINT, "elbow": ELBOW, "sterno": STERNO, "rest": REST_DEG,
+            "plane": SCAPULAR_PLANE_DEG, "bend": ELBOW_BEND_DEG,
+            "angles": {str(a): shoulder_angles(a) for a in poses}}
     x0, x1, y0, y1 = VIEW
     width, height = round((x1 - x0) * PX_PER_CM), round((y1 - y0) * PX_PER_CM)
     to_px = lambda x, y: [(x - x0) * PX_PER_CM, (y1 - y) * PX_PER_CM]
@@ -124,7 +175,7 @@ def main():
         page.add_script_tag(content=SETUP)
         page.evaluate("([d, w, h, v]) => setupBody(d, w, h, v)", [data, width, height, list(VIEW)])
         for angle in ANGLES:
-            url = page.evaluate("a => renderAngle(a)", angle)
+            url = page.evaluate("([a, o]) => renderAngle(String(a), String(o))", [angle, OTHER_ARM_DEG])
             image = Image.open(io.BytesIO(base64.b64decode(url.split(",", 1)[1]))).convert("RGBA")
             image.save(OUT / f"arm_{angle:03d}.png", optimize=True)
         browser.close()
