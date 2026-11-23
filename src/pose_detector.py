@@ -16,6 +16,21 @@ import numpy as np
 from src.geometry import Point2D, Point3D, PoseLandmarkIndex
 
 
+
+MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
+POSE_VARIANTS = ("full", "lite", "heavy")
+
+
+def installed_pose_model(preferred="full", models_dir=MODELS_DIR):
+    """The preferred pose model if it is downloaded, otherwise another installed one; else the preferred name.
+
+    Lets the app open with the model already on the computer instead of stopping at startup.
+    """
+    for variant in [preferred] + [v for v in POSE_VARIANTS if v != preferred]:
+        if (Path(models_dir) / f"pose_landmarker_{variant}.task").exists():
+            return variant
+    return preferred
+
 class PoseDetector:
     """Encapsulates MediaPipe Pose Landmarker for real-time video stream analysis."""
 

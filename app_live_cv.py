@@ -11,7 +11,7 @@ from collections import deque
 import cv2
 from src.capture import VideoCaptureManager
 from src.config import ExerciseConfig
-from src.pose_detector import PoseDetector
+from src.pose_detector import PoseDetector, installed_pose_model
 from src.session_processor import SessionProcessor, FrameAnalysis
 from src.dashboard import render_dashboard, CANVAS_SIZE
 from src.audio_feedback import AudioCoach
@@ -71,6 +71,11 @@ def main(argv=None):
                          pose=replace(config.pose, model=args.model or config.pose.model))
     except ValueError as exc:
         parser.error(str(exc))
+    model = installed_pose_model(config.pose.model)
+    if model != config.pose.model:
+        print(f"[MODELE] pose_landmarker_{config.pose.model}.task absent : modele {model} utilise. "
+              "Pour le suivi le plus precis : python models/download_models.py")
+        config = replace(config, pose=replace(config.pose, model=model))
     processor = SessionProcessor(config, profile.arm or "right")
     mirror = True
     controls = PatientControls(avatars=not args.no_avatars, avatar_gender=profile.avatar_gender or "male")
