@@ -451,6 +451,11 @@ class App:
         self._calibrations_seen = 0
         self.timings = {}  # startup: seconds to the first window and until ready
         self.worker = None
+        self.detector = None
+        self.pose_model = config.pose.model
+        self._pose_check_since = None
+        self._pose_checked = False
+        self._closing = []  # pose models to close at the end
         self._last_seq = 0
         self.timer = StageTimer(getattr(args, "debug", False), data_dir() / "timings.csv")
         self.sets = None   # sets of the plan, from Start to the end of the session
@@ -500,6 +505,7 @@ class App:
     def new_form(self):
         form = physio.SettingsForm(self.plan)
         form.camera = self.capture.camera_index if self.capture is not None else 0
+        form.model, form.auto_lite = self.profile.pose_model, self.profile.auto_lite
         if self.profile.resting_angle is not None:
             form.resting_angle = self.profile.resting_angle
             form.resting_date = physio.short_date(self.profile.resting_date)
@@ -515,6 +521,17 @@ class App:
                 form.message = f"Caméra n° {form.camera} introuvable."
                 return
             self.profile.save()
+        if form is not None and form.model != self.profile.pose_model:
+            wanted = form.model or self.config.pose.model
+            if not self.pose_model_installed(wanted):
+                form.message = f"Modèle « {physio.MODEL_LABELS[form.model]} » non installé."
+                return
+            self.profile.pose_model, self.profile.auto_lite = form.model, False
+            self.profile.save()
+            self._pose_checked = form.model is not None  # back to automatic: measure again
+            if wanted != self.pose_model and self.detector is not None:
+                self.pose_model = wanted
+                self.open_pose_model(wanted)
         if plan != self.plan:
             self.profile.set_plan(plan)
             self.profile.save()
@@ -575,11 +592,8 @@ class App:
         self.capture = self._devices.enter_context(VideoCaptureManager(
             camera_index=index, width=c.width, height=c.height, target_fps=c.fps, zoom=c.zoom, mirror=False))
         self.show_loading("Chargement du suivi du mouvement…")
-        self.detector = self._devices.enter_context(PoseDetector(model_variant=config.pose.model,
-                                                                 num_poses=config.pose.num_poses))
-        self.detector.choose = self.person_lock.choose  # follow only the patient (Phase 5.3)
-        self.worker = self._devices.enter_context(PoseWorker(
-            self.capture, self.detector, threaded=config.performance.pose_thread, clock=lambda: time.monotonic()))
+        self.pose_model = self.chosen_pose_model()
+        self.open_pose_model(self.pose_model)
         self.show_loading("Préparation de ma voix…")
         self.audio = self._devices.enter_context(AudioCoach.from_config(
             config.audio, enabled=self.profile.audio_enabled, language=self.profile.language or "fr"))
@@ -596,6 +610,66 @@ class App:
         self.timings["ready"] = perf_counter() - started
         print(f"[DÉMARRAGE] Fenêtre en {self.timings['first_window']:.2f} s, prêt en {self.timings['ready']:.2f} s")
 
+    # ----------------------------------------------------------------- pose model choice
+    @staticmethod
+    def pose_model_installed(variant):
+        from src.pose_detector import installed_pose_model
+        return installed_pose_model(variant) == variant
+
+    def chosen_pose_model(self):
+        """--model, else the physio's choice, else lite if the app chose it before, else the config."""
+        if self.args.model is None:
+            wanted = self.profile.pose_model or ("lite" if self.profile.auto_lite else None)
+            if wanted is not None and self.pose_model_installed(wanted):
+                return wanted
+        return self.config.pose.model
+
+    def open_pose_model(self, variant):
+        """(Re)open the pose model and the camera thread that uses it (Phase 6.4)."""
+        old_worker, old_detector = self.worker, self.detector
+        if old_worker is not None:
+            old_worker.stop()
+        self.detector = PoseDetector(model_variant=variant, num_poses=self.config.pose.num_poses)
+        self.detector.choose = self.person_lock.choose  # follow only the patient (Phase 5.3)
+        if old_detector is not None:
+            old_detector.close()
+            self._closing.remove(old_detector.close)
+        self._closing.append(self.detector.close)
+        self.processor.model_info = self.detector.model_info.copy()
+        self.worker = PoseWorker(self.capture, self.detector, threaded=self.config.performance.pose_thread,
+                                 clock=lambda: time.monotonic())
+        if old_worker is not None:  # carry on the frame numbers: the last frame is not analysed twice
+            self.worker._seq, self.worker._latest = old_worker._seq, old_worker._latest
+            self.worker.want_pose = old_worker.want_pose
+        self.worker.start()
+        self._pose_check_since = None
+
+    def check_pose_speed(self):
+        """In the first 3 seconds of tracking with the full model, switch to lite if the PC is too slow."""
+        limit = self.config.performance.auto_lite_fps
+        if (self._pose_checked or self.pose_model != "full" or self.profile.pose_model is not None
+                or not limit or self.args.model is not None or self.worker.pose_ms <= 0):
+            return
+        now = time.monotonic()
+        if self._pose_check_since is None:
+            self._pose_check_since = now
+            return
+        if now - self._pose_check_since < 3.:
+            return
+        self._pose_checked = True
+        rate = 1000. / self.worker.pose_ms
+        self.timings["pose_fps_full"] = round(rate, 1)
+        if rate >= limit:
+            return
+        if not self.pose_model_installed("lite"):
+            print(f"[MODELE] {rate:.0f} images/s avec le modele full. Un modele plus rapide existe : "
+                  "python models/download_models.py pose_landmarker_lite.task")
+            return
+        print(f"[MODELE] {rate:.0f} images/s avec le modele full : passage au modele lite (plus rapide).")
+        self.pose_model, self.profile.auto_lite = "lite", True
+        self.profile.save()
+        self.open_pose_model("lite")
+
     def show_loading(self, step):
         """Willy and "Je me prépare…" while the app loads (no clicks yet)."""
         language = self.profile.language or "fr"
@@ -606,7 +680,11 @@ class App:
 
     def close(self):
         self.save_session(partial=self.controls.mode in ("running", "paused"))
-        self._devices.close()  # audio, pose model, camera
+        if self.worker is not None:
+            self.worker.stop()
+        for close in self._closing:
+            close()
+        self._devices.close()  # audio, camera
         if self.director is not None:
             self.director.session_recorded(self.processor.rules_engine.session)
         if self.hand_detector is not None:
@@ -708,6 +786,7 @@ class App:
                 with self.timer.stage("analysis"):
                     analysis = self.processor.process(landmarks, result.world, width, height, self.now_sec)
                 self.after_analysis(analysis, frame, timestamp_ms, landmarks)
+                self.check_pose_speed()
             else:
                 analysis = self.analysis if self.analysis is not None else FrameAnalysis(self.now_sec, metrics={})
                 analysis.new_evaluation = None

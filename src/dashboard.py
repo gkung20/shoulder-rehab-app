@@ -86,6 +86,18 @@ class _Painter:
             y+=size*1.4
         return y
 
+    def fit(self,xy,value,width,size=18,color=TEXT,bold=False,min_size=18):
+        """One line shrunk (down to min_size) to fit `width`; else two smaller lines. Returns the size used."""
+        text=tr(str(value),self.lang)
+        x,y=xy
+        for used in range(size,min_size-1,-1):
+            if self.draw.textlength(text,font=self.font(used,bold))<=width*self.sx:
+                self.draw.text(self.point(x,y+(size-used)*.5),text,font=self.font(used,bold),fill=color)
+                return used
+        small=max(12,min_size-2)
+        self.wrap((x,y-small*.35),text,width,small,color,bold,max_lines=2)
+        return small
+
     def rect(self,bounds,fill=None,outline=None,radius=0):
         if radius:
             self.draw.rounded_rectangle(self.box(bounds),radius=max(1,round(radius*self.scale)),

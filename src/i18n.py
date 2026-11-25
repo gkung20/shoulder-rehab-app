@@ -60,6 +60,10 @@ EN = {
     "Appuyez sur Reprendre pour continuer en douceur.": "Press Resume to carry on gently.",
     "PAUSE": "BREAK",
     "Caméra (numéro)": "Camera (number)",
+    "Modèle de suivi": "Tracking model", "Automatique": "Automatic", "Précis": "Accurate", "Rapide": "Fast",
+    "Auto (rapide)": "Auto (fast)",
+    "Modèle rapide utilisé (ce PC est lent pour le modèle précis)":
+        "Fast model in use (this PC is slow for the accurate model)",
     "Je me prépare…": "Getting ready…", "Préparation des avatars 3D…": "Preparing the 3D avatars…",
     "Démarrage de la caméra…": "Starting the camera…", "Chargement du suivi du mouvement…": "Loading movement tracking…",
     "Préparation de ma voix…": "Preparing my voice…",
@@ -184,6 +188,7 @@ _PATTERNS = [
     (re.compile(r"^Trop d'essais\. Réessayez dans (\d+) s\.$"), r"Too many tries. Try again in \1 s."),
     (re.compile(r"^Angle de repos mesuré : (.*)$"), r"Measured resting angle: \1"),
     (re.compile(r"^Mesuré le (.*)$"), r"Measured on \1"),
+    (re.compile(r"^Modèle « (.*) » non installé\.$"), r"Model “\1” is not installed."),
     (re.compile(r"^(\d+(?:[.,]\d+)?) (s|min)$"), r"\1 \2"),
     (re.compile(r"^(\d+(?:[.,]\d+)?)/10$"), r"\1/10"),
     (re.compile(r"^Bras (droit|gauche) · Son (activé|coupé)$"),

@@ -161,6 +161,8 @@ class Profile:
     resting_date: str = ""          # ISO date of that measurement
     rest_warning: bool = False      # resting too close to the target: the plan's thresholds were kept
     camera_index: int | None = None # camera chosen in the physio settings (None: the configured one)
+    pose_model: str | None = None   # "full" or "lite" forced by the physio; None = automatic
+    auto_lite: bool = False         # the app switched to lite by itself because the PC was too slow
 
     @classmethod
     def load(cls, path=None):
@@ -190,6 +192,8 @@ class Profile:
             profile.resting_angle = None
         profile.resting_date = str(profile.resting_date or "") if _parse(profile.resting_date) else ""
         profile.rest_warning = profile.rest_warning is True
+        profile.pose_model = profile.pose_model if profile.pose_model in ("full", "lite") else None
+        profile.auto_lite = profile.auto_lite is True
         camera = profile.camera_index
         profile.camera_index = camera if isinstance(camera, int) and not isinstance(camera, bool) and 0 <= camera <= 9 else None
         profile._path = path

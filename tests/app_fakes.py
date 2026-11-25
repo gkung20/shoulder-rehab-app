@@ -43,7 +43,9 @@ class FakeDetector:
 
     model_info = {"file": "fake"}
 
-    def __init__(self, **kwargs):
+    def __init__(self, model_variant="full", **kwargs):
+        self.variant = model_variant
+        self.closed = False
         self.calls = 0
         self.rest = 40
         self.cycle = rep_angles(rest=10, rise=30, hold=40, settle=10)
@@ -55,6 +57,9 @@ class FakeDetector:
 
     def __exit__(self, *args):
         return False
+
+    def close(self):
+        self.closed = True
 
     def detect(self, frame, timestamp_ms):
         angle = 0. if self.calls < self.rest else self.cycle[(self.calls - self.rest) % len(self.cycle)]

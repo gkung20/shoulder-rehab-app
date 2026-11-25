@@ -68,7 +68,9 @@ def download_voice(name: str = WILLY_VOICE) -> Path:
 
 
 if __name__ == "__main__":
-    targets = sys.argv[1:] or ["pose_landmarker_full.task", "hand_landmarker.task", "voice", "voice-en"]
+    # lite: the faster model the app switches to on a slow PC (Phase 6.4)
+    targets = sys.argv[1:] or ["pose_landmarker_full.task", "pose_landmarker_lite.task", "hand_landmarker.task",
+                               "voice", "voice-en"]
     for target in targets:
         if target == "voice":
             download_voice()

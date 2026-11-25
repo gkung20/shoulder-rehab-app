@@ -132,7 +132,11 @@ FIELDS = (
     ("pain_gentle_max", "Douleur : séance douce jusqu'à", "/10"),
     ("seated", "Exercice assis", ""),
     ("camera", "Caméra (numéro)", ""),
+    ("model", "Modèle de suivi", ""),
 )
+MODEL_CHOICES = (None, "full", "lite")
+MODEL_LABELS = {None: "Automatique", "full": "Précis", "lite": "Rapide"}
+FAST_MODEL_NOTE = "Modèle rapide utilisé (ce PC est lent pour le modèle précis)"
 CAMERA_RANGE = (0, 5)
 ARM_CHOICES = (None, "right", "left")
 ARM_LABELS = {None: "Au choix du patient", "right": "Droit", "left": "Gauche"}
@@ -147,6 +151,8 @@ class SettingsForm:
     warning: str = ""
     message: str = ""
     camera: int = 0
+    model: str | None = None      # forced pose model; None = automatic
+    auto_lite: bool = False       # shown as "Modèle rapide utilisé" when automatic chose lite
 
     def __post_init__(self):
         self.original = self.original or self.plan
@@ -164,6 +170,8 @@ class SettingsForm:
             self.plan = replace(self.plan, seated=not self.plan.seated)
         elif key == "camera":
             self.camera = min(CAMERA_RANGE[1], max(CAMERA_RANGE[0], self.camera + direction))
+        elif key == "model":
+            self.model = MODEL_CHOICES[(MODEL_CHOICES.index(self.model) + direction) % len(MODEL_CHOICES)]
         else:
             low, high, step = PLAN_BOUNDS[key]
             value = getattr(self.plan, key) + direction * step
@@ -179,6 +187,10 @@ class SettingsForm:
             return "Oui" if value else "Non"
         if key == "camera":
             return str(self.camera)
+        if key == "model":
+            if self.model is None and self.auto_lite:
+                return "Auto (rapide)"
+            return MODEL_LABELS[self.model]
         text = f"{value:g}"
         if language == "fr":
             text = text.replace(".", ",")
@@ -235,14 +247,14 @@ def render_settings(form, output_size=None, language="fr"):
     p.text((48, 30), "Réglages kiné", 34)
     p.text((50, 78), "Le plan du patient. Chaque valeur reste dans des limites sûres.", 16, MUTED)
     hit_boxes = []
-    rows_per_column = 7
+    rows_per_column = 8
     for index, (key, label, unit) in enumerate(FIELDS):
         column, row = divmod(index, rows_per_column)
-        x, y = 48 + column * 612, 124 + row * 84
-        p.rect((x, y, x + 584, y + 72), fill=(255, 255, 255), outline=(214, 220, 219), radius=12)
-        p.wrap((x + 20, y + 12), label, 260, 17, TEXT, max_lines=2)
-        p.text((x + 300, y + 20), form.value_text(key, unit, language), 22, TEXT, True)
-        minus, plus = (x + 444, y + 10, x + 504, y + 62), (x + 514, y + 10, x + 574, y + 62)
+        x, y = 48 + column * 612, 112 + row * 74
+        p.rect((x, y, x + 584, y + 64), fill=(255, 255, 255), outline=(214, 220, 219), radius=12)
+        p.wrap((x + 20, y + 10), label, 260, 17, TEXT, max_lines=2)
+        p.fit((x + 300, y + 16), form.value_text(key, unit, language), 136, 22, TEXT, True)
+        minus, plus = (x + 444, y + 8, x + 504, y + 56), (x + 514, y + 8, x + 574, y + 56)
         draw_button(p, minus, "−", size=26)
         draw_button(p, plus, "+", size=26)
         hit_boxes += [(f"set:-:{key}", minus), (f"set:+:{key}", plus)]
@@ -250,6 +262,8 @@ def render_settings(form, output_size=None, language="fr"):
         p.text((760, 34), f"Angle de repos mesuré : {form.resting_angle:.0f}°", 17, TEXT, True)
         if form.resting_date:
             p.text((760, 62), f"Mesuré le {form.resting_date}", 14, MUTED)
+    if form.model is None and form.auto_lite:  # the app chose the fast model by itself (Phase 6.4)
+        p.text((760, 86), FAST_MODEL_NOTE, 14, MUTED)
     if form.warning:
         p.wrap((48, 718), form.warning, 760, 15, (176, 58, 46), max_lines=2)
     if form.message:
