@@ -38,6 +38,8 @@ EN = {
     "Changer le code": "Change the PIN",
     "Enregistrer": "Save",
     "Code modifié.": "PIN changed.",
+    "Le repos mesuré est proche de la cible : le plan garde ses valeurs. Baissez la cible minimale ou relevez le repos maximal.":
+        "The measured rest is close to the target, so the plan keeps its values. Lower the target minimum or raise the rest maximum.",
     # Header and panels
     "Épaule / séance guidée": "Shoulder / guided session",
     "VOTRE COACH": "YOUR COACH",

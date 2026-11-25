@@ -18,6 +18,7 @@ class CalibrationData:
     baseline_rest_angle_deg: Optional[float] = None
     baseline_trunk_lean_deg: Optional[float] = None
     reference_mode: str = "shoulders"
+    rest_angle_median_deg: Optional[float] = None  # the patient's own resting angle (median)
 
 
 class CalibrationManager:
@@ -126,7 +127,10 @@ class CalibrationManager:
         if (stds[1] / means[1] > self.max_variance_ratio or stds[2] > 3 or stds[3] > 3):
             return self._reject(Cue.CAL_MOVED)
         mode = "torso" if means[3] is not None else "shoulders"
-        self.calibrated_data = CalibrationData(True, self._active_arm, *means, reference_mode=mode)
+        angles = sorted(sample[2] for sample in self._samples if sample[2] is not None)
+        median = angles[len(angles) // 2] if len(angles) % 2 else (sum(angles[len(angles) // 2 - 1:len(angles) // 2 + 1]) / 2 if angles else None)
+        self.calibrated_data = CalibrationData(True, self._active_arm, *means, reference_mode=mode,
+                                               rest_angle_median_deg=median)
         self._is_calibrating = False
         self._set(Cue.CAL_DONE_TIGHT if mode == "shoulders" else Cue.CAL_DONE)
         return True, self.status_message

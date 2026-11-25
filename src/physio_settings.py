@@ -106,6 +106,16 @@ class PinPad:
 
 
 # --------------------------------------------------------------------------- the plan form
+REST_WARNING = ("Le repos mesuré est proche de la cible : le plan garde ses valeurs. "
+                "Baissez la cible minimale ou relevez le repos maximal.")
+
+
+def short_date(iso):
+    """2026-11-25 -> 25/11/2026 (empty when unknown)."""
+    parts = str(iso or "").split("-")
+    return "/".join(reversed(parts)) if len(parts) == 3 else ""
+
+
 # (key, French label, unit). The arm and seated rows are choices; the rest are numbers.
 FIELDS = (
     ("arm", "Bras", ""),

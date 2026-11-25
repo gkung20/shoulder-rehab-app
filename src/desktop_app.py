@@ -8,6 +8,7 @@ The OpenCV window sits behind `Window`, which tests replace with a fake.
 """
 from __future__ import annotations
 
+import datetime
 import sys
 import time
 from collections import deque
@@ -290,6 +291,7 @@ class App:
         self._last_audio_status = None
         self.screens = {screen.name: screen for screen in (HomeScreen(), ExerciseScreen(), PinScreen(), SettingsScreen())}
         self.modal = None  # a screen shown over Willy's flow (PIN pad, settings); Willy waits meanwhile
+        self._calibrations_seen = 0
         self._devices = ExitStack()
 
     @property
@@ -314,9 +316,11 @@ class App:
 
     def new_form(self):
         form = physio.SettingsForm(self.plan)
-        resting = getattr(self.profile, "resting_angle", None)
-        if resting is not None:
-            form.resting_angle, form.resting_date = resting, getattr(self.profile, "resting_date", "")
+        if self.profile.resting_angle is not None:
+            form.resting_angle = self.profile.resting_angle
+            form.resting_date = physio.short_date(self.profile.resting_date)
+        if self.profile.rest_warning:
+            form.warning = physio.REST_WARNING
         return form
 
     def save_plan(self, plan):
@@ -441,6 +445,9 @@ class App:
             analysis = self.processor.process(landmarks, self.detector.last_world_landmarks, width, height, self.now_sec)
             if self.hand_detector is not None:
                 analysis.hands = self.hand_detector.detect(frame, timestamp_ms, landmarks)
+            if self.processor.calibrations_done != self._calibrations_seen:
+                self._calibrations_seen = self.processor.calibrations_done
+                self.remember_resting_angle()
             # During the first guided movements, Willy's tour speaks the phases and results itself.
             if not director.coaching or analysis.cue.level == FeedbackLevel.WARNING:
                 self.audio.speak_cue(analysis.cue)
@@ -507,7 +514,17 @@ class App:
         return self.screen.on_key(self, key)
 
     # ----------------------------------------------------------------- helpers
+    def remember_resting_angle(self):
+        """Keep the resting angle measured at calibration, for the physio's settings screen."""
+        processor, profile = self.processor, self.profile
+        if processor.resting_angle is not None:
+            profile.resting_angle = round(processor.resting_angle, 1)
+            profile.resting_date = datetime.date.today().isoformat()
+        profile.rest_warning = processor.rest_warning
+        profile.save()
+
     def new_processor(self):
+        self._calibrations_seen = 0
         self.processor = SessionProcessor(self.config, self.processor.arm, exercise=self.exercise, plan=self.plan)
         self.processor.model_info = self.detector.model_info.copy()
 

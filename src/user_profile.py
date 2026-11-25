@@ -152,6 +152,9 @@ class Profile:
     schema_version: int = SCHEMA_VERSION
     pin_salt: str = ""              # physio PIN: salt and PBKDF2 hash (src.physio_settings); empty = 0000
     pin_hash: str = ""
+    resting_angle: float | None = None  # resting abduction measured at the last calibration (deg)
+    resting_date: str = ""          # ISO date of that measurement
+    rest_warning: bool = False      # resting too close to the target: the plan's thresholds were kept
 
     @classmethod
     def load(cls, path=None):
@@ -177,6 +180,10 @@ class Profile:
         history = profile.plan_history if isinstance(profile.plan_history, list) else []
         profile.plan_history = [h for h in history if isinstance(h, dict)][-MAX_PLAN_HISTORY:]
         profile.schema_version = SCHEMA_VERSION
+        if not isinstance(profile.resting_angle, (int, float)) or isinstance(profile.resting_angle, bool):
+            profile.resting_angle = None
+        profile.resting_date = str(profile.resting_date or "") if _parse(profile.resting_date) else ""
+        profile.rest_warning = profile.rest_warning is True
         profile._path = path
         return profile
 

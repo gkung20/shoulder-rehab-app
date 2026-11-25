@@ -3,7 +3,7 @@
 FrameAnalysis is a presentation-neutral contract: the avatar can consume
 the same observed joints, phase, target and cue without influencing assessment.
 """
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 import math
 from typing import Optional
@@ -61,6 +61,12 @@ def repetition_log(evaluation):
     }
 
 
+CALIBRATION_MARGIN_DEG = 15.  # calibration accepts a resting arm up to target min - 15 deg
+REST_MARGIN_DEG = 8.          # rest threshold = resting angle + 8 deg
+RISE_MARGIN_DEG = 7.          # rise threshold = rest threshold + 7 deg
+TARGET_GAP_DEG = 10.          # the rise threshold stays at least 10 deg below the target
+
+
 class SessionProcessor:
     def __init__(self, config=None, arm="right", rules_engine=None, exercise=None, plan=None):
         """`exercise` (src.exercises.Exercise, default: abduction) and then the patient's `plan`
@@ -77,11 +83,18 @@ class SessionProcessor:
         self.session_id = uuid4().hex
         self.started_at = datetime.now(timezone.utc).isoformat()
         self.smoother = MultiMetricSmoother(self.config.filtering.ema_alpha)
+        # Calibration accepts a resting arm a little raised (a stiff shoulder's own rest), but not an
+        # arm clearly raised toward the target; the rest and rise thresholds then follow (Phase 2.3).
+        self._planned_abduction = self.config.abduction
+        ceiling = max(self.config.abduction.rest_threshold_deg, self.config.abduction.target_min_deg - CALIBRATION_MARGIN_DEG)
         self.calibrator = CalibrationManager(
             self.config.calibration.duration_sec, self.config.calibration.max_variance_ratio,
-            self.config.filtering.min_landmark_visibility, self.config.abduction.rest_threshold_deg,
+            self.config.filtering.min_landmark_visibility, ceiling,
             self.config.compensation.max_trunk_lean_deg,
         )
+        self.resting_angle = None      # median resting angle of the last calibration
+        self.rest_warning = False      # resting too close to the target: the plan's values were kept
+        self.calibrations_done = 0
         a = self.config.abduction
         self.state_machine = RepetitionStateMachine(a.rest_threshold_deg, a.rising_start_deg,
             a.target_min_deg, a.target_max_deg, self.config.timing.min_hold_time_sec, arm)
@@ -94,6 +107,26 @@ class SessionProcessor:
         self.interrupted_attempts = 0
         self.frames_total = 0
         self.frames_tracked = 0
+
+    def _adapt_rest(self, resting):
+        """Rest threshold = max(planned rest, resting + 8 deg); rise = rest + 7 deg, unless the
+        rise would come within 10 deg of the target: then the plan's values stay (rest_warning)."""
+        planned = self._planned_abduction
+        self.calibrations_done += 1
+        resting = None if resting is None else round(resting, 1)
+        self.resting_angle, self.rest_warning = resting, False
+        rest, rise = planned.rest_threshold_deg, planned.rising_start_deg
+        if resting is not None and resting + REST_MARGIN_DEG > planned.rest_threshold_deg:
+            candidate = resting + REST_MARGIN_DEG
+            if candidate + RISE_MARGIN_DEG > planned.target_min_deg - TARGET_GAP_DEG:
+                self.rest_warning = True
+            else:
+                rest, rise = candidate, candidate + RISE_MARGIN_DEG
+        abduction = replace(planned, rest_threshold_deg=rest, rising_start_deg=rise)
+        if abduction != self.config.abduction:
+            self.config = replace(self.config, abduction=abduction)
+            self.rules_engine.config = self.config
+        self.state_machine.rest_threshold_deg, self.state_machine.rising_start_deg = rest, rise
 
     def recalibrate(self, arm=None, timestamp_sec=None):
         if timestamp_sec is None:
@@ -168,6 +201,8 @@ class SessionProcessor:
             calibration_pts = [p if visible((i,)) else type(p)(p.x, p.y, 0.) for i,p in enumerate(pts)]
             self.calibrator.update(calibration_pts if shoulders_ok else None, self.arm, now)
             frame.calibration_progress = self.calibrator.get_progress() if self.calibrator.is_calibrating else None
+            if not self.calibrator.is_calibrating and self.calibrator.calibrated_data.is_calibrated:
+                self._adapt_rest(self.calibrator.calibrated_data.rest_angle_median_deg)
         baseline = self.calibrator.calibrated_data
         if baseline.is_calibrated and baseline.reference_mode == "torso" and not torso_ok:
             # Changing angle definitions in a movement would corrupt its peak/timing.
