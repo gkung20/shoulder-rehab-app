@@ -196,7 +196,8 @@ def trend(days):
 TREND_LINES = {"improving": "E7.04", "steady": "E7.05", "lower": "E7.06", None: "E7.07"}
 
 
-def render_history(records, output_size=None, language="fr", streak=0, period="30", today=None, message=""):
+def render_history(records, output_size=None, language="fr", streak=0, period="30", today=None, message="",
+                   can_open=False):
     """The last 30 days as a BGR image, and its hit boxes (back, export period, export)."""
     today = today or dt.date.today()
     canvas, p = _canvas(output_size, language)
@@ -260,7 +261,7 @@ def render_history(records, output_size=None, language="fr", streak=0, period="3
     line_id = TREND_LINES[trend(days)]
     p.wrap((48, 688), shared_script().text(line_id, language), 1180, 18, TEXT, max_lines=2)
     if message:
-        p.text((560, 742), message, 15, QUALITY_COLOURS["correct"], True)
+        p.text((48, 742), message, 15, QUALITY_COLOURS["correct"], True)
     hit_boxes = []
     draw_button(p, (48, 772, 228, 820), "Retour", size=18)
     hit_boxes.append(("history_back", (48, 772, 228, 820)))
@@ -269,6 +270,9 @@ def render_history(records, output_size=None, language="fr", streak=0, period="3
         bounds = (560 + i * 136, 772, 684 + i * 136, 820)
         draw_button(p, bounds, labels[key], primary=key == period, size=17)
         hit_boxes.append((f"period:{key}", bounds))
+    if can_open:
+        draw_button(p, (244, 772, 520, 820), "Ouvrir le dossier", size=17)
+        hit_boxes.append(("history_open_folder", (244, 772, 520, 820)))
     draw_button(p, (1000, 772, 1232, 820), "Exporter", primary=True, size=18)
     hit_boxes.append(("history_export", (1000, 772, 1232, 820)))
     return _finish(canvas), hit_boxes, line_id

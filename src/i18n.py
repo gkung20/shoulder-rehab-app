@@ -51,6 +51,8 @@ EN = {
     "DOULEUR AVANT LA SÉANCE (0-10)": "PAIN BEFORE THE SESSION (0-10)",
     "7 jours": "7 days", "30 jours": "30 days", "Tout": "All", "Exporter": "Export",
     "Mes résultats": "My results",
+    "Ouvrir le dossier": "Open the folder",
+    "L'export n'a pas pu être enregistré.": "The export could not be saved.",
     "REPOS": "REST",
     "PRÊT À REPRENDRE": "READY TO RESUME",
     "Appuyez sur Reprendre quand vous le souhaitez.": "Press Resume whenever you like.",

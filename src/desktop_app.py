@@ -9,8 +9,10 @@ The OpenCV window sits behind `Window`, which tests replace with a fake.
 from __future__ import annotations
 
 import datetime
+import os
 import sys
 import time
+from dataclasses import asdict
 from collections import deque
 from contextlib import ExitStack
 
@@ -28,7 +30,7 @@ from src import physio_settings as physio
 from src.pose_detector import PoseDetector
 from src.results_screen import render_history, render_results, results_lines
 from src.rules_engine import FeedbackLevel
-from src import session_store
+from src import history_export, session_store
 from src.session_plan import SetTracker
 from src.session_processor import FrameAnalysis, SessionProcessor
 from src.silhouette import patient_alignment
@@ -322,10 +324,12 @@ class HistoryScreen(Screen):
         self.message = ""
         self.hit_boxes = []
         self.said = False
+        self.folder = None   # the last export, for "Ouvrir le dossier"
 
     def draw(self, app, output_size):
         image, self.hit_boxes, line_id = render_history(self.records, output_size, app.director.language,
-                                                        app.profile.streak(), self.period, message=self.message)
+                                                        app.profile.streak(), self.period, message=self.message,
+                                                        can_open=self.folder is not None)
         if not self.said:
             self.said = True
             app.say_line(line_id)
@@ -341,6 +345,8 @@ class HistoryScreen(Screen):
             self.period = action.split(":", 1)[1]
         elif action == "history_export":
             app.export_history(self.period)
+        elif action == "history_open_folder" and self.folder is not None and hasattr(os, "startfile"):
+            os.startfile(self.folder)  # Windows Explorer
 
     def on_key(self, app, key):
         if key == ESCAPE:
@@ -403,7 +409,7 @@ class App:
                     self.audio.say(line, self.director.language, interrupt=False)
         elif name == "history":
             screen.records = session_store.load_sessions(since=datetime.date.today() - datetime.timedelta(days=29))
-            screen.said, screen.message = False, ""
+            screen.said, screen.message, screen.folder = False, "", None
         self.modal = name
 
     def close_modal(self):
@@ -647,7 +653,19 @@ class App:
             self.audio.say(shared_script().text(line_id, self.director.language, **values), self.director.language)
 
     def export_history(self, period):
-        """Written in the next step (Phase 3.4)."""
+        """PDF, CSV and session files for the physio, in Documents\\Mouvement; Willy confirms."""
+        screen = self.screens["history"]
+        try:
+            folder = history_export.export_history(session_store.load_sessions(), period, self.director.language,
+                                                   asdict(self.plan), self.profile.name, self.processor.arm)
+        except (OSError, ValueError) as error:
+            print(f"[EXPORT] {error}")
+            screen.message = "L'export n'a pas pu être enregistré."
+            return None
+        screen.folder = folder
+        screen.message = f"Fichiers enregistrés dans {folder.parent.name}{os.sep}{folder.name}"
+        self.say_line("E8.02")
+        return folder
 
     def count_for_plan(self):
         """A counted movement: at the end of a set, rest; at the end of the plan, finish."""

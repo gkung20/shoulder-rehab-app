@@ -81,6 +81,9 @@ def patient(window):
         window.state = 3
     elif state == 3 and app.modal == "history":
         window.click_action("period:7", app.screens["history"].hit_boxes)
+        window.click_action("history_export", app.screens["history"].hit_boxes)
+        window.state = 31
+    elif state == 31 and app.modal == "history" and app.screens["history"].folder is not None:
         window.click_action("history_back", app.screens["history"].hit_boxes)
         window.state = 4
     elif state == 4 and app.modal == "results":
@@ -92,9 +95,13 @@ def patient(window):
 
 
 def test_results_and_history_open_after_a_session(monkeypatch, tmp_path):
+    monkeypatch.setenv("MOUVEMENT_EXPORT_DIR", str(tmp_path / "exports"))
     window = ScriptedWindow(patient)
     app = make_app(monkeypatch, tmp_path, window, language="en", tour_done=True)
     assert app.run() == 0 and window.state == 6
+    exported = list((tmp_path / "exports").iterdir())
+    assert len(exported) == 1 and (exported[0] / "bilan.pdf").exists() and (exported[0] / "mouvements.csv").exists()
     assert app.screens["history"].period == "7" and app.screens["results"].record["totals"]["reps"] >= 1
     said = [call.args[0] for call in app.fake_audio.say.call_args_list]
     assert any("movement" in line for line in said) and any(line.startswith("Your history starts here") for line in said)
+    assert "I've saved the report in the Mouvement folder of your Documents." in said
