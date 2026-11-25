@@ -1,5 +1,6 @@
 """The whole desktop app runs headless: home, a session with two counted movements, close."""
 from src import layout as L
+from src.session_store import load_sessions
 from src.user_profile import Profile
 from tests.app_fakes import ScriptedWindow, make_app
 
@@ -26,3 +27,5 @@ def test_app_runs_headless_from_home_to_a_finished_session(monkeypatch, tmp_path
     assert app.processor.rules_engine.session.total_repetitions >= 2
     assert window.shown >= 300 and window.closed
     assert Profile.load().session_days  # the session was recorded in the profile
+    sessions = load_sessions()
+    assert len(sessions) == 1 and sessions[0]["totals"]["reps"] >= 2 and not sessions[0]["partial"]

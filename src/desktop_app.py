@@ -27,6 +27,7 @@ from src.patient_controls import PatientControls, dashboard_action_at
 from src import physio_settings as physio
 from src.pose_detector import PoseDetector
 from src.rules_engine import FeedbackLevel
+from src import session_store
 from src.session_plan import SetTracker
 from src.session_processor import FrameAnalysis, SessionProcessor
 from src.silhouette import patient_alignment
@@ -151,6 +152,7 @@ class ExerciseScreen(Screen):
         if not controls.apply(action):
             return
         if action == "replay_tour":
+            app.save_session(partial=old_mode in ("running", "paused"))
             app.director.session_recorded(app.processor.rules_engine.session)
             app.processor.finish()
             app.new_processor()
@@ -159,10 +161,13 @@ class ExerciseScreen(Screen):
         elif action == "start":
             app.processor.recalibrate(timestamp_sec=app.now_sec)
             app.sets = SetTracker.from_plan(app.plan)
+            app.begin_log()
             audio.begin_session()
         elif action in ("pause", "finish") or (action == "help" and old_mode == "running"):
             app.processor.finish()
             audio.silence()
+            if action == "finish":
+                app.save_session()
         elif action == "resume" and app.sets is not None and app.sets.waiting:
             app.sets.next_set()
             app.director.set_started(app.sets.current_set, app.sets.is_last_set)
@@ -171,6 +176,7 @@ class ExerciseScreen(Screen):
         elif action == "resume" and app.processor.calibrator.is_calibrating:
             app.processor.recalibrate(timestamp_sec=app.now_sec)
         elif action == "restart":
+            app.save_session()
             app.director.session_recorded(app.processor.rules_engine.session)
             app.new_processor()
             app.sets = None
@@ -302,6 +308,9 @@ class App:
         self.modal = None  # a screen shown over Willy's flow (PIN pad, settings); Willy waits meanwhile
         self._calibrations_seen = 0
         self.sets = None   # sets of the plan, from Start to the end of the session
+        self.log = None    # the session being recorded (src.session_store.SessionLog)
+        self.last_record = None
+        self._session_t0 = 0.
         self._devices = ExitStack()
 
     @property
@@ -396,6 +405,7 @@ class App:
         self.window.open(window_size(), self.on_mouse)
 
     def close(self):
+        self.save_session(partial=self.controls.mode in ("running", "paused"))
         self._devices.close()  # audio, pose model, camera
         if self.director is not None:
             self.director.session_recorded(self.processor.rules_engine.session)
@@ -463,6 +473,8 @@ class App:
                 self.audio.speak_cue(analysis.cue)
             if analysis.new_evaluation and not director.coaching:
                 self.audio.speak_evaluation(analysis.new_evaluation)
+            if analysis.new_evaluation and self.log is not None:
+                self.log.add_rep(analysis.new_evaluation, self.now_sec - self._session_t0)
             if analysis.new_evaluation and self.sets is not None:
                 self.count_for_plan()
         elif director.wants_tracking:
@@ -528,6 +540,25 @@ class App:
         return self.screen.on_key(self, key)
 
     # ----------------------------------------------------------------- helpers
+    def begin_log(self):
+        self.log = session_store.SessionLog.start(self.exercise.id, self.processor.arm, self.plan)
+        self._session_t0 = self.now_sec
+
+    def save_session(self, partial=False):
+        """Save the session once (no images: numbers per movement). Never stops the app."""
+        log = self.log
+        if log is None or log.saved or not log.worth_saving:
+            return None
+        record = log.record(sets=self.sets, model=str(self.processor.model_info.get("file", "")), fps=self.fps,
+                            resting_angle=self.processor.resting_angle, partial=partial)
+        try:
+            path = session_store.save_session(record)
+        except OSError as error:
+            print(f"[SÉANCE] Impossible d'enregistrer la séance : {error}")
+            return None
+        log.saved, self.last_record = True, record
+        return path
+
     def count_for_plan(self):
         """A counted movement: at the end of a set, rest; at the end of the plan, finish."""
         event = self.sets.add_rep(time.monotonic())
