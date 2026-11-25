@@ -86,6 +86,22 @@ Willy s’affiche aussi dans sa **bulle** : l’application reste utilisable son
   l'inclinaison du buste est estimée par la ligne des épaules.
 - Analyse des risques : `docs/risk-analysis.md`.
 
+## Mains libres et caméra robuste
+
+- **Geste de la main libre** : pendant la séance, gardez la main du bras qui ne travaille pas
+  au-dessus de la tête 2 secondes pour faire une pause ; après une pause faite à distance (geste,
+  ou repos entre les séries), le même geste reprend. Un anneau se remplit autour du poignet et
+  Willy dit « C'est noté ! ». Le bras qui travaille ne déclenche jamais le geste. Aucun suivi n'a
+  lieu sur l'accueil ni après une pause cliquée à l'ordinateur.
+- **Une seule personne suivie** : le modèle cherche deux personnes (`pose.num_poses: 2`) ; la séance
+  suit le patient de la calibration et ignore quelqu'un qui passe derrière. Mettez `1` pour un PC lent.
+- **Caméra** : son numéro se règle dans les réglages kiné (ou `--camera`). Si elle se débranche,
+  la fenêtre reste ouverte, l'application réessaie toutes les 2 secondes et la séance reprend.
+- **Démarrage** : la fenêtre s'ouvre tout de suite avec Willy (« Je me prépare… ») pendant le
+  chargement ; les temps de démarrage s'affichent dans la console.
+- **Face à la caméra** : si le corps se tourne (environ 25° ou plus), Willy demande de se remettre
+  face à la caméra et rien n'est compté, car l'angle 2D serait faux.
+
 ## Silhouette guide en vue caméra
 
 En vue caméra (**Voir la caméra** ou **V**), un petit bouton **Silhouette** en
@@ -440,6 +456,9 @@ shoulder-rehab-app/
 │   ├── history_export.py       # Export pour le kiné : PDF, CSV et fichiers des séances
 │   ├── pain_screen.py          # Question de douleur (0-10) et choix après « J'ai mal »
 │   ├── safety.py               # Règles d'arrêt : durée, fatigue, douleur répétée
+│   ├── gesture.py              # Geste de la main libre (pause / reprise à distance)
+│   ├── person_lock.py          # Suivi du seul patient quand plusieurs personnes sont visibles
+│   ├── notice_screen.py        # Écrans simples avec Willy (chargement, caméra, erreur)
 │   ├── session_processor.py    # Pipeline commun OpenCV, Streamlit et évaluation vidéo
 │   ├── dashboard.py            # Interface patient minimale dessinée à la résolution native
 │   ├── patient_controls.py     # Boutons et états de la séance, communs au rendu et aux clics

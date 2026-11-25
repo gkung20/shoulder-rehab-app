@@ -19,7 +19,7 @@ Updated after every phase.
 | 2 Plan per patient | done | plan in profile, physio settings (PIN 0000), resting angle, sets |
 | 3 Results and history | done | session files, results screen, 30-day history, export PDF/CSV/JSON |
 | 4 Safety | done | pain check, J'ai mal, stop rules, seated mode, risk analysis |
-| 5 Hands-free, camera | to do | 5.2 not chosen |
+| 5 Hands-free, camera | done | gesture, person lock, camera reconnect, fast start, face check (5.2 not chosen) |
 | 6 Speed | to do | |
 | 7 Validation tools | to do | |
 | 8 Ready to share | to do | 8.2 not chosen |
@@ -33,7 +33,7 @@ Updated after every phase.
 - Installed there: `pose_landmarker_full.task`, `pose_landmarker_lite.task`, `hand_landmarker.task`,
   `fr_FR-tom-medium` and `en_US-ryan-medium`. Python 3.13 on Windows (see `constraints-windows-py313.txt`).
 - No shell on the PC this run, so files are synced by copying.
-- Last synced commit: `8d159f3` (end of Phase 3); updated after each phase.
+- Last synced commit: `7b224cc` (end of Phase 4); updated after each phase.
 
 ## Baseline (before)
 
@@ -79,6 +79,17 @@ Marwane's PC numbers will differ; run the same command there to compare.
   natural tilt as the arm rises; this is only used when the plan says seated.
 - Phase 4.5: the risk analysis is in French, like the README; it names the tests of later phases,
   and a test checks that every named test exists once its phase lands.
+- Phase 5.1: gestures only on the session screen (pause while counting; resume after a pause made from
+  a distance), so the camera model never runs on Willy's home or after a pause clicked at the PC, as
+  before. Not on the tour or results screens.
+- Phase 5.3: the lock re-finds the patient only by position (never switches to someone else after a
+  delay); a new session, an arm change or C restarts it.
+- Phase 5.4: no camera probing at first use (DirectShow is slow to open cameras); the camera number
+  is set in the physio settings.
+- Phase 5.5: loading stays on the main thread (Panda3D, the OpenCV window and the Windows DLL order
+  need it); the window is refreshed between steps instead.
+- Phase 5.6: the face check fires from about 24 deg with depth, 32 deg without.
+- New Willy lines: E3.10 (gesture recognised); E6.08 reworded (the app now retries).
 - New Willy lines: E9.01, E9.03 to E9.12 (pain and safety).
 - New Willy lines: E6.09, E6.10, E6.11 (sets), E8.01 (plan updated), E7.04 to E7.07 (history trend),
   E8.02 (export saved); in lines.yaml, and added to the script doc at the end of the sprint.
@@ -87,6 +98,12 @@ Marwane's PC numbers will differ; run the same command there to compare.
 
 ## To test on the PC
 
+- After Phase 5: during a session, hold your free hand above your head for 2 s (pause), then again
+  (resume); ask someone to walk behind you; unplug the camera for a few seconds and plug it back;
+  turn your body about 30 deg and check Willy asks you to face the camera. Note the startup times
+  printed in the console ("[DÉMARRAGE] Fenêtre en … s, prêt en … s") and add them here.
+- After Phase 5: check that "face the camera" never shows when you stand straight (MediaPipe's depth
+  is noisy; the thresholds are in config/exercise_config.yaml, filtering:).
 - After Phase 4: start a session and answer the pain question (try 2, 5 and 8 on three days); during a
   session press "J'ai mal" (or P); try the seated mode from the physio settings.
 - After Phase 3: finish a session, press "Mon bilan", then "Historique", choose a period and
