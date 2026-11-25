@@ -55,7 +55,8 @@ class StageTimer:
             self.log()
 
     def lines(self):
-        return [f"{self.fps:5.1f} img/s ecran  {self.pose_fps:5.1f} img/s pose"] + [
+        # one language for this developer overlay (stage names, units): English
+        return [f"screen {self.fps:5.1f} fps  pose {self.pose_fps:5.1f} fps"] + [
             f"{stage:<9}{self.ms[stage]:6.1f} ms" for stage in STAGES]
 
     def overlay(self, image):
