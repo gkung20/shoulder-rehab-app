@@ -84,6 +84,9 @@ def test_native_mouse_buttons_pause_inference_and_finish_before_closing(monkeypa
     monkeypatch.setattr(app,"AvatarStage",lambda: Mock())
     hands=Mock(detect=Mock(return_value={}))
     monkeypatch.setattr(app,"HandDetector",lambda: hands)
+    hand_file=tmp_path/"hand_landmarker.task"
+    hand_file.write_bytes(b"x")
+    monkeypatch.setattr(app,"HAND_MODEL_PATH",hand_file)  # the optional hand model is "installed"
     monkeypatch.setattr(app,"enable_high_dpi",lambda: None)
     monkeypatch.setattr(app.Window,"pump",lambda self: None)  # loading screens: no key reads
     created=[]
@@ -94,7 +97,8 @@ def test_native_mouse_buttons_pause_inference_and_finish_before_closing(monkeypa
         created.append(processor)
         return processor
     monkeypatch.setattr(app,"SessionProcessor",make_processor)
-    saved_config=replace(config(),performance=replace(config().performance,pose_thread=False))
+    # The hand model is off by default (Phase 6.5); switched on here so its pausing is checked too.
+    saved_config=replace(config(),performance=replace(config().performance,pose_thread=False,hand_model=True))
     monkeypatch.setattr(cli.ExerciseConfig,"from_yaml",lambda: saved_config)
     class Capture:
         status_message="Test camera"
@@ -150,9 +154,8 @@ def test_native_mouse_buttons_pause_inference_and_finish_before_closing(monkeypa
     assert cli.main(["--skip-home"]) == 0
     assert created[0].process.call_count == 4
     assert detector.detect.call_count == 4
-    if app.HAND_MODEL_PATH.exists():
-        assert hands.detect.call_count == 4
-        hands.close.assert_called_once()
+    assert hands.detect.call_count == 4
+    hands.close.assert_called_once()
     assert all(size == window_dimensions for size in rendered_sizes)
     assert all(shape == (window_dimensions[1],window_dimensions[0],3) for shape in displayed_shapes)
     audio.begin_session.assert_called_once()

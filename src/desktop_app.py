@@ -561,10 +561,13 @@ class App:
         if not args.no_avatars:
             self.show_loading("Préparation des avatars 3D…")
             self.avatar_stage = AvatarStage()
-        if not args.no_hands and HAND_MODEL_PATH.exists():
+        # The hand model only adds palms and fingers to the avatars and costs time on every frame,
+        # so it is off unless asked for (performance.hand_model: true, or --hands).
+        wants_hands = not args.no_hands and (config.performance.hand_model or getattr(args, "hands", False))
+        if wants_hands and HAND_MODEL_PATH.exists():
             self.hand_detector = HandDetector()
             print("[MAINS] Suivi detaille des paumes et doigts actif.")
-        elif not args.no_hands:
+        elif wants_hands:
             print("[MAINS] Modele optionnel absent : python models/download_models.py hand_landmarker.task")
         self.show_loading("Démarrage de la caméra…")
         c = config.camera
