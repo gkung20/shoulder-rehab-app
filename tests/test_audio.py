@@ -6,7 +6,6 @@ from types import SimpleNamespace
 
 from src.audio_feedback import AudioCoach
 from src.rules_engine import FeedbackLevel, LiveFeedback, RepetitionEvaluation, ClinicalError
-from src.state_machine import RepetitionMetrics
 
 
 @pytest.fixture(autouse=True)

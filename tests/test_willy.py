@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from src.config import ExerciseConfig
-from src.dashboard import WILLY_BOX, render_dashboard, CANVAS_SIZE
+from src.dashboard import WILLY_BOX, render_dashboard
 from src.session_processor import FrameAnalysis, SessionProcessor
 from src.state_machine import ExercisePhase
 from src.speech import willy_voice

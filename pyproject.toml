@@ -1,0 +1,9 @@
+# Lint settings only: the app is run with `python app_live_cv.py`, not installed as a package.
+[tool.ruff]
+target-version = "py311"
+extend-exclude = ["models", "data", "assets"]
+
+[tool.ruff.lint]
+# A deliberately small rule set: syntax errors and pyflakes (unused imports and
+# variables, undefined names). No style rules, so diffs stay easy to read.
+select = ["E9", "F"]

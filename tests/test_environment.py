@@ -1,7 +1,6 @@
 """Sanity check for Phase 0: verify runtime environment, libraries, and config."""
 
 from pathlib import Path
-import pytest
 import yaml
 from tests.conftest import requires_pose_model
 
@@ -22,7 +21,6 @@ def test_core_imports():
 @requires_pose_model
 def test_mediapipe_tasks_pose_landmarker():
     """Verify modern MediaPipe Tasks PoseLandmarker loads with local task model."""
-    import mediapipe as mp
     from mediapipe.tasks import python
     from mediapipe.tasks.python import vision
 

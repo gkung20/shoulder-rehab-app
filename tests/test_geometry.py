@@ -9,8 +9,6 @@ from src.geometry import (
     calculate_angle_2d,
     calculate_abduction_angle,
     calculate_elbow_angle,
-    calculate_distance_2d,
-    get_midpoint,
     calculate_trunk_lean,
     calculate_shoulder_shrug,
     calculate_anterior_drift_angle,

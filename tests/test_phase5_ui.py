@@ -1,11 +1,8 @@
 """Unit tests for Phase 5 Streamlit data structures and report generation."""
 
 import pandas as pd
-import pytest
 
 from src.config import ExerciseConfig, AbductionThresholds, CompensationThresholds, TimingThresholds
-from src.rules_engine import RulesEngine, RepetitionEvaluation, ClinicalError
-from src.state_machine import RepetitionMetrics
 
 
 def test_streamlit_config_dynamic_construction():

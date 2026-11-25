@@ -7,12 +7,10 @@ Provides:
 """
 
 import argparse
-import sys
-import time
 
 from src.config import ExerciseConfig
 from src.rules_engine import RulesEngine
-from src.state_machine import ExercisePhase, RepetitionStateMachine
+from src.state_machine import RepetitionStateMachine
 
 
 def run_simulation():

@@ -10,7 +10,7 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 import sys
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 import cv2
 from src.config import ExerciseConfig
 from src.pose_detector import PoseDetector

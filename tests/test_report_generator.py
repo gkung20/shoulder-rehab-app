@@ -1,7 +1,5 @@
 """Unit tests for src/report_generator.py clinical PDF reporting."""
 
-from pathlib import Path
-import pytest
 
 from src.report_generator import generate_clinical_pdf_report
 from src.rules_engine import ClinicalError, RepetitionEvaluation, SessionSummary

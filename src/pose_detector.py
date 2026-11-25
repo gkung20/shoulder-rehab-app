@@ -6,7 +6,7 @@ Operates fully offline using local .task model bundles.
 
 from pathlib import Path
 import hashlib
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 import cv2
 import mediapipe as mp
 from mediapipe.tasks import python

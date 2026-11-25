@@ -3,7 +3,6 @@ import datetime as dt
 from types import SimpleNamespace
 
 import numpy as np
-import pytest
 
 from src.rules_engine import ClinicalError, FeedbackLevel, LiveFeedback, RepetitionEvaluation
 from src.session_processor import FrameAnalysis

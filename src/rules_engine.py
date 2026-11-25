@@ -9,7 +9,7 @@ Evaluates biomechanical thresholds from exercise_config.yaml, providing:
 from collections import Counter
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from src.config import ExerciseConfig
 from src.state_machine import ExercisePhase, RepetitionMetrics

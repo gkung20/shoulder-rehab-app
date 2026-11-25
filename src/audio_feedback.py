@@ -11,7 +11,7 @@ import unicodedata
 
 from src.rules_engine import FeedbackLevel, LiveFeedback, RepetitionEvaluation
 from src.speech import create_speech_backend
-from src.willy_lines import LANGUAGES, Line, cue_line_id, result_line, shared_script
+from src.willy_lines import LANGUAGES, cue_line_id, result_line, shared_script
 
 LOGGER = logging.getLogger(__name__)
 

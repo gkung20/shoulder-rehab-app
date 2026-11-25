@@ -6,8 +6,12 @@ permissions:
   contents: read
 
 jobs:
-  windows-tests:
-    runs-on: windows-latest
+  tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -17,8 +21,19 @@ jobs:
           cache-dependency-path: |
             requirements.txt
             constraints-windows-py313.txt
-      - run: python -m pip install -r requirements.txt -c constraints-windows-py313.txt
-      - run: python models/download_models.py
-      - run: python models/download_models.py hand_landmarker.task
-      - run: python -m piper.download_voices fr_FR-siwis-medium --data-dir models/voices
-      - run: python -m pytest -q
+      - name: System libraries (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libportaudio2 libgl1 libegl1
+      - name: Install (Windows, pinned)
+        if: runner.os == 'Windows'
+        run: python -m pip install -r requirements.txt -c constraints-windows-py313.txt ruff
+      - name: Install (Linux)
+        if: runner.os == 'Linux'
+        run: python -m pip install -r requirements.txt ruff
+      - name: Lint
+        run: ruff check .
+      # Pose model, hand model and Willy's two voices, so the model and voice tests run.
+      - name: Download models and voices
+        run: python models/download_models.py
+      - name: Tests
+        run: python -m pytest -q

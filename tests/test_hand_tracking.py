@@ -4,7 +4,7 @@ from dataclasses import replace
 from types import SimpleNamespace as P
 import numpy as np
 import pytest
-from src.hand_detector import extract_hand,match_hands,HandObservation
+from src.hand_detector import extract_hand,match_hands
 from src.geometry import Point2D
 from src.avatar_motion import AvatarMotion,arm_pose
 from src.avatar_filter import SafeAvatarArms,arm_angles

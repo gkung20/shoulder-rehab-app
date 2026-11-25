@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from src.geometry import Point2D, calculate_abduction_angle, PoseLandmarkIndex
+from src.geometry import Point2D, PoseLandmarkIndex
 from src.pose_detector import PoseDetector
 from src.visualizer import draw_hud, draw_skeleton
 from tests.conftest import requires_pose_model

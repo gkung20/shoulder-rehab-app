@@ -7,7 +7,7 @@ phases of rehabilitation exercises while preventing jitter from triggering false
 from dataclasses import dataclass, field
 from enum import Enum
 import math
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 from src.geometry import calculate_trajectory_smoothness
 

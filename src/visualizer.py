@@ -6,7 +6,7 @@ import numpy as np
 
 from src.geometry import Point2D, PoseLandmarkIndex
 from src.rules_engine import LiveFeedback, FeedbackLevel, RepetitionEvaluation, SessionSummary
-from src.state_machine import ExercisePhase, RepetitionMetrics
+from src.state_machine import ExercisePhase
 
 # Standard colors in BGR format
 COLOR_ACTIVE_ARM = (0, 230, 115)       # Vibrant Spring Green
@@ -258,10 +258,6 @@ def draw_session_summary_modal(frame: np.ndarray, summary: SessionSummary) -> np
     cv2.putText(frame, f"Repetitions correctes  : {summary.correct_repetitions}", (cx + 35, cy + 106), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (100, 255, 100), 1, cv2.LINE_AA)
     cv2.putText(frame, f"Taux de reussite       : {summary.success_rate_percent:.1f} %", (cx + 35, cy + 132), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (0, 220, 255), 2, cv2.LINE_AA)
 
-    avg_fluid = 0.0
-    if summary.evaluations:
-        scores = [e.metrics.fluidity_score_pct for e in summary.evaluations if e.metrics and e.metrics.fluidity_score_pct is not None]
-        avg_fluid = sum(scores) / len(scores) if scores else 0.0
     cv2.putText(frame, f"Evaluables : {summary.assessed_repetitions}/{summary.total_repetitions}", (cx + 35, cy + 158), cv2.FONT_HERSHEY_SIMPLEX, 0.52, (0, 255, 200), 1, cv2.LINE_AA)
 
     cv2.putText(frame, "Compensations les plus frequentes :", (cx + 35, cy + 195), cv2.FONT_HERSHEY_SIMPLEX, 0.48, (200, 200, 200), 1, cv2.LINE_AA)
