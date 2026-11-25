@@ -97,8 +97,13 @@ class _Painter:
         self.draw.line((*self.point(x1,y1),*self.point(x2,y2)),fill=color,width=max(1,round(width*self.scale)))
 
 
-def patient_guidance(analysis,mode,processor,lang="fr"):
+def patient_guidance(analysis,mode,processor,lang="fr",sets=None,now=0.):
     """(title, body, status) for the guidance column; French, translated when drawn in English."""
+    if mode == "paused" and sets is not None and sets.waiting:
+        if sets.resting:
+            return ("Pause entre les séries",
+                    f"Reprise possible dans {max(1,round(sets.rest_left(now)))} s. Relâchez l'épaule et respirez.","REPOS")
+        return f"Série {sets.current_set+1}/{sets.sets}","Appuyez sur Reprendre quand vous le souhaitez.","PRÊT À REPRENDRE"
     if mode == "ready":
         return "Installez-vous", "Gardez les deux épaules et le coude visibles. Choisissez votre bras, puis commencez.", "AVANT DE COMMENCER"
     if mode == "paused":
@@ -233,7 +238,7 @@ def _silhouette_labels(p,guide_text):
 def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_enabled=True,audio_status="",
                      *,mode="running",details=False,help_visible=False,show_controls=True,output_size=None,
                      avatar_stage=None,avatars=True,avatar_gender="male",willy=None,speaking=False,
-                     silhouette=False,lang="fr",overlay=None):
+                     silhouette=False,lang="fr",overlay=None,sets=None,now=0.):
     """The patient screen. `overlay` (src.willy_overlay.Overlay) adds Willy's bubble and the tour's spotlight."""
     width,height=output_size or CANVAS_SIZE
     if width <= 0 or height <= 0:
@@ -289,14 +294,18 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
                else "Main absente : bras au repos",12,MUTED)
 
     p.rule(892,132,892,706)
-    title,body,status=patient_guidance(analysis,mode,processor,lang)
+    title,body,status=patient_guidance(analysis,mode,processor,lang,sets,now)
     p.text((920,132),status,11,MUTED)
     end=p.wrap((916,178),title,330,37,max_lines=3)
     p.wrap((920,end+18),body,322,18,MUTED,max_lines=4)
-    count=processor.rules_engine.session.total_repetitions
+    count=str(processor.rules_engine.session.total_repetitions)
+    label="RÉPÉTITIONS"
+    if sets is not None:  # the physio's plan: this set's movements out of the set's goal
+        count=f"{sets.reps_in_set}/{sets.reps_per_set}"
+        label=f"SÉRIE {sets.current_set}/{sets.sets}"
     p.rule(920,444,1248,444)
-    p.text((920,466),"RÉPÉTITIONS",12,MUTED)
-    p.text((912,484),str(count),min(100,round(260/max(1,len(str(count))))))
+    p.text((920,466),label,12,MUTED)
+    p.text((912,484),count,min(100,round(260/max(1,len(count)))))
     p.wrap((920,596),"Comptées au retour au repos",150,14,MUTED,max_lines=2)
     if analysis.calibration_progress and mode == "running":
         progress,_=analysis.calibration_progress

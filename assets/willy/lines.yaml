@@ -829,6 +829,21 @@ E6.03:
   anim: cheer
   en: "That's today's goal. Well done!"
   fr: "Objectif du jour atteint. Bravo !"
+E6.09:
+  moment: A set of the plan is done; the rest between sets starts
+  anim: calm
+  en: "Set {n} done. Have a rest."
+  fr: "Série {n} terminée. Reposez-vous."
+E6.10:
+  moment: The rest between sets is over
+  anim: point
+  en: "Set {n} whenever you like: press Resume."
+  fr: "Série {n} quand vous voulez : appuyez sur Reprendre."
+E6.11:
+  moment: The last set of the plan starts
+  anim: cheer
+  en: "Last set! You're nearly there."
+  fr: "Dernière série ! Vous y êtes presque."
 E6.04:
   moment: No movement for 30 s during a session
   anim: idle

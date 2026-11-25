@@ -38,6 +38,10 @@ EN = {
     "Changer le code": "Change the PIN",
     "Enregistrer": "Save",
     "Code modifié.": "PIN changed.",
+    "Pause entre les séries": "Rest between sets",
+    "REPOS": "REST",
+    "PRÊT À REPRENDRE": "READY TO RESUME",
+    "Appuyez sur Reprendre quand vous le souhaitez.": "Press Resume whenever you like.",
     "Le repos mesuré est proche de la cible : le plan garde ses valeurs. Baissez la cible minimale ou relevez le repos maximal.":
         "The measured rest is close to the target, so the plan keeps its values. Lower the target minimum or raise the rest maximum.",
     # Header and panels
@@ -142,6 +146,10 @@ _PATTERNS = [
      r"Estimated from the shoulders · Camera \1 · Model \2 · \3 fps"),
     (re.compile(r"^Angle depuis le tronc · Caméra (.*?) · Modèle (.*?) · (\d+) images/s$"),
      r"Angle from the trunk · Camera \1 · Model \2 · \3 fps"),
+    (re.compile(r"^Reprise possible dans (\d+) s\. Relâchez l'épaule et respirez\.$"),
+     r"You can resume in \1 s. Relax your shoulder and breathe."),
+    (re.compile(r"^Série (\d+)/(\d+)$"), r"Set \1/\2"),
+    (re.compile(r"^SÉRIE (\d+)/(\d+)$"), r"SET \1/\2"),
     (re.compile(r"^Trop d'essais\. Réessayez dans (\d+) s\.$"), r"Too many tries. Try again in \1 s."),
     (re.compile(r"^Angle de repos mesuré : (.*)$"), r"Measured resting angle: \1"),
     (re.compile(r"^Mesuré le (.*)$"), r"Measured on \1"),

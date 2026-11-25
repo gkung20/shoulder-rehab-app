@@ -27,6 +27,7 @@ from src.patient_controls import PatientControls, dashboard_action_at
 from src import physio_settings as physio
 from src.pose_detector import PoseDetector
 from src.rules_engine import FeedbackLevel
+from src.session_plan import SetTracker
 from src.session_processor import FrameAnalysis, SessionProcessor
 from src.silhouette import patient_alignment
 from src.willy import shared_guide
@@ -134,7 +135,8 @@ class ExerciseScreen(Screen):
                                 help_visible=c.help_visible, output_size=output_size,
                                 avatar_stage=app.avatar_stage, avatars=c.avatars, avatar_gender=c.avatar_gender,
                                 speaking=app.audio.speaking, silhouette=c.silhouette, willy=app.guide,
-                                lang=app.director.language, overlay=app.director.overlay)
+                                lang=app.director.language, overlay=app.director.overlay,
+                                sets=app.sets, now=time.monotonic())
 
     def action_at(self, app, point):
         c = app.controls
@@ -156,15 +158,22 @@ class ExerciseScreen(Screen):
             audio.silence()
         elif action == "start":
             app.processor.recalibrate(timestamp_sec=app.now_sec)
+            app.sets = SetTracker.from_plan(app.plan)
             audio.begin_session()
         elif action in ("pause", "finish") or (action == "help" and old_mode == "running"):
             app.processor.finish()
             audio.silence()
+        elif action == "resume" and app.sets is not None and app.sets.waiting:
+            app.sets.next_set()
+            app.director.set_started(app.sets.current_set, app.sets.is_last_set)
+            if app.processor.calibrator.is_calibrating:
+                app.processor.recalibrate(timestamp_sec=app.now_sec)
         elif action == "resume" and app.processor.calibrator.is_calibrating:
             app.processor.recalibrate(timestamp_sec=app.now_sec)
         elif action == "restart":
             app.director.session_recorded(app.processor.rules_engine.session)
             app.new_processor()
+            app.sets = None
             audio.silence()
         elif action in ("arm_left", "arm_right"):
             app.processor.recalibrate("left" if action == "arm_left" else "right", app.now_sec)
@@ -292,6 +301,7 @@ class App:
         self.screens = {screen.name: screen for screen in (HomeScreen(), ExerciseScreen(), PinScreen(), SettingsScreen())}
         self.modal = None  # a screen shown over Willy's flow (PIN pad, settings); Willy waits meanwhile
         self._calibrations_seen = 0
+        self.sets = None   # sets of the plan, from Start to the end of the session
         self._devices = ExitStack()
 
     @property
@@ -453,6 +463,8 @@ class App:
                 self.audio.speak_cue(analysis.cue)
             if analysis.new_evaluation and not director.coaching:
                 self.audio.speak_evaluation(analysis.new_evaluation)
+            if analysis.new_evaluation and self.sets is not None:
+                self.count_for_plan()
         elif director.wants_tracking:
             # Camera setup of the tour: find the shoulders to check the placement, count nothing.
             landmarks = self.detector.detect(frame, timestamp_ms)
@@ -460,6 +472,8 @@ class App:
             alignment = patient_alignment(analysis.landmarks, width, height, self.mirror)
         else:
             analysis = FrameAnalysis(self.now_sec, metrics={}, status=controls.mode.upper())
+        if self.sets is not None and self.sets.tick(time.monotonic()) == "rest_over":
+            director.rest_over(self.sets.current_set + 1)
         self.analysis = analysis
         director.update(Moment(time.monotonic(), controls.mode, analysis, self.processor, alignment, self.mirror,
                                self.audio.enabled is not False))
@@ -514,6 +528,16 @@ class App:
         return self.screen.on_key(self, key)
 
     # ----------------------------------------------------------------- helpers
+    def count_for_plan(self):
+        """A counted movement: at the end of a set, rest; at the end of the plan, finish."""
+        event = self.sets.add_rep(time.monotonic())
+        if event == "set_done":
+            self.director.set_done(self.sets.current_set)
+            self.screens["dashboard"].on_action(self, "pause")
+        elif event == "plan_done":
+            self.director.plan_done()
+            self.screens["dashboard"].on_action(self, "finish")
+
     def remember_resting_angle(self):
         """Keep the resting angle measured at calibration, for the physio's settings screen."""
         processor, profile = self.processor, self.profile

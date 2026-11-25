@@ -159,6 +159,24 @@ class WillyDirector:
         else:
             self._start(self._returning_home())
 
+    # ------------------------------------------------------------------ sets of the plan
+    def set_done(self, number):
+        """A set ended: Willy calms down for the rest between sets (no pause lines meanwhile)."""
+        self._set_rest = True
+        self.say("E6.09", n=number, compact=True)
+
+    def rest_over(self, next_number):
+        self.say("E6.10", n=next_number, spotlight="main_button", compact=True)
+
+    def set_started(self, number, last):
+        self._set_rest = False
+        if last:
+            self.say("E6.11", compact=True)
+
+    def plan_done(self):
+        """The last set is done: the session-end lines start with E6.03 (goal reached)."""
+        self._goal_reached = True
+
     def plan_updated(self):
         """Back from the physio settings after a change: Willy confirms, then his Start button."""
         self.screen = "home"
@@ -736,6 +754,7 @@ class WillyDirector:
         # A new session: forget the last one's counters.
         if mode == "ready" and previous not in (None, "ready"):
             self._last_reps, self._correct_run, self._session_recorded = 0, 0, False
+            self._set_rest = self._goal_reached = False
             self._stop_episode()
         if self._episode is not None:
             self._run_episode(now)
@@ -754,11 +773,13 @@ class WillyDirector:
                     self.say("S8.04", spotlight="finish_button", compact=True, interrupt=False)
         self._last_reps = reps
         # Pause, and a long pause.
-        if mode == "paused" and previous == "running":
+        resting = getattr(self, "_set_rest", False)  # a rest between sets is not a pause
+        if mode == "paused" and previous == "running" and not resting:
             self._paused_at = now
             if self._once("S8.02"):
                 self.say("S8.02", compact=True)
-        if mode == "paused" and self._paused_at is not None and now - self._paused_at > 10 and self._once("S8.03"):
+        if (mode == "paused" and not resting and self._paused_at is not None and now - self._paused_at > 10
+                and self._once("S8.03")):
             self.say("S8.03", spotlight="main_button", compact=True)
         if mode != "paused":
             self._paused_at = None
@@ -824,6 +845,10 @@ class WillyDirector:
         """Every session ends with S8.05 to S8.09; the first one also shows where the results are."""
         if session is None:
             return
+        if getattr(self, "_goal_reached", False):
+            self._goal_reached = False
+            self.say("E6.03")
+            yield _Speech()
         total = session.total_repetitions
         correct = session.correct_repetitions
         unmeasured = total - session.assessed_repetitions
