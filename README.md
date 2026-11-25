@@ -55,6 +55,21 @@ Willy s’affiche aussi dans sa **bulle** : l’application reste utilisable son
   compte à rebours, puis Willy propose de reprendre ; après la dernière série, la séance se termine
   seule et Willy annonce l'objectif atteint.
 
+## Résultats, historique et export pour le kiné
+
+- Chaque séance est enregistrée dans `%APPDATA%\Mouvement\sessions\` (un petit fichier JSON par
+  séance : angles, temps, qualité, douleur ; **aucune image ni vidéo**). Les 365 dernières séances
+  sont gardées.
+- **Mon bilan** (après une séance, et « Mes résultats » sur l'accueil de Willy) : mouvements par
+  rapport à l'objectif, meilleur angle et angle moyen, durée, une barre par mouvement sur la zone
+  cible, le conseil le plus fréquent et la douleur avant/après. Willy résume la séance.
+- **Historique** : les 30 derniers jours (calendrier, série en cours, meilleur angle par jour,
+  mouvements par jour, douleur avant la séance) et une phrase de Willy sur la tendance, sans jamais
+  reprocher un jour manqué.
+- **Exporter** : choisissez 7 jours, 30 jours ou tout, puis « Exporter ». Le dossier
+  `Documents\Mouvement\bilan_<date>\` contient `bilan.pdf`, `mouvements.csv` (une ligne par
+  mouvement, ouvrable dans Excel) et les fichiers des séances. « Ouvrir le dossier » l'affiche.
+
 ## Silhouette guide en vue caméra
 
 En vue caméra (**Voir la caméra** ou **V**), un petit bouton **Silhouette** en
@@ -404,6 +419,9 @@ shoulder-rehab-app/
 │   ├── synthetic_pose.py       # Corps synthétiques pour les tests et les outils (jamais en direct)
 │   ├── physio_settings.py      # Code kiné (PIN) et écran de réglages du plan
 │   ├── session_plan.py         # Séries, repos entre les séries, fin du plan
+│   ├── session_store.py        # Enregistrement des séances (JSON, sans image)
+│   ├── results_screen.py       # Écrans « Mon bilan » et « Historique »
+│   ├── history_export.py       # Export pour le kiné : PDF, CSV et fichiers des séances
 │   ├── session_processor.py    # Pipeline commun OpenCV, Streamlit et évaluation vidéo
 │   ├── dashboard.py            # Interface patient minimale dessinée à la résolution native
 │   ├── patient_controls.py     # Boutons et états de la séance, communs au rendu et aux clics
