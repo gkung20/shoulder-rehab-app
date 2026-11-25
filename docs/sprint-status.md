@@ -50,6 +50,19 @@ Marwane's PC numbers will differ; run the same command there to compare.
 - Tests: 231 passed, 19 skipped with the models installed; 227 passed, 23 skipped without them (0 failed either way).
 - `main()` in `app_live_cv.py`: 220 lines.
 
+## After Phase 6 (same workspace, same command)
+
+| Measurement | Before: median / p95 (ms) | After: median / p95 (ms) |
+| --- | ---: | ---: |
+| Exercise screen, 1280x840 | 7.0 / 23.3 | 3.5 / 14.6 |
+| Exercise screen, 1920x1080 | 7.1 / 21.2 | 4.2 / 14.7 |
+| Home screen, 1280x840 | 6.4 / 36.1 | 4.2 / 23.2 |
+| Analysis of one frame | 0.1 / 0.1 | 0.1 / 0.1 |
+
+The 95th percentiles move a lot between runs here (shared 2-core workspace); the medians are the
+stable numbers. On top of drawing, the pose model now runs in its own thread, so the screen no
+longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py --debug` on the PC.
+
 ## Decisions
 
 - Phase 0.1: the voice test assumed 22.05 kHz; Tom's voice is 44.1 kHz, so the test now reads the

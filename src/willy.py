@@ -12,6 +12,7 @@ fed back into counting or assessment.
 from dataclasses import dataclass
 import json
 import math
+from collections import OrderedDict
 from pathlib import Path
 import random
 import time
@@ -76,8 +77,7 @@ class WillyGuide:
         self._mouth_next = 0.
         self._mouth = "smile"
         self._last_time = None
-        self._cache_key = None
-        self._cache = None
+        self._renders, self._render_bytes = OrderedDict(), 0  # recent renders, newest last
         # What Willy acts out for his current line (outside a running session, where he mirrors the patient).
         self._act = None
         self._act_since = 0.
@@ -279,24 +279,31 @@ class WillyGuide:
         pose = self.pose
         key = (width, height, self._arm_layer("L", pose), self._arm_layer("R", pose), pose.eyes, pose.mouth,
                round(pose.bob), round(pose.tilt, 1))
-        if key == self._cache_key:
-            return self._cache
+        cached = self._renders.get(key)
+        if cached is not None:  # blinks, talking and bobbing come back to the same few poses
+            self._renders.move_to_end(key)
+            return cached
         image = self.compose(pose)
         h, w = image.shape[:2]
         scale = min(width / w, height / h)
         size = (max(1, round(w * scale)), max(1, round(h * scale)))
         small = cv2.resize(image, size, interpolation=cv2.INTER_AREA if scale < 1 else cv2.INTER_CUBIC)
-        out = np.zeros((height, width, 4), np.float32)
+        # Un-premultiply only the sprite's own rectangle; the margins stay fully transparent.
+        alpha = np.clip(small[..., 3:], 0, 1)
+        rgb = np.where(alpha > 1e-4, small[..., :3] / np.maximum(alpha, 1e-4), 0)
+        result = np.zeros((height, width, 4), np.uint8)
         ox, oy = (width - size[0]) // 2, height - size[1]  # stand on the bottom edge
-        out[oy:oy + size[1], ox:ox + size[0]] = small
-        alpha = np.clip(out[..., 3:], 0, 1)
-        rgb = np.where(alpha > 1e-4, out[..., :3] / np.maximum(alpha, 1e-4), 0)
-        result = (np.concatenate([np.clip(rgb, 0, 1), alpha], axis=2) * 255 + .5).astype(np.uint8)
-        self._cache_key, self._cache = key, result
+        result[oy:oy + size[1], ox:ox + size[0]] = (np.concatenate([np.clip(rgb, 0, 1), alpha], axis=2) * 255 + .5).astype(np.uint8)
+        self._renders[key] = result
+        self._render_bytes += result.nbytes
+        while self._render_bytes > RENDER_CACHE_BYTES and len(self._renders) > 1:
+            _, old = self._renders.popitem(last=False)
+            self._render_bytes -= old.nbytes
         return result
 
 
 _shared = None
+RENDER_CACHE_BYTES = 48 * 1024 * 1024  # recent Willy renders kept (about 16 big ones)
 
 
 def shared_guide():

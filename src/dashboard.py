@@ -241,20 +241,48 @@ def _silhouette_labels(p,guide_text):
     _pill(p,(446,546),instruction,18,center=True)
 
 
-def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_enabled=True,audio_status="",
-                     *,mode="running",details=False,help_visible=False,show_controls=True,output_size=None,
-                     avatar_stage=None,avatars=True,avatar_gender="male",willy=None,speaking=False,
-                     silhouette=False,lang="fr",overlay=None,sets=None,now=0.,results=False,guidance=None):
-    """The patient screen. `overlay` (src.willy_overlay.Overlay) adds Willy's bubble and the tour's spotlight."""
-    width,height=output_size or CANVAS_SIZE
-    if width <= 0 or height <= 0:
-        width,height=CANVAS_SIZE
+IN_STAGE_BUTTONS=("silhouette","replay_tour")
+
+
+@lru_cache(maxsize=16)
+def _chrome(width,height,lang,mode,arm,audio_enabled,details,help_visible,avatars,avatar_gender,silhouette,results,show_controls):
+    """The parts of the patient screen that only change with its state, not with each frame."""
     viewport=canvas_viewport(CANVAS_SIZE,width,height)
     canvas=Image.new("RGB",(width,height),BG)
     p=_Painter(canvas,viewport,lang)
     p.text((32,17),"mouvement",30)
     p.text((34,60),"Épaule / séance guidée",14,MUTED)
     p.rule(32,98,1248,98)
+    p.rule(32,732,1248,732)
+    if show_controls:
+        for button in patient_buttons(mode,arm,audio_enabled,details,help_visible,avatars,avatar_gender,silhouette,lang,results):
+            if button.action not in IN_STAGE_BUTTONS:
+                _button(p,button)
+    else:
+        p.text((32,766),"Utilisez les commandes de la page pour mettre en pause ou terminer.",16,MUTED)
+        label="Bras droit" if arm == "right" else "Bras gauche"
+        p.text((920,37),f"{label} · Son {'activé' if audio_enabled else 'coupé'}",15,MUTED)
+    p.text((32,819),"Prototype éducatif · Mesures estimées. Arrêtez en cas de douleur.",11,MUTED)
+    return canvas
+
+
+def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_enabled=True,audio_status="",
+                     *,mode="running",details=False,help_visible=False,show_controls=True,output_size=None,
+                     avatar_stage=None,avatars=True,avatar_gender="male",willy=None,speaking=False,
+                     silhouette=False,lang="fr",overlay=None,sets=None,now=0.,results=False,guidance=None,cache=True):
+    """The patient screen. `overlay` (src.willy_overlay.Overlay) adds Willy's bubble and the tour's spotlight.
+
+    What doesn't change from frame to frame (background, title, top and bottom bars, footer) is
+    drawn once per state into a cached layer (`cache=False` draws it fresh, for tests).
+    """
+    width,height=output_size or CANVAS_SIZE
+    if width <= 0 or height <= 0:
+        width,height=CANVAS_SIZE
+    viewport=canvas_viewport(CANVAS_SIZE,width,height)
+    chrome_key=(width,height,lang,mode,processor.arm,audio_enabled,details,help_visible,avatars,avatar_gender,
+                silhouette,results,show_controls)
+    canvas=(_chrome(*chrome_key) if cache else _chrome.__wrapped__(*chrome_key)).copy()
+    p=_Painter(canvas,viewport,lang)
     use_avatars=avatars and avatar_stage is not None
     p.text((32,108),"VOTRE COACH" if use_avatars else "CAMÉRA",11,MUTED)
     if use_avatars:
@@ -375,15 +403,10 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
     if big:
         p.rect((446,132,860,602),fill=(236,244,242))
     guide=_draw_willy(canvas,p,willy,analysis,mode,processor,mirror,speaking,willy_box)
-    p.rule(32,732,1248,732)
-    if show_controls:
+    if show_controls:  # buttons inside the stage go over the camera; the bars' buttons are in the cached layer
         for button in patient_buttons(mode,processor.arm,audio_enabled,details,help_visible,avatars,avatar_gender,silhouette,lang,results):
-            _button(p,button)
-    else:
-        p.text((32,766),"Utilisez les commandes de la page pour mettre en pause ou terminer.",16,MUTED)
-        arm="Bras droit" if processor.arm == "right" else "Bras gauche"
-        p.text((920,37),f"{arm} · Son {'activé' if audio_enabled else 'coupé'}",15,MUTED)
-    p.text((32,819),"Prototype éducatif · Mesures estimées. Arrêtez en cas de douleur.",11,MUTED)
+            if button.action in IN_STAGE_BUTTONS:
+                _button(p,button)
     if overlay is not None:
         _draw_overlay(canvas,p,overlay,guide,willy_box)
     return cv2.cvtColor(np.asarray(canvas),cv2.COLOR_RGB2BGR)

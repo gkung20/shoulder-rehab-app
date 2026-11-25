@@ -14,3 +14,11 @@ requires_pose_model = pytest.mark.skipif(
     not POSE_MODEL.exists(),
     reason="MediaPipe pose model missing: run 'python models/download_models.py pose_landmarker_full.task'",
 )
+
+
+@pytest.fixture(autouse=True)
+def fresh_screen_cache():
+    """Each test draws the exercise screen's static layer itself (it is cached between frames)."""
+    from src.dashboard import _chrome
+    _chrome.cache_clear()
+    yield
