@@ -19,6 +19,7 @@ from src.audio_feedback import AudioCoach
 from src.avatar_stage import AvatarStage
 from src.capture import VideoCaptureManager
 from src.dashboard import CANVAS_SIZE, render_dashboard
+from src.exercises import get_exercise
 from src.hand_detector import HandDetector, MODEL_PATH as HAND_MODEL_PATH
 from src.home_screen import render_home
 from src.patient_controls import PatientControls, dashboard_action_at
@@ -198,7 +199,8 @@ class App:
     def __init__(self, args, config, profile, window=None):
         self.args, self.config, self.profile = args, config, profile
         self.window = window or Window()
-        self.processor = SessionProcessor(config, profile.arm or "right")
+        self.exercise = get_exercise()
+        self.processor = SessionProcessor(config, profile.arm or "right", exercise=self.exercise)
         self.controls = PatientControls(avatars=not args.no_avatars, avatar_gender=profile.avatar_gender or "male")
         self.mirror = True
         self.actions = deque()
@@ -381,7 +383,7 @@ class App:
 
     # ----------------------------------------------------------------- helpers
     def new_processor(self):
-        self.processor = SessionProcessor(self.config, self.processor.arm)
+        self.processor = SessionProcessor(self.config, self.processor.arm, exercise=self.exercise)
         self.processor.model_info = self.detector.model_info.copy()
 
     def ensure_avatar_stage(self):

@@ -85,8 +85,8 @@ def test_native_mouse_buttons_pause_inference_and_finish_before_closing(monkeypa
     monkeypatch.setattr(app,"enable_high_dpi",lambda: None)
     created=[]
     original_processor=SessionProcessor
-    def make_processor(cfg,arm="right"):
-        processor=original_processor(cfg,arm)
+    def make_processor(cfg,arm="right",**kwargs):
+        processor=original_processor(cfg,arm,**kwargs)
         processor.process=Mock(wraps=processor.process)
         created.append(processor)
         return processor

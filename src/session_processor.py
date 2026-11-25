@@ -18,6 +18,7 @@ from src.geometry import (
     calculate_shoulder_reference_angle,
 )
 from src.cues import Cue
+from src.exercises import get_exercise
 from src.rules_engine import RulesEngine, LiveFeedback, FeedbackLevel, RepetitionEvaluation, cue_feedback
 from src.smoothing import MultiMetricSmoother
 from src.state_machine import RepetitionStateMachine, ExercisePhase
@@ -61,8 +62,11 @@ def repetition_log(evaluation):
 
 
 class SessionProcessor:
-    def __init__(self, config=None, arm="right", rules_engine=None):
-        self.config = config or ExerciseConfig.from_yaml()
+    def __init__(self, config=None, arm="right", rules_engine=None, exercise=None):
+        """`exercise` (src.exercises.Exercise, default: abduction) may override the movement
+        thresholds of `config`; everything below reads the effective `self.config`."""
+        self.exercise = exercise or get_exercise()
+        self.config = self.exercise.apply(config or ExerciseConfig.from_yaml())
         self.arm = arm
         self.rules_engine = rules_engine or RulesEngine(self.config)
         self.rules_engine.config = self.config

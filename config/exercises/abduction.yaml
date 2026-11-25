@@ -1,0 +1,11 @@
+# Active shoulder abduction: one arm raised sideways, patient facing the camera.
+# Thresholds are not repeated here: the values in config/exercise_config.yaml apply.
+# Another exercise can set its own under `thresholds:` (same names as that file).
+id: abduction
+names:
+  fr: "Abduction de l'épaule"
+  en: "Shoulder abduction"
+camera_view: front        # front: facing the camera; side: camera beside the patient
+measured_angle: abduction # angle between the trunk and the upper arm, in the frontal plane
+arms: one                 # one: the arm chosen in the plan; both: both arms together
+willy_demo: raise_side    # how Willy shows the movement
