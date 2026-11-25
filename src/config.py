@@ -40,6 +40,8 @@ class FilteringConfig:
     ema_alpha: float = 0.35
     min_landmark_visibility: float = 0.60
     tracking_reset_sec: float = 0.75
+    max_turn_depth_ratio: float = 0.40  # shoulders' depth gap / their distance: above, the body is turned (~24 deg)
+    min_facing_ratio: float = 0.85      # shoulder width / torso height vs calibration: below, turned (~32 deg)
 
 
 @dataclass
@@ -122,7 +124,8 @@ class ExerciseConfig:
             raise ValueError("Invalid phase durations")
         if self.filtering is not None:
             f = self.filtering
-            if not (0 < f.ema_alpha <= 1 and 0 <= f.min_landmark_visibility <= 1 and f.tracking_reset_sec > 0):
+            if not (0 < f.ema_alpha <= 1 and 0 <= f.min_landmark_visibility <= 1 and f.tracking_reset_sec > 0
+                    and 0 < f.max_turn_depth_ratio <= 1 and 0 < f.min_facing_ratio <= 1):
                 raise ValueError("Invalid filtering settings")
         if self.calibration is not None and (self.calibration.duration_sec <= 0 or self.calibration.max_variance_ratio <= 0):
             raise ValueError("Invalid calibration settings")
@@ -204,6 +207,8 @@ class ExerciseConfig:
                 ema_alpha=float(filt.get("ema_alpha", 0.35)),
                 min_landmark_visibility=float(filt.get("min_landmark_visibility", 0.60)),
                 tracking_reset_sec=float(filt.get("tracking_reset_sec", 0.75)),
+                max_turn_depth_ratio=float(filt.get("max_turn_depth_ratio", 0.40)),
+                min_facing_ratio=float(filt.get("min_facing_ratio", 0.85)),
             ),
             calibration=CalibrationConfig(
                 duration_sec=float(calib.get("duration_sec", 3.0)),

@@ -91,6 +91,8 @@ filtering:
   # Minimum visibility score from MediaPipe Pose landmark output (range 0.0 - 1.0)
   min_landmark_visibility: 0.60
   tracking_reset_sec: 0.75        # Long gaps discard an unfinished attempt; return to rest to restart
+  max_turn_depth_ratio: 0.40     # Face-the-camera check: shoulders' depth gap / their distance (about 24 deg)
+  min_facing_ratio: 0.85         # Face-the-camera check without depth: width / torso height vs calibration (about 32 deg)
 
 # ------------------------------------------------------------------------------
 # Calibration Settings

@@ -100,6 +100,7 @@ class SessionProcessor:
             self.config.compensation.max_trunk_lean_deg,
         )
         self.resting_angle = None      # median resting angle of the last calibration
+        self._facing_baseline = None   # shoulder width / torso height at calibration (face check)
         self.rest_warning = False      # resting too close to the target: the plan's values were kept
         self.calibrations_done = 0
         a = self.config.abduction
@@ -114,6 +115,14 @@ class SessionProcessor:
         self.interrupted_attempts = 0
         self.frames_total = 0
         self.frames_tracked = 0
+
+    @staticmethod
+    def _facing_ratio(pts):
+        """Shoulder width over torso height: smaller when the body turns away from the camera."""
+        mid_shoulders = ((pts[I.LEFT_SHOULDER].x + pts[I.RIGHT_SHOULDER].x) / 2, (pts[I.LEFT_SHOULDER].y + pts[I.RIGHT_SHOULDER].y) / 2)
+        mid_hips = ((pts[I.LEFT_HIP].x + pts[I.RIGHT_HIP].x) / 2, (pts[I.LEFT_HIP].y + pts[I.RIGHT_HIP].y) / 2)
+        torso = math.dist(mid_shoulders, mid_hips)
+        return calculate_distance_2d(pts[I.LEFT_SHOULDER], pts[I.RIGHT_SHOULDER]) / torso if torso > 1e-6 else None
 
     def set_plan(self, plan):
         """Change the plan during a session (gentle after "It hurts") without losing its movements."""
@@ -227,6 +236,7 @@ class SessionProcessor:
             frame.calibration_progress = self.calibrator.get_progress() if self.calibrator.is_calibrating else None
             if not self.calibrator.is_calibrating and self.calibrator.calibrated_data.is_calibrated:
                 self._adapt_rest(self.calibrator.calibrated_data.rest_angle_median_deg)
+                self._facing_baseline = self._facing_ratio(pts) if torso_ok else None
         baseline = self.calibrator.calibrated_data
         if baseline.is_calibrated and baseline.reference_mode == "torso" and not torso_ok:
             # Changing angle definitions in a movement would corrupt its peak/timing.
@@ -252,6 +262,7 @@ class SessionProcessor:
             raw["lean"] = max(0., shoulder_line_tilt(pts[I.LEFT_SHOULDER], pts[I.RIGHT_SHOULDER]) - SEATED_TILT_ALLOWANCE_DEG)
         if baseline.is_calibrated and baseline.baseline_ear_shoulder_dist is not None and visible((ear, sh)):
             raw["shrug"] = calculate_shoulder_shrug(pts[ear], pts[sh], baseline.baseline_ear_shoulder_dist, baseline.baseline_shoulder_width)
+        turned = False
         if world_landmarks and len(world_landmarks) >= 33:
             other_sh, other_hip = ((I.RIGHT_SHOULDER, I.RIGHT_HIP) if self.arm == "left" else (I.LEFT_SHOULDER, I.LEFT_HIP))
             wpts = [world_landmarks[i] for i in (sh, other_sh, hip, other_hip, el)]
@@ -261,12 +272,15 @@ class SessionProcessor:
                 arm_length = math.dist((wpts[0].x,wpts[0].y,wpts[0].z), (wpts[4].x,wpts[4].y,wpts[4].z))
                 if lateral > .05 and arm_length > .05:
                     raw["drift"] = calculate_anterior_drift_angle(*wpts)
-                    if abs(wpts[0].z - wpts[1].z) / lateral > .5:
-                        angle_ok = False
+                    if abs(wpts[0].z - wpts[1].z) / lateral > self.config.filtering.max_turn_depth_ratio:
+                        angle_ok, turned = False, True
         if baseline.is_calibrated and shoulders_ok:
             width_ratio = calculate_distance_2d(pts[I.LEFT_SHOULDER], pts[I.RIGHT_SHOULDER]) / baseline.baseline_shoulder_width
             if not .65 <= width_ratio <= 1.4:
                 angle_ok = False
+            facing = self._facing_ratio(pts) if torso_ok else None
+            if facing is not None and self._facing_baseline and facing / self._facing_baseline < self.config.filtering.min_facing_ratio:
+                angle_ok, turned = False, True  # turned: the 2D angle would be wrong (Phase 5.6)
         # A time-based EMA has the same response at different frame rates.
         alpha = 1 - (1 - self.config.filtering.ema_alpha) ** (min(dt, .1) * 30)
         for name, value in raw.items():
@@ -282,7 +296,8 @@ class SessionProcessor:
             frame.metrics["abduction"] = None
             self._pause(now)
             frame.status = "EPAULES PRETES" if shoulders_ok and not elbow_ok else "POSITION A AJUSTER"
-            frame.cue = cue_feedback(Cue.SHOULDERS_READY_SHOW_ELBOW if shoulders_ok and not elbow_ok
+            frame.cue = cue_feedback(Cue.FACE_CAMERA if turned and elbow_ok else
+                                     Cue.SHOULDERS_READY_SHOW_ELBOW if shoulders_ok and not elbow_ok
                                      else Cue.SHOW_SHOULDERS_AND_ELBOW)
             return frame
         self.frames_tracked += 1
