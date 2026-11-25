@@ -12,34 +12,14 @@ import math
 import time
 
 from src.cues import Cue, code_of
+from src import layout as L
 from src.i18n import ui
 from src.willy import exercise_screen_side
 from src.willy_lines import Line, most_frequent_tip, reading_seconds, result_line, shared_script
 from src.willy_overlay import Overlay, TourButton
 
 # Dashboard zones (logical 1280 x 840 coordinates) that the tour lights up.
-ZONES = {
-    "top_bar": (416, 16, 1256, 82),
-    "avatar_buttons": (418, 16, 690, 82),
-    "arm_buttons": (722, 16, 1038, 82),
-    "sound_button": (1064, 16, 1254, 82),
-    "coach_panel": (32, 132, 446, 602),
-    "patient_panel": (446, 132, 860, 602),
-    "camera_thumbnail": (366, 494, 526, 584),
-    "view_button": (436, 750, 614, 806),
-    "guidance": (912, 128, 1252, 436),
-    "counter": (904, 456, 1074, 626),
-    "progress": (912, 640, 1040, 668),
-    "steps": (26, 608, 866, 662),
-    "result_line": (26, 664, 866, 718),
-    "main_button": (32, 750, 248, 806),
-    "finish_button": (264, 750, 420, 806),
-    "details_button": (630, 750, 814, 806),
-    "help_button": (830, 750, 998, 806),
-    "close_button": (1096, 750, 1248, 806),
-    "willy": (1040, 440, 1248, 716),
-    "silhouette_button": (632, 144, 848, 184),
-}
+ZONES = dict(L.TOUR_ZONES)  # spotlight rectangles, from src.layout
 
 SCREEN_TOUR = (("S5.01", None), ("S5.02", "top_bar"), ("S5.03", "arm_buttons"), ("S5.04", "coach_panel"),
                ("S5.05", "patient_panel"), ("S5.06", "camera_thumbnail"), ("S5.07", "view_button"),

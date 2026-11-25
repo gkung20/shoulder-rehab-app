@@ -9,15 +9,17 @@ import cv2
 import numpy as np
 from PIL import Image
 
+from src import layout as L
+
 from src.dashboard import CANVAS_SIZE, MUTED, TEXT, _Painter
 from src.i18n import ui
 from src.window_viewport import canvas_viewport
 from src.willy_overlay import GLOW, _wrap, draw_button
 
-HOME_WILLY_BOX = (70, 120, 590, 800)
-BUBBLE_LEFT, BUBBLE_TOP, BUBBLE_RIGHT = 630, 170, 1220
-LANGUAGE_BOX = (1060, 28, 1240, 80)
-REPLAY_BOX = (820, 28, 1044, 80)
+HOME_WILLY_BOX = L.HOME_WILLY_BOX
+BUBBLE_LEFT, BUBBLE_TOP, BUBBLE_RIGHT = L.HOME_BUBBLE.x0, L.HOME_BUBBLE.y0, L.HOME_BUBBLE.x1
+LANGUAGE_BOX = L.HOME_LANGUAGE_BUTTON
+REPLAY_BOX = L.HOME_REPLAY_BUTTON
 
 
 def home_buttons(director):

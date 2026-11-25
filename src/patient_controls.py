@@ -1,6 +1,8 @@
 """Patient-facing controls shared by the drawing and native mouse hit testing."""
 from dataclasses import dataclass
 
+from src import layout as L
+
 
 @dataclass(frozen=True)
 class PatientButton:
@@ -12,7 +14,7 @@ class PatientButton:
     primary: bool = False
 
 
-LANGUAGE_BUTTON = (264, 22, 404, 76)
+LANGUAGE_BUTTON = L.LANGUAGE_BUTTON
 
 
 def patient_buttons(mode="running", arm="right", audio_enabled=True, details=False, help_visible=False, avatars=True, avatar_gender="male",
@@ -21,26 +23,26 @@ def patient_buttons(mode="running", arm="right", audio_enabled=True, details=Fal
     primary = {"ready": ("start", "Commencer"), "running": ("pause", "Faire une pause"),
                "paused": ("resume", "Reprendre"), "finished": ("restart", "Nouvelle séance")}[mode]
     buttons = [
-        PatientButton("avatar_male", "Homme", (424,22,550,76), selected=avatar_gender == "male"),
-        PatientButton("avatar_female", "Femme", (558,22,684,76), selected=avatar_gender == "female"),
-        PatientButton("arm_right", "Bras droit", (728,22,876,76), mode in ("ready","paused"), arm == "right"),
-        PatientButton("arm_left", "Bras gauche", (884,22,1032,76), mode in ("ready","paused"), arm == "left"),
-        PatientButton("audio", "Son activé" if audio_enabled else "Son coupé", (1070,22,1248,76), selected=audio_enabled),
-        PatientButton(*primary, (32,750,248,806), primary=True),
-        PatientButton("finish", "Terminer" if mode in ("running","paused") else "Mon bilan", (264,750,420,806), mode in ("running","paused")),
-        PatientButton("avatars", "Voir la caméra" if avatars else "Voir les avatars", (436,750,614,806), selected=avatars),
-        PatientButton("details", "Masquer les mesures" if details else "Mesures", (630,750,814,806), selected=details),
-        PatientButton("help", "Fermer l’aide" if help_visible else "Aide", (830,750,998,806), selected=help_visible),
-        PatientButton("quit", "Fermer", (1096,750,1248,806)),
+        PatientButton("avatar_male", "Homme", L.AVATAR_MALE_BUTTON, selected=avatar_gender == "male"),
+        PatientButton("avatar_female", "Femme", L.AVATAR_FEMALE_BUTTON, selected=avatar_gender == "female"),
+        PatientButton("arm_right", "Bras droit", L.ARM_RIGHT_BUTTON, mode in ("ready","paused"), arm == "right"),
+        PatientButton("arm_left", "Bras gauche", L.ARM_LEFT_BUTTON, mode in ("ready","paused"), arm == "left"),
+        PatientButton("audio", "Son activé" if audio_enabled else "Son coupé", L.AUDIO_BUTTON, selected=audio_enabled),
+        PatientButton(*primary, L.MAIN_BUTTON, primary=True),
+        PatientButton("finish", "Terminer" if mode in ("running","paused") else "Mon bilan", L.FINISH_BUTTON, mode in ("running","paused")),
+        PatientButton("avatars", "Voir la caméra" if avatars else "Voir les avatars", L.VIEW_BUTTON, selected=avatars),
+        PatientButton("details", "Masquer les mesures" if details else "Mesures", L.DETAILS_BUTTON, selected=details),
+        PatientButton("help", "Fermer l’aide" if help_visible else "Aide", L.HELP_BUTTON, selected=help_visible),
+        PatientButton("quit", "Fermer", L.QUIT_BUTTON),
         # The other language, written in that language: always readable by whoever needs it.
         PatientButton("language", "Français" if language == "en" else "English", LANGUAGE_BUTTON),
     ]
     if help_visible:
-        buttons.append(PatientButton("replay_tour", "Revoir la visite", (82,526,330,572)))
+        buttons.append(PatientButton("replay_tour", "Revoir la visite", L.REPLAY_TOUR_BUTTON))
     if not avatars and not help_visible:
         # Small toggle in the camera view's top-right corner.
         buttons.append(PatientButton("silhouette", "Masquer la silhouette" if silhouette else "Silhouette",
-                                     (632 if silhouette else 712,144,848,184), selected=silhouette))
+                                     L.SILHOUETTE_ON_BUTTON if silhouette else L.SILHOUETTE_OFF_BUTTON, selected=silhouette))
     return buttons
 
 

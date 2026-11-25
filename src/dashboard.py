@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+from src import layout as L
 from src.audio_feedback import spoken_french
 from src.i18n import tr
 from src.patient_controls import patient_buttons
@@ -16,7 +17,7 @@ from src.silhouette import SilhouetteGuide, silhouette_frame
 from src.willy_lines import cue_line_id, shared_script
 from src.willy_overlay import bubble_layout, dim_outside, draw_bubble, ring, ring_zone
 
-CANVAS_SIZE=(1280,840)  # Logical layout coordinates, not a fixed-resolution bitmap.
+CANVAS_SIZE=L.CANVAS_SIZE  # Logical layout coordinates, not a fixed-resolution bitmap.
 BG=(250,250,249)
 TEXT=(26,29,32)
 MUTED=(112,117,122)
@@ -146,8 +147,8 @@ def _button(p,button):
     p.text((left+(right-left-text_width)/2,top+(bottom-top-size)/2-3),label,size,color,button.primary)
 
 
-WILLY_BOX=(1040,440,1248,716)  # Right column, beside the repetition count: visible in every view.
-WILLY_STAGE_BOX=(470,142,836,600)  # The exercise demo: Willy steps into the large panel.
+WILLY_BOX=L.WILLY_BOX  # Right column, beside the repetition count: visible in every view.
+WILLY_STAGE_BOX=L.WILLY_STAGE_BOX  # The exercise demo: Willy steps into the large panel.
 
 
 def _draw_willy(canvas,p,willy,analysis,mode,processor,mirror,speaking,box=WILLY_BOX):
@@ -175,7 +176,7 @@ def willy_point(guide,name,box=WILLY_BOX):
     return box[0]+x,box[1]+y
 
 
-GUIDANCE_COLUMN=(894,104,1262,442)
+GUIDANCE_COLUMN=L.GUIDANCE_COLUMN
 
 
 def _draw_overlay(canvas,p,overlay,guide,box):
@@ -257,8 +258,8 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
     if silhouette and not use_avatars and not help_visible:
         guide_text=silhouette_frame(video,analysis,mode,processor,mirror,_SILHOUETTE)
     # Resample only the camera, directly into its final physical-pixel viewport.
-    x1,y1,x2,y2=p.box((32,132,860,602))
-    p.rect((32,132,860,602),fill=(33,36,39))
+    x1,y1,x2,y2=p.box(L.STAGE)
+    p.rect(L.STAGE,fill=(33,36,39))
     vh,vw=video.shape[:2]
     scale=min((x2-x1)/vw,(y2-y1)/vh)
     video_width,video_height=max(1,round(vw*scale)),max(1,round(vh*scale))
@@ -278,10 +279,10 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
                else "Au repos · aucun suivi")
         p.text((472,150),label,15)
         # A framing preview remains visible, without covering the moving arms.
-        thumb_w,thumb_h=round(160*p.sx),round(90*p.sy)
+        thumb_w,thumb_h=round(L.CAMERA_THUMBNAIL.width*p.sx),round(L.CAMERA_THUMBNAIL.height*p.sy)
         thumb_scale=min(thumb_w/vw,thumb_h/vh)
         thumb=cv2.resize(video,(max(1,round(vw*thumb_scale)),max(1,round(vh*thumb_scale))))
-        canvas.paste(Image.fromarray(cv2.cvtColor(thumb,cv2.COLOR_BGR2RGB)),p.point(366,494))
+        canvas.paste(Image.fromarray(cv2.cvtColor(thumb,cv2.COLOR_BGR2RGB)),p.point(L.CAMERA_THUMBNAIL.x0,L.CAMERA_THUMBNAIL.y0))
         p.text((54,570),"Exemple à votre rythme",12,MUTED)
         detailed=getattr(avatar_stage,'detailed_hands',0)
         p.text((550,570),"Paume et doigts suivis" if isinstance(detailed,int) and detailed>0
