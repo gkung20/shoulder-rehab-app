@@ -15,7 +15,7 @@ Updated after every phase.
 | Phase | Status | Notes |
 | --- | --- | --- |
 | 0 Setup and baseline | done | see below |
-| 1 Foundations | to do | |
+| 1 Foundations | done | cue codes, layout module, App class, exercises in YAML |
 | 2 Plan per patient | to do | |
 | 3 Results and history | to do | |
 | 4 Safety | to do | |
@@ -33,7 +33,7 @@ Updated after every phase.
 - Installed there: `pose_landmarker_full.task`, `pose_landmarker_lite.task`, `hand_landmarker.task`,
   `fr_FR-tom-medium` and `en_US-ryan-medium`. Python 3.13 on Windows (see `constraints-windows-py313.txt`).
 - No shell on the PC this run, so files are synced by copying.
-- Last synced commit: `ce68d90` (updated after each phase).
+- Last synced commit: `9a40db6` (end of Phase 1).
 
 ## Baseline (before)
 
@@ -59,9 +59,16 @@ Marwane's PC numbers will differ; run the same command there to compare.
   here, so check the Actions tab on GitHub for the result.
 - Validation tools: `record_clip.py` and `evaluate_dataset.py` already exist at the repo root, so
   Phase 7 extends them instead of writing new ones in `tools/`.
+- Phase 1.1: the first-session tour said "And now, lower slowly" (S7.12) as soon as the arm reached
+  the zone, because the hold cue also contained "redescendez"; S7.11 ("Hold it") now plays first.
+- Phase 1.2: renders of 35 screen states were compared before and after the layout change with a
+  frozen clock: identical.
+- Phase 1.3: the end-to-end tests now patch `src.desktop_app` (where the app lives) instead of
+  `app_live_cv`.
 - `src/synthetic_pose.py`: one synthetic-body helper for tests, previews and tools (both arms,
   turning, seated, free hand raised).
 
 ## To test on the PC
 
-- (filled in as phases land)
+- After Phase 1: run `python app_live_cv.py` once and check that the home screen, the tour and a
+  session behave exactly as before (the code was reorganised, nothing should look different).

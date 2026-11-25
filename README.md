@@ -359,11 +359,12 @@ Les concepts exploitent des principes fondamentaux de développement de jeux (mo
 shoulder-rehab-app/
 │
 ├── config/
-│   └── exercise_config.yaml    # Source unique de vérité pour les seuils biomécaniques
+│   ├── exercise_config.yaml    # Seuils biomécaniques par défaut
+│   └── exercises/              # Un fichier par exercice (abduction…) ; peut ajuster les seuils
 │
 ├── models/
 │   ├── download_models.py      # Téléchargement local : modèles MediaPipe (.task) et voix de Willy
-│   ├── voices/                 # Documentation et modèle vocal local Siwis (binaires ignorés)
+│   ├── voices/                 # Voix de Willy (Tom, Ryan) et leur documentation (binaires ignorés)
 │   └── pose_landmarker_full.task (Modèle Full par défaut, ignoré par git)
 │
 ├── src/
@@ -376,6 +377,11 @@ shoulder-rehab-app/
 │   ├── calibration.py          # Enregistrement des mesures de référence au repos (3 sec)
 │   ├── state_machine.py        # Machine à états finis (REST/RISING/HOLD/LOWERING) & télémétrie de fluidité
 │   ├── rules_engine.py         # Moteur de règles cliniques et retours en français
+│   ├── cues.py                 # Un code par message en direct (Willy et la voix suivent le code)
+│   ├── exercises.py            # Exercices définis en YAML (config/exercises/)
+│   ├── layout.py               # Tous les rectangles des écrans (boutons, panneaux, zones de la visite)
+│   ├── desktop_app.py          # L'application de bureau : boucle, écrans, fenêtre (App)
+│   ├── synthetic_pose.py       # Corps synthétiques pour les tests et les outils (jamais en direct)
 │   ├── session_processor.py    # Pipeline commun OpenCV, Streamlit et évaluation vidéo
 │   ├── dashboard.py            # Interface patient minimale dessinée à la résolution native
 │   ├── patient_controls.py     # Boutons et états de la séance, communs au rendu et aux clics
@@ -409,7 +415,9 @@ shoulder-rehab-app/
 │   └── test_phase5_ui.py       # Tests des structures de données du tableau de bord
 │
 ├── Ouvrir Mouvement.cmd        # Lanceur Windows par double-clic, sans saisie dans un terminal
-├── app_live_cv.py              # Interface patient OpenCV avec boutons et coaching discret
+├── app_live_cv.py              # Lance l'application de bureau (lit la ligne de commande)
+├── tools/benchmark.py          # Temps de dessin et d'analyse, sans caméra ni modèle
+├── docs/sprint-status.md       # Suivi du sprint d'améliorations (fait, décisions, mesures)
 ├── app_streamlit.py            # Séance patient et exports, réglages avancés repliés
 ├── evaluate_dataset.py         # Script d'évaluation hors ligne (Matrice de confusion)
 ├── record_clip.py              # Outil d'enregistrement éthique avec recueil de consentement
