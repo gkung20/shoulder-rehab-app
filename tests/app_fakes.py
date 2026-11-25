@@ -18,8 +18,14 @@ from src.willy_tour import WillyDirector
 class FakeCapture:
     status_message = "Fake camera"
 
-    def __init__(self, **kwargs):
+    def __init__(self, camera_index=0, **kwargs):
         self.t = 0
+        self.camera_index = camera_index
+        self.reconnects = 0
+
+    def reconnect(self):
+        self.reconnects += 1
+        return True
 
     def __enter__(self):
         return self

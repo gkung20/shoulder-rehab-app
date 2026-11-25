@@ -131,7 +131,9 @@ FIELDS = (
     ("pain_go_max", "Douleur : séance normale jusqu'à", "/10"),
     ("pain_gentle_max", "Douleur : séance douce jusqu'à", "/10"),
     ("seated", "Exercice assis", ""),
+    ("camera", "Caméra (numéro)", ""),
 )
+CAMERA_RANGE = (0, 5)
 ARM_CHOICES = (None, "right", "left")
 ARM_LABELS = {None: "Au choix du patient", "right": "Droit", "left": "Gauche"}
 
@@ -144,6 +146,7 @@ class SettingsForm:
     resting_date: str = ""
     warning: str = ""
     message: str = ""
+    camera: int = 0
 
     def __post_init__(self):
         self.original = self.original or self.plan
@@ -159,6 +162,8 @@ class SettingsForm:
             self.plan = replace(self.plan, arm=ARM_CHOICES[index])
         elif key == "seated":
             self.plan = replace(self.plan, seated=not self.plan.seated)
+        elif key == "camera":
+            self.camera = min(CAMERA_RANGE[1], max(CAMERA_RANGE[0], self.camera + direction))
         else:
             low, high, step = PLAN_BOUNDS[key]
             value = getattr(self.plan, key) + direction * step
@@ -167,11 +172,13 @@ class SettingsForm:
         self.message = ""
 
     def value_text(self, key, unit, language):
-        value = getattr(self.plan, key)
+        value = getattr(self.plan, key, None)
         if key == "arm":
             return ARM_LABELS[value]
         if key == "seated":
             return "Oui" if value else "Non"
+        if key == "camera":
+            return str(self.camera)
         text = f"{value:g}"
         if language == "fr":
             text = text.replace(".", ",")
@@ -239,11 +246,10 @@ def render_settings(form, output_size=None, language="fr"):
         draw_button(p, minus, "−", size=26)
         draw_button(p, plus, "+", size=26)
         hit_boxes += [(f"set:-:{key}", minus), (f"set:+:{key}", plus)]
-    info_y = 124 + 6 * 84
     if form.resting_angle is not None:
-        p.text((672, info_y + 12), f"Angle de repos mesuré : {form.resting_angle:.0f}°", 17, TEXT, True)
+        p.text((760, 34), f"Angle de repos mesuré : {form.resting_angle:.0f}°", 17, TEXT, True)
         if form.resting_date:
-            p.text((672, info_y + 40), f"Mesuré le {form.resting_date}", 14, MUTED)
+            p.text((760, 62), f"Mesuré le {form.resting_date}", 14, MUTED)
     if form.warning:
         p.wrap((48, 718), form.warning, 760, 15, (176, 58, 46), max_lines=2)
     if form.message:

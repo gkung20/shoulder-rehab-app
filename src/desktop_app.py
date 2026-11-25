@@ -28,6 +28,7 @@ from src.hand_detector import HandDetector, MODEL_PATH as HAND_MODEL_PATH
 from src.home_screen import render_home
 from src.patient_controls import PatientControls, dashboard_action_at
 from src import physio_settings as physio
+from src.notice_screen import render_notice
 from src.pain_screen import QUESTIONS as PAIN_QUESTIONS, PainCheck, render_pain
 from src.person_lock import PersonLock
 from src.pose_detector import PoseDetector
@@ -47,6 +48,7 @@ __all__ = ["App", "Window", "show_startup_error", "window_size", "HAND_MODEL_PAT
 
 WINDOW_NAME = "Mouvement - Coach epaule"
 ESCAPE, ENTER, SPACE, NO_KEY = 27, 13, 32, 255
+CAMERA_RETRY_SEC = 2.
 PRIMARY_BY_MODE = {"ready": "start", "running": "pause", "paused": "resume", "finished": "restart"}
 SHORTCUTS = {ord('l'): "arm_left", ord('r'): "arm_right", ord('a'): "audio", ord('s'): "finish",
              ord('m'): "mirror", ord('h'): "help", ord('d'): "details", ord('v'): "avatars", ord('g'): "silhouette",
@@ -448,6 +450,8 @@ class App:
         self.gesture = HandRaise()   # free hand above the head: pause/resume, Next/OK
         self.hands_free = False      # the current pause was made from a distance: watch for "resume"
         self.person_lock = PersonLock()
+        self.camera_lost_since = None
+        self._next_camera_retry = 0.
         self.log = None    # the session being recorded (src.session_store.SessionLog)
         self.last_record = None
         self._session_t0 = 0.
@@ -485,6 +489,7 @@ class App:
 
     def new_form(self):
         form = physio.SettingsForm(self.plan)
+        form.camera = self.capture.camera_index if self.capture is not None else 0
         if self.profile.resting_angle is not None:
             form.resting_angle = self.profile.resting_angle
             form.resting_date = physio.short_date(self.profile.resting_date)
@@ -494,6 +499,12 @@ class App:
 
     def save_plan(self, plan):
         """Keep the physio's plan, rebuild the session with it, and let Willy confirm."""
+        form = self.screens["settings"].form
+        if form is not None and self.capture is not None and form.camera != self.capture.camera_index:
+            if not self.use_camera(form.camera):
+                form.message = f"Caméra n° {form.camera} introuvable."
+                return
+            self.profile.save()
         if plan != self.plan:
             self.profile.set_plan(plan)
             self.profile.save()
@@ -537,8 +548,9 @@ class App:
         elif not args.no_hands:
             print("[MAINS] Modele optionnel absent : python models/download_models.py hand_landmarker.task")
         c = config.camera
+        index = c.index if args.camera is not None or self.profile.camera_index is None else self.profile.camera_index
         self.capture = self._devices.enter_context(VideoCaptureManager(
-            camera_index=c.index, width=c.width, height=c.height, target_fps=c.fps, zoom=c.zoom, mirror=False))
+            camera_index=index, width=c.width, height=c.height, target_fps=c.fps, zoom=c.zoom, mirror=False))
         self.detector = self._devices.enter_context(PoseDetector(model_variant=config.pose.model,
                                                                  num_poses=config.pose.num_poses))
         self.detector.choose = self.person_lock.choose  # follow only the patient (Phase 5.3)
@@ -577,8 +589,9 @@ class App:
             return False
         success, frame, timestamp_ms, fps = self.capture.read_frame()
         if not success or frame is None:
-            show_startup_error(shared_script().text("E6.08", self.director.language))
-            return False
+            return self.camera_lost_step()
+        if self.camera_lost_since is not None:
+            self.camera_lost_since = None  # the camera is back: the session goes on where it was
         if self.modal is None:
             self.tick(frame, timestamp_ms, fps)
         else:
@@ -686,6 +699,38 @@ class App:
         if self.gesture.progress > 0:
             draw_ring(display, self.viewport, self.gesture_ring_point(), self.gesture.progress)
         return display
+
+    # ----------------------------------------------------------------- camera
+    def camera_lost_step(self):
+        """The camera stopped: keep the window, show it, and try again every 2 seconds."""
+        now = time.monotonic()
+        if self.camera_lost_since is None:
+            self.camera_lost_since, self._next_camera_retry = now, now + CAMERA_RETRY_SEC
+            self.say_line("E6.08")
+        elif now >= self._next_camera_retry:
+            self._next_camera_retry = now + CAMERA_RETRY_SEC
+            self.capture.reconnect()
+        output_size = self.window.output_size()
+        language = self.director.language
+        image, _ = render_notice("Caméra déconnectée, reconnexion…", shared_script().text("E6.08", language),
+                                 output_size, language, self.guide)
+        self.viewport = canvas_viewport(CANVAS_SIZE, *output_size)
+        self.window.show(image)
+        key = self.window.read_key()
+        return self.window.is_open() and key not in (ord('q'), ord('Q'), ESCAPE)
+
+    def use_camera(self, index):
+        """Switch to another camera (physio settings); back to the previous one if it can't open."""
+        previous = self.capture.camera_index
+        if index == previous:
+            return True
+        self.capture.camera_index = index
+        if self.capture.reconnect():
+            self.profile.camera_index = index
+            return True
+        self.capture.camera_index = previous
+        self.capture.reconnect()
+        return False
 
     # ----------------------------------------------------------------- hands-free
     def gesture_action(self):

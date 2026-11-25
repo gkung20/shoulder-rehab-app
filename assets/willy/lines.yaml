@@ -872,8 +872,8 @@ E6.07:
 E6.08:
   moment: Camera stops
   anim: calm
-  en: "The camera stopped. Check its cable, then reopen the app."
-  fr: "La caméra ne répond plus. Vérifiez son branchement, puis rouvrez l'application."
+  en: "The camera stopped. Check its cable; I'm trying again."
+  fr: "La caméra ne répond plus. Vérifiez son branchement ; je réessaie."
 
 # --- Everyday: end of session and closing ------------------------------------------------
 E7.01:

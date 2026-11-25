@@ -160,6 +160,7 @@ class Profile:
     resting_angle: float | None = None  # resting abduction measured at the last calibration (deg)
     resting_date: str = ""          # ISO date of that measurement
     rest_warning: bool = False      # resting too close to the target: the plan's thresholds were kept
+    camera_index: int | None = None # camera chosen in the physio settings (None: the configured one)
 
     @classmethod
     def load(cls, path=None):
@@ -189,6 +190,8 @@ class Profile:
             profile.resting_angle = None
         profile.resting_date = str(profile.resting_date or "") if _parse(profile.resting_date) else ""
         profile.rest_warning = profile.rest_warning is True
+        camera = profile.camera_index
+        profile.camera_index = camera if isinstance(camera, int) and not isinstance(camera, bool) and 0 <= camera <= 9 else None
         profile._path = path
         return profile
 

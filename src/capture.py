@@ -117,6 +117,15 @@ class VideoCaptureManager:
 
         return True, frame, timestamp_ms, self._fps_filtered
 
+    def reconnect(self) -> bool:
+        """Close and reopen the same camera (after it stopped); timestamps keep increasing."""
+        start, last = self._start_time_sec, self._last_timestamp_ms
+        self.release()
+        if not self.open():
+            return False
+        self._start_time_sec, self._last_timestamp_ms = start, last
+        return True
+
     def release(self) -> None:
         """Release camera hardware resource."""
         if self.cap is not None:
