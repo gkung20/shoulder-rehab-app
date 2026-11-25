@@ -41,6 +41,7 @@ class PoseDetector:
         min_tracking_confidence: float = 0.5,
         running_mode: vision.RunningMode = vision.RunningMode.VIDEO,
         model_variant: str = "full",
+        num_poses: int = 1,
     ):
         """Initialize the PoseDetector.
 
@@ -68,12 +69,14 @@ class PoseDetector:
         self.running_mode = running_mode
         self._last_timestamp_ms = 0
         self.last_world_landmarks: Optional[List[Point3D]] = None
+        self.last_poses = []  # every person found in the last frame: [(landmarks, world landmarks)]
+        self.choose = None    # optional: picks which person to follow, e.g. src.person_lock.PersonLock
 
         base_options = python.BaseOptions(model_asset_path=str(self.model_path))
         options = vision.PoseLandmarkerOptions(
             base_options=base_options,
             running_mode=self.running_mode,
-            num_poses=1,
+            num_poses=max(1, int(num_poses)),
             min_pose_detection_confidence=min_detection_confidence,
             min_tracking_confidence=min_tracking_confidence,
             output_segmentation_masks=False,
@@ -114,33 +117,27 @@ class PoseDetector:
             result = self.landmarker.detect(mp_image)
 
         if not result.pose_landmarks or len(result.pose_landmarks) == 0:
-            self.last_world_landmarks = None
+            self.last_world_landmarks, self.last_poses = None, []
             return None
 
-        # Extract 3D metric world landmarks (in meters) if available
-        if getattr(result, "pose_world_landmarks", None) and len(result.pose_world_landmarks) > 0:
-            world_lms = result.pose_world_landmarks[0]
-            self.last_world_landmarks = [
-                Point3D(
-                    x=float(lm.x),
-                    y=float(lm.y),
-                    z=float(lm.z),
-                    visibility=float(lm.visibility) if lm.visibility is not None else 0.0,
-                )
-                for lm in world_lms
-            ]
-        else:
+        worlds = getattr(result, "pose_world_landmarks", None) or []
+        self.last_poses = []
+        for index, person in enumerate(result.pose_landmarks):
+            points = [Point2D(x=float(lm.x), y=float(lm.y), visibility=float(getattr(lm, "visibility", 0.0) or 0.0))
+                      for lm in person]
+            world = None
+            if index < len(worlds) and worlds[index]:
+                world = [Point3D(x=float(lm.x), y=float(lm.y), z=float(lm.z),
+                                 visibility=float(lm.visibility) if lm.visibility is not None else 0.0)
+                         for lm in worlds[index]]
+            self.last_poses.append((points, world))
+        # Several people: follow the one the lock chooses (the patient); one person: the first.
+        choose = getattr(self, "choose", None)
+        chosen = choose(self.last_poses) if choose is not None else 0
+        if chosen is None:
             self.last_world_landmarks = None
-
-        # Extract primary person landmarks (33 points)
-        person_landmarks = result.pose_landmarks[0]
-        points: List[Point2D] = []
-        for lm in person_landmarks:
-            visibility = getattr(lm, "visibility", 0.0)
-            if visibility is None:
-                visibility = 0.0
-            points.append(Point2D(x=float(lm.x), y=float(lm.y), visibility=float(visibility)))
-
+            return None
+        points, self.last_world_landmarks = self.last_poses[chosen]
         return points
 
     @staticmethod

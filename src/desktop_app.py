@@ -29,6 +29,7 @@ from src.home_screen import render_home
 from src.patient_controls import PatientControls, dashboard_action_at
 from src import physio_settings as physio
 from src.pain_screen import QUESTIONS as PAIN_QUESTIONS, PainCheck, render_pain
+from src.person_lock import PersonLock
 from src.pose_detector import PoseDetector
 from src.results_screen import render_history, render_results, results_lines
 from src.rules_engine import FeedbackLevel
@@ -177,6 +178,7 @@ class ExerciseScreen(Screen):
             controls.mode = "ready"
             audio.silence()
         elif action == "start":
+            app.person_lock.reset()  # lock on the patient in front of the camera now
             app.processor.recalibrate(timestamp_sec=app.now_sec)
             app.sets = SetTracker.from_plan(app.plan, gentle=app.session_plan is not app.plan)
             app.safety = SafetyMonitor.from_config(app.config.safety, app.session_plan)
@@ -206,6 +208,7 @@ class ExerciseScreen(Screen):
             app.sets = app.safety = None
             audio.silence()
         elif action in ("arm_left", "arm_right"):
+            app.person_lock.reset()
             app.processor.recalibrate("left" if action == "arm_left" else "right", app.now_sec)
             audio.silence()
         elif action == "audio":
@@ -224,6 +227,7 @@ class ExerciseScreen(Screen):
         if 65 <= key <= 90:
             key += 32
         if key == ord('c') and app.controls.mode == "running" and app.director.permits("calibrate"):
+            app.person_lock.reset()
             app.processor.recalibrate(timestamp_sec=app.now_sec)
             app.audio.silence()
         elif key == SPACE:
@@ -443,6 +447,7 @@ class App:
         self.pain_rest_until = None  # the minute of rest after "J'ai mal"
         self.gesture = HandRaise()   # free hand above the head: pause/resume, Next/OK
         self.hands_free = False      # the current pause was made from a distance: watch for "resume"
+        self.person_lock = PersonLock()
         self.log = None    # the session being recorded (src.session_store.SessionLog)
         self.last_record = None
         self._session_t0 = 0.
@@ -534,7 +539,9 @@ class App:
         c = config.camera
         self.capture = self._devices.enter_context(VideoCaptureManager(
             camera_index=c.index, width=c.width, height=c.height, target_fps=c.fps, zoom=c.zoom, mirror=False))
-        self.detector = self._devices.enter_context(PoseDetector(model_variant=config.pose.model))
+        self.detector = self._devices.enter_context(PoseDetector(model_variant=config.pose.model,
+                                                                 num_poses=config.pose.num_poses))
+        self.detector.choose = self.person_lock.choose  # follow only the patient (Phase 5.3)
         self.audio = self._devices.enter_context(AudioCoach.from_config(
             config.audio, enabled=self.profile.audio_enabled, language=self.profile.language or "fr"))
         print(self.capture.status_message)

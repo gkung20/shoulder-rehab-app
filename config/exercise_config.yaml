@@ -10,6 +10,7 @@
 
 pose:
   model: full                    # full = default; lite for slower PCs; heavy is optional
+  num_poses: 2                   # 2: keep following the patient when someone walks behind; 1: faster
 
 audio:
   backend: auto                  # Local neural Piper, then a Windows voice in the same language

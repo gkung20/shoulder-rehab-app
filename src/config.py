@@ -72,6 +72,7 @@ class CameraConfig:
 @dataclass
 class PoseConfig:
     model: str = "full"
+    num_poses: int = 2   # 2: find a second person so the app can keep following the patient; 1: faster
 
 
 @dataclass
@@ -129,6 +130,8 @@ class ExerciseConfig:
                 raise ValueError("Invalid filtering settings")
         if self.calibration is not None and (self.calibration.duration_sec <= 0 or self.calibration.max_variance_ratio <= 0):
             raise ValueError("Invalid calibration settings")
+        if self.pose.num_poses not in (1, 2, 3):
+            raise ValueError("pose.num_poses must be 1, 2 or 3")
         if self.pose.model not in ("lite", "full", "heavy"):
             raise ValueError("Pose model must be lite, full or heavy")
         audio = self.audio
@@ -180,7 +183,8 @@ class ExerciseConfig:
             audio=AudioConfig(**audio),
             camera=CameraConfig(index=camera.get("index", 0), width=camera.get("width", 1280),
                 height=camera.get("height", 720), fps=camera.get("fps", 30), zoom=camera.get("zoom")),
-            pose=PoseConfig(model=raw.get("pose", {}).get("model", "full")),
+            pose=PoseConfig(model=raw.get("pose", {}).get("model", "full"),
+                            num_poses=int(raw.get("pose", {}).get("num_poses", 2))),
             abduction=AbductionThresholds(
                 rest_threshold_deg=float(abd.get("rest_threshold_deg", 25.0)),
                 rising_start_deg=float(abd.get("rising_start_deg", 32.0)),
