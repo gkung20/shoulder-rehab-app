@@ -149,7 +149,8 @@ def make_app(monkeypatch, tmp_path, window, args=("--no-avatars", "--no-hands"),
     monkeypatch.setattr(desktop, "WillyDirector", Director)
     monkeypatch.setattr(desktop, "time", SimpleNamespace(monotonic=tick))
     config = ExerciseConfig.from_yaml()
-    config = replace(config, calibration=replace(config.calibration, duration_sec=calibration_sec))
+    config = replace(config, calibration=replace(config.calibration, duration_sec=calibration_sec),
+                     performance=replace(config.performance, pose_thread=False))  # one frame per step
     _, parsed = cli.parse_args(list(args))
     app = desktop.App(parsed, config, Profile.load(), window=window)
     window.app = app

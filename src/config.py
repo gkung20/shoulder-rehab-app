@@ -61,6 +61,13 @@ class SafetyConfig:
 
 
 @dataclass
+class PerformanceConfig:
+    pose_thread: bool = True      # camera and pose model in their own thread (the screen keeps its pace)
+    auto_lite_fps: float = 15.0   # below this pose rate with the full model, switch to lite (0 = never)
+    hand_model: bool = False      # the optional hand model (display only); costs time on every frame
+
+
+@dataclass
 class CameraConfig:
     index: int = 0
     width: int = 1280
@@ -102,6 +109,7 @@ class ExerciseConfig:
     pose: PoseConfig = field(default_factory=PoseConfig)
     audio: AudioConfig = field(default_factory=AudioConfig)
     safety: SafetyConfig = field(default_factory=SafetyConfig)
+    performance: PerformanceConfig = field(default_factory=PerformanceConfig)
 
     def __post_init__(self):
         # Dataclasses used by pure rule tests may omit camera-only settings.
@@ -220,4 +228,6 @@ class ExerciseConfig:
             ),
             safety=SafetyConfig(**{k: v for k, v in (raw.get("safety") or {}).items()
                                    if k in SafetyConfig.__dataclass_fields__}),
+            performance=PerformanceConfig(**{k: v for k, v in (raw.get("performance") or {}).items()
+                                             if k in PerformanceConfig.__dataclass_fields__}),
         )

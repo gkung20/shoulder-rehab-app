@@ -25,6 +25,7 @@ def parse_args(argv=None):
     parser.add_argument("--no-hands", action="store_true", help="Desactiver le suivi detaille des mains")
     parser.add_argument("--tour", action="store_true", help="Rejouer la visite guidee de Willy / replay Willy's tour")
     parser.add_argument("--skip-home", action="store_true", help="Ouvrir directement la seance, sans l'accueil de Willy")
+    parser.add_argument("--debug", action="store_true", help="Temps de chaque etape a l'ecran et dans timings.csv")
     return parser, parser.parse_args(argv)
 
 

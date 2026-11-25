@@ -1,4 +1,5 @@
 """Mouse-only patient flows must pause analysis and keep counts honest."""
+from dataclasses import replace
 from unittest.mock import Mock
 import numpy as np
 import pytest
@@ -92,7 +93,7 @@ def test_native_mouse_buttons_pause_inference_and_finish_before_closing(monkeypa
         created.append(processor)
         return processor
     monkeypatch.setattr(app,"SessionProcessor",make_processor)
-    saved_config=config()
+    saved_config=replace(config(),performance=replace(config().performance,pose_thread=False))
     monkeypatch.setattr(cli.ExerciseConfig,"from_yaml",lambda: saved_config)
     class Capture:
         status_message="Test camera"
@@ -190,7 +191,7 @@ def test_app_opens_on_willys_home_and_reaches_the_session_after_the_safety_rules
     monkeypatch.setattr(app,"HandDetector",lambda: Mock(detect=Mock(return_value={})))
     monkeypatch.setattr(app,"enable_high_dpi",lambda: None)
     monkeypatch.setattr(app.Window,"pump",lambda self: None)  # loading screens: no key reads
-    saved_config=config()
+    saved_config=replace(config(),performance=replace(config().performance,pose_thread=False))
     monkeypatch.setattr(cli.ExerciseConfig,"from_yaml",lambda: saved_config)
     clock=[1000.]
     def tick():

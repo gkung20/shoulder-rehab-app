@@ -33,9 +33,12 @@ from src.notice_screen import render_notice
 from src.pain_screen import QUESTIONS as PAIN_QUESTIONS, PainCheck, render_pain
 from src.person_lock import PersonLock
 from src.pose_detector import PoseDetector
+from src.pose_worker import PoseWorker
+from src.timings import StageTimer
 from src.results_screen import render_history, render_results, results_lines
 from src.rules_engine import FeedbackLevel
 from src import history_export, session_store
+from src.user_profile import data_dir
 from src.safety import SafetyMonitor
 from src.session_plan import SetTracker
 from src.session_processor import FrameAnalysis, SessionProcessor
@@ -49,7 +52,6 @@ __all__ = ["App", "Window", "show_startup_error", "window_size", "HAND_MODEL_PAT
 
 WINDOW_NAME = "Mouvement - Coach epaule"
 ESCAPE, ENTER, SPACE, NO_KEY = 27, 13, 32, 255
-CAMERA_RETRY_SEC = 2.
 PRIMARY_BY_MODE = {"ready": "start", "running": "pause", "paused": "resume", "finished": "restart"}
 SHORTCUTS = {ord('l'): "arm_left", ord('r'): "arm_right", ord('a'): "audio", ord('s'): "finish",
              ord('m'): "mirror", ord('h'): "help", ord('d'): "details", ord('v'): "avatars", ord('g'): "silhouette",
@@ -448,6 +450,9 @@ class App:
         self.modal = None  # a screen shown over Willy's flow (PIN pad, settings); Willy waits meanwhile
         self._calibrations_seen = 0
         self.timings = {}  # startup: seconds to the first window and until ready
+        self.worker = None
+        self._last_seq = 0
+        self.timer = StageTimer(getattr(args, "debug", False), data_dir() / "timings.csv")
         self.sets = None   # sets of the plan, from Start to the end of the session
         self.session_plan = self.plan  # the plan of this session (gentle when pain is in the middle band)
         self.safety = None  # gentle stop rules of this session (src.safety)
@@ -457,7 +462,6 @@ class App:
         self.hands_free = False      # the current pause was made from a distance: watch for "resume"
         self.person_lock = PersonLock()
         self.camera_lost_since = None
-        self._next_camera_retry = 0.
         self.log = None    # the session being recorded (src.session_store.SessionLog)
         self.last_record = None
         self._session_t0 = 0.
@@ -571,6 +575,8 @@ class App:
         self.detector = self._devices.enter_context(PoseDetector(model_variant=config.pose.model,
                                                                  num_poses=config.pose.num_poses))
         self.detector.choose = self.person_lock.choose  # follow only the patient (Phase 5.3)
+        self.worker = self._devices.enter_context(PoseWorker(
+            self.capture, self.detector, threaded=config.performance.pose_thread, clock=lambda: time.monotonic()))
         self.show_loading("Préparation de ma voix…")
         self.audio = self._devices.enter_context(AudioCoach.from_config(
             config.audio, enabled=self.profile.audio_enabled, language=self.profile.language or "fr"))
@@ -610,24 +616,47 @@ class App:
     # ----------------------------------------------------------------- one frame
     def step(self):
         """One frame of the app; False when it should close."""
+        timer = self.timer
+        timer.begin_frame()
         self.handle_actions()
         if self.quitting and self.director.ready_to_close(time.monotonic()):
             return False
-        success, frame, timestamp_ms, fps = self.capture.read_frame()
-        if not success or frame is None:
+        self.worker.want_pose = self.needs_pose()
+        with timer.stage("capture"):
+            result = self.worker.poll()
+        if result is None:  # the camera thread has no frame yet
+            self.show_loading("Démarrage de la caméra…")
+            return True
+        if not result.ok:
             return self.camera_lost_step()
         if self.camera_lost_since is not None:
             self.camera_lost_since = None  # the camera is back: the session goes on where it was
+        new = result.seq != self._last_seq
+        self._last_seq = result.seq
+        timer.record("pose", self.worker.pose_ms)
+        if result.detected and new:
+            timer.pose_fps = 1000 / max(1., self.worker.pose_ms + self.worker.capture_ms)
         if self.modal is None:
-            self.tick(frame, timestamp_ms, fps)
+            self.tick(result, new)
         else:
-            self.frame, self.fps = frame, fps  # Willy's flow waits while the physio screens are open
-            self.check_gesture(frame, timestamp_ms, None)
-        self.window.show(self.draw())
-        key = self.window.read_key()
+            self.frame, self.fps = result.frame, result.fps  # Willy's flow waits while modal screens are open
+            if new:
+                self.check_gesture(result)
+        with timer.stage("draw"):
+            image = self.draw()
+        timer.overlay(image)
+        with timer.stage("display"):
+            self.window.show(image)
+            key = self.window.read_key()
         if not self.window.is_open():
             return False
         return self.on_key(key)
+
+    def needs_pose(self):
+        """Run the pose model only while counting, while the tour checks the framing, or for a gesture."""
+        director = self.director
+        return ((director.screen == "dashboard" and self.controls.mode == "running" and self.modal is None)
+                or director.wants_tracking or self.gesture_action() is not None)
 
     def handle_actions(self):
         while self.actions:
@@ -656,9 +685,11 @@ class App:
                 continue
             self.screen.on_action(self, action)
 
-    def tick(self, frame, timestamp_ms, fps):
-        """Analyse a camera frame (only while a session runs, or while the tour checks the framing)."""
-        self.frame, self.fps = frame, fps
+    def tick(self, result, new=True):
+        """Analyse the newest camera frame (only while a session runs, or while the tour checks the
+        framing). The screen may tick faster than the camera: a frame is analysed once."""
+        frame, timestamp_ms = result.frame, result.timestamp_ms
+        self.frame, self.fps = frame, result.fps
         previous, self.now_sec = self.now_sec, timestamp_ms / 1000.
         if self.controls.mode == "running" and self.director.screen == "dashboard":
             self.active_sec += min(.5, max(0., self.now_sec - previous))
@@ -668,45 +699,55 @@ class App:
         height, width = frame.shape[:2]
         director, controls = self.director, self.controls
         alignment = None
-        landmarks = None
+        landmarks = result.landmarks if result.detected else None
         if director.screen == "dashboard" and controls.mode == "running":
-            landmarks = self.detector.detect(frame, timestamp_ms)
-            analysis = self.processor.process(landmarks, self.detector.last_world_landmarks, width, height, self.now_sec)
-            if self.hand_detector is not None:
-                analysis.hands = self.hand_detector.detect(frame, timestamp_ms, landmarks)
-            if self.processor.calibrations_done != self._calibrations_seen:
-                self._calibrations_seen = self.processor.calibrations_done
-                self.remember_resting_angle()
-            # During the first guided movements, Willy's tour speaks the phases and results itself.
-            if not director.coaching or analysis.cue.level == FeedbackLevel.WARNING:
-                self.audio.speak_cue(analysis.cue)
-            if analysis.new_evaluation and not director.coaching:
-                self.audio.speak_evaluation(analysis.new_evaluation)
-            if analysis.new_evaluation and self.log is not None:
-                self.log.add_rep(analysis.new_evaluation, self.now_sec - self._session_t0)
-            if analysis.new_evaluation and self.safety is not None:
-                self.check_fatigue(analysis.new_evaluation)
-            if analysis.new_evaluation and self.sets is not None:
-                self.count_for_plan()
+            if new and result.detected:
+                with self.timer.stage("analysis"):
+                    analysis = self.processor.process(landmarks, result.world, width, height, self.now_sec)
+                self.after_analysis(analysis, frame, timestamp_ms, landmarks)
+            else:
+                analysis = self.analysis if self.analysis is not None else FrameAnalysis(self.now_sec, metrics={})
+                analysis.new_evaluation = None
         elif director.wants_tracking:
             # Camera setup of the tour: find the shoulders to check the placement, count nothing.
-            landmarks = self.detector.detect(frame, timestamp_ms)
             analysis = FrameAnalysis(self.now_sec, landmarks=landmarks or [], metrics={}, status=controls.mode.upper())
             alignment = patient_alignment(analysis.landmarks, width, height, self.mirror)
         else:
             analysis = FrameAnalysis(self.now_sec, metrics={}, status=controls.mode.upper())
         if controls.mode != "paused":
             self.hands_free = False
-        self.check_gesture(frame, timestamp_ms, landmarks)
+        if new:
+            self.check_gesture(result)
         if self.sets is not None and self.sets.tick(time.monotonic()) == "rest_over":
             director.rest_over(self.sets.current_set + 1)
         self.analysis = analysis
-        director.update(Moment(time.monotonic(), controls.mode, analysis, self.processor, alignment, self.mirror,
-                               self.audio.enabled is not False))
+        with self.timer.stage("director"):
+            director.update(Moment(time.monotonic(), controls.mode, analysis, self.processor, alignment, self.mirror,
+                                   self.audio.enabled is not False))
         self.follow_tour_view()
         if self.audio.status_message != self._last_audio_status:
             print(f"[AUDIO] {self.audio.status_message}")
             self._last_audio_status = self.audio.status_message
+
+    def after_analysis(self, analysis, frame, timestamp_ms, landmarks):
+        """Everything that follows a newly analysed frame during a session."""
+        director = self.director
+        if self.hand_detector is not None:
+            analysis.hands = self.hand_detector.detect(frame, timestamp_ms, landmarks)
+        if self.processor.calibrations_done != self._calibrations_seen:
+            self._calibrations_seen = self.processor.calibrations_done
+            self.remember_resting_angle()
+        # During the first guided movements, Willy's tour speaks the phases and results itself.
+        if not director.coaching or analysis.cue.level == FeedbackLevel.WARNING:
+            self.audio.speak_cue(analysis.cue)
+        if analysis.new_evaluation and not director.coaching:
+            self.audio.speak_evaluation(analysis.new_evaluation)
+        if analysis.new_evaluation and self.log is not None:
+            self.log.add_rep(analysis.new_evaluation, self.now_sec - self._session_t0)
+        if analysis.new_evaluation and self.safety is not None:
+            self.check_fatigue(analysis.new_evaluation)
+        if analysis.new_evaluation and self.sets is not None:
+            self.count_for_plan()
 
     def follow_tour_view(self):
         """The tour shows the view it is talking about."""
@@ -729,13 +770,9 @@ class App:
     # ----------------------------------------------------------------- camera
     def camera_lost_step(self):
         """The camera stopped: keep the window, show it, and try again every 2 seconds."""
-        now = time.monotonic()
-        if self.camera_lost_since is None:
-            self.camera_lost_since, self._next_camera_retry = now, now + CAMERA_RETRY_SEC
+        if self.camera_lost_since is None:  # the camera thread retries every 2 seconds
+            self.camera_lost_since = time.monotonic()
             self.say_line("E6.08")
-        elif now >= self._next_camera_retry:
-            self._next_camera_retry = now + CAMERA_RETRY_SEC
-            self.capture.reconnect()
         output_size = self.window.output_size()
         language = self.director.language
         image, _ = render_notice("Caméra déconnectée, reconnexion…", shared_script().text("E6.08", language),
@@ -750,13 +787,17 @@ class App:
         previous = self.capture.camera_index
         if index == previous:
             return True
-        self.capture.camera_index = index
-        if self.capture.reconnect():
-            self.profile.camera_index = index
-            return True
-        self.capture.camera_index = previous
-        self.capture.reconnect()
-        return False
+        self.worker.stop()  # nobody else reads the camera while it is reopened
+        try:
+            self.capture.camera_index = index
+            if self.capture.reconnect():
+                self.profile.camera_index = index
+                return True
+            self.capture.camera_index = previous
+            self.capture.reconnect()
+            return False
+        finally:
+            self.worker.start()
 
     # ----------------------------------------------------------------- hands-free
     def gesture_action(self):
@@ -775,13 +816,12 @@ class App:
             return "resume"
         return None
 
-    def check_gesture(self, frame, timestamp_ms, landmarks):
+    def check_gesture(self, result):
         action = self.gesture_action()
-        if action is None or self.detector is None:
+        landmarks = result.landmarks if result.detected else None
+        if action is None or landmarks is None:
             self.gesture.update(None, self.processor.arm, time.monotonic())
             return
-        if landmarks is None:
-            landmarks = self.detector.detect(frame, timestamp_ms)
         if self.gesture.update(landmarks, self.processor.arm, time.monotonic()):
             self.actions.append(action)
             if action == "pause":

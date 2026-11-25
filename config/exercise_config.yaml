@@ -112,3 +112,9 @@ safety:
   compensation_streak: 3       # reps in a row with compensations before Willy suggests a break
   fatigue_cooldown_sec: 180.0  # at most one break suggestion per 3 minutes
   max_pain_stops: 2            # pressing "J'ai mal" this many times in one session ends it kindly
+
+# Speed (see python app_live_cv.py --debug for the time of each stage).
+performance:
+  pose_thread: true      # camera and pose model in their own thread; false = one loop (fallback)
+  auto_lite_fps: 15.0    # with the full model below this pose rate, switch to lite (0 = never)
+  hand_model: false      # optional hand model (palms and fingers on the avatars); costs time per frame

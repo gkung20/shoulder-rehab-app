@@ -44,3 +44,27 @@ def test_the_window_opens_at_once_with_willy_getting_ready(monkeypatch, tmp_path
     assert app.run() == 0
     assert shown[0] is True and window.pumps >= 3  # loading screens painted before anything else
     assert app.timings["first_window"] < 1.0 and app.timings["ready"] >= app.timings["first_window"]
+
+
+def test_the_app_runs_with_the_camera_thread(monkeypatch, tmp_path):
+    """Same patient as above, with the real worker thread: no deadlock, movements counted."""
+    import time
+    from dataclasses import replace
+
+    import src.desktop_app as desktop
+    from tests.app_fakes import FakeCapture
+
+    class PacedCapture(FakeCapture):  # a real camera waits for each frame
+        def read_frame(self):
+            time.sleep(.012)
+            ok, frame, _, fps = super().read_frame()
+            self.t += 12 - 33
+            return ok, frame, self.t, fps
+
+    window = ScriptedWindow(patient)
+    app = make_app(monkeypatch, tmp_path, window, language="fr", tour_done=True)
+    monkeypatch.setattr(desktop, "VideoCaptureManager", PacedCapture)
+    app.config = replace(app.config, performance=replace(app.config.performance, pose_thread=True))
+    assert app.run() == 0
+    assert app.worker.threaded and app.worker._thread is None  # the thread was stopped at close
+    assert app.processor.rules_engine.session.total_repetitions >= 2
