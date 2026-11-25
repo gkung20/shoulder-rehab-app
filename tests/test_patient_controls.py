@@ -76,7 +76,8 @@ def test_fullscreen_text_is_rasterized_at_native_font_size_not_enlarged(monkeypa
 
 @pytest.mark.parametrize("window_dimensions",[(1280,840),(1920,1080)])
 def test_native_mouse_buttons_pause_inference_and_finish_before_closing(monkeypatch,window_dimensions,tmp_path):
-    import app_live_cv as app
+    import app_live_cv as cli
+    import src.desktop_app as app
     monkeypatch.setenv("MOUVEMENT_DATA_DIR",str(tmp_path))
     monkeypatch.setattr(app,"AvatarStage",lambda: Mock())
     hands=Mock(detect=Mock(return_value={}))
@@ -91,7 +92,7 @@ def test_native_mouse_buttons_pause_inference_and_finish_before_closing(monkeypa
         return processor
     monkeypatch.setattr(app,"SessionProcessor",make_processor)
     saved_config=config()
-    monkeypatch.setattr(app.ExerciseConfig,"from_yaml",lambda: saved_config)
+    monkeypatch.setattr(cli.ExerciseConfig,"from_yaml",lambda: saved_config)
     class Capture:
         status_message="Test camera"
         def __init__(self,**kwargs):
@@ -141,7 +142,7 @@ def test_native_mouse_buttons_pause_inference_and_finish_before_closing(monkeypa
             mouse["callback"](app.cv2.EVENT_LBUTTONUP,x,y,None,None)
         return 255
     monkeypatch.setattr(app.cv2,"waitKey",wait_key)
-    assert app.main(["--skip-home"]) == 0
+    assert cli.main(["--skip-home"]) == 0
     assert created[0].process.call_count == 4
     assert detector.detect.call_count == 4
     if app.HAND_MODEL_PATH.exists():
@@ -178,14 +179,15 @@ def test_live_session_paused_read_never_runs_detector_or_counts():
 def test_app_opens_on_willys_home_and_reaches_the_session_after_the_safety_rules(monkeypatch,tmp_path):
     """First launch: home screen, language, skip the tour, safety rules (never skipped), then the session."""
     from types import SimpleNamespace
-    import app_live_cv as app
+    import app_live_cv as cli
+    import src.desktop_app as app
     from src.willy_tour import WillyDirector
     monkeypatch.setenv("MOUVEMENT_DATA_DIR",str(tmp_path))
     monkeypatch.setattr(app,"AvatarStage",lambda: Mock())
     monkeypatch.setattr(app,"HandDetector",lambda: Mock(detect=Mock(return_value={})))
     monkeypatch.setattr(app,"enable_high_dpi",lambda: None)
     saved_config=config()
-    monkeypatch.setattr(app.ExerciseConfig,"from_yaml",lambda: saved_config)
+    monkeypatch.setattr(cli.ExerciseConfig,"from_yaml",lambda: saved_config)
     clock=[1000.]
     def tick():
         clock[0]+=.25
@@ -246,7 +248,7 @@ def test_app_opens_on_willys_home_and_reaches_the_session_after_the_safety_rules
                 break
         return 255
     monkeypatch.setattr(app.cv2,"waitKey",wait_key)
-    assert app.main([]) == 0
+    assert cli.main([]) == 0
     director=directors[0]
     assert screens[0] == "home" and "dashboard" in screens and wanted == []
     assert director.profile.language == "en" and director.profile.tour_done
