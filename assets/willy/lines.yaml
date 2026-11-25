@@ -672,6 +672,11 @@ E3.09:
   fr: "Placez-vous face à la caméra."
 
 # --- Everyday: during a movement --------------------------------------------------------
+E3.10:
+  moment: The free hand held above the head was recognised (hands-free control)
+  anim: nod
+  en: "Got it!"
+  fr: "C'est noté !"
 E4.01:
   moment: Ready, arm at rest
   anim: idle

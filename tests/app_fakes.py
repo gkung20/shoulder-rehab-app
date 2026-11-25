@@ -39,8 +39,10 @@ class FakeDetector:
 
     def __init__(self, **kwargs):
         self.calls = 0
-        self.angles = [0.] * 40 + rep_angles(rest=10, rise=30, hold=40, settle=10) * 4
+        self.rest = 40
+        self.cycle = rep_angles(rest=10, rise=30, hold=40, settle=10)
         self.last_world_landmarks = None
+        self.hand_up = False  # a test can raise the free hand
 
     def __enter__(self):
         return self
@@ -49,9 +51,9 @@ class FakeDetector:
         return False
 
     def detect(self, frame, timestamp_ms):
-        angle = self.angles[min(self.calls, len(self.angles) - 1)]
+        angle = 0. if self.calls < self.rest else self.cycle[(self.calls - self.rest) % len(self.cycle)]
         self.calls += 1
-        landmarks, self.last_world_landmarks = body(angle)
+        landmarks, self.last_world_landmarks = body(angle, left_hand_up=self.hand_up)
         return landmarks
 
 

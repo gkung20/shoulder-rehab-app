@@ -23,6 +23,7 @@ from src.avatar_stage import AvatarStage
 from src.capture import VideoCaptureManager
 from src.dashboard import CANVAS_SIZE, render_dashboard
 from src.exercises import get_exercise
+from src.gesture import HandRaise
 from src.hand_detector import HandDetector, MODEL_PATH as HAND_MODEL_PATH
 from src.home_screen import render_home
 from src.patient_controls import PatientControls, dashboard_action_at
@@ -98,6 +99,16 @@ class Window:
 
     def close(self):
         cv2.destroyAllWindows()
+
+
+def draw_ring(image, viewport, canvas_point, progress):
+    """A ring filling clockwise, drawn on the final BGR image (canvas coordinates)."""
+    scale = viewport.content_width / viewport.source_width
+    x = round(viewport.left + canvas_point[0] * scale)
+    y = round(viewport.top + canvas_point[1] * (viewport.content_height / viewport.source_height))
+    radius, thick = max(8, round(34 * scale)), max(2, round(6 * scale))
+    cv2.circle(image, (x, y), radius, (235, 238, 236), thick, cv2.LINE_AA)
+    cv2.ellipse(image, (x, y), (radius, radius), -90, 0, 360 * progress, (32, 29, 26), thick, cv2.LINE_AA)
 
 
 # --------------------------------------------------------------------------- screens
@@ -430,6 +441,8 @@ class App:
         self.safety = None  # gentle stop rules of this session (src.safety)
         self.active_sec = 0.
         self.pain_rest_until = None  # the minute of rest after "J'ai mal"
+        self.gesture = HandRaise()   # free hand above the head: pause/resume, Next/OK
+        self.hands_free = False      # the current pause was made from a distance: watch for "resume"
         self.log = None    # the session being recorded (src.session_store.SessionLog)
         self.last_record = None
         self._session_t0 = 0.
@@ -563,6 +576,7 @@ class App:
             self.tick(frame, timestamp_ms, fps)
         else:
             self.frame, self.fps = frame, fps  # Willy's flow waits while the physio screens are open
+            self.check_gesture(frame, timestamp_ms, None)
         self.window.show(self.draw())
         key = self.window.read_key()
         if not self.window.is_open():
@@ -608,6 +622,7 @@ class App:
         height, width = frame.shape[:2]
         director, controls = self.director, self.controls
         alignment = None
+        landmarks = None
         if director.screen == "dashboard" and controls.mode == "running":
             landmarks = self.detector.detect(frame, timestamp_ms)
             analysis = self.processor.process(landmarks, self.detector.last_world_landmarks, width, height, self.now_sec)
@@ -634,6 +649,9 @@ class App:
             alignment = patient_alignment(analysis.landmarks, width, height, self.mirror)
         else:
             analysis = FrameAnalysis(self.now_sec, metrics={}, status=controls.mode.upper())
+        if controls.mode != "paused":
+            self.hands_free = False
+        self.check_gesture(frame, timestamp_ms, landmarks)
         if self.sets is not None and self.sets.tick(time.monotonic()) == "rest_over":
             director.rest_over(self.sets.current_set + 1)
         self.analysis = analysis
@@ -658,7 +676,54 @@ class App:
         output_size = self.window.output_size()
         display = self.screen.draw(self, output_size)
         self.viewport = canvas_viewport(CANVAS_SIZE, *output_size)
+        if self.gesture.progress > 0:
+            draw_ring(display, self.viewport, self.gesture_ring_point(), self.gesture.progress)
         return display
+
+    # ----------------------------------------------------------------- hands-free
+    def gesture_action(self):
+        """What the free hand held up means right now (None: no gesture here).
+
+        Only on the session screen: pause while counting, and resume after a pause the patient
+        made from a distance (gesture, or the rest between sets). Nothing is tracked on Willy's
+        home or after a pause clicked at the computer, so the camera model only runs when needed.
+        """
+        if self.modal is not None or self.director is None or self.director.screen != "dashboard":
+            return None
+        mode = self.controls.mode
+        if mode == "running":
+            return "pause"
+        if mode == "paused" and self.hands_free:
+            return "resume"
+        return None
+
+    def check_gesture(self, frame, timestamp_ms, landmarks):
+        action = self.gesture_action()
+        if action is None or self.detector is None:
+            self.gesture.update(None, self.processor.arm, time.monotonic())
+            return
+        if landmarks is None:
+            landmarks = self.detector.detect(frame, timestamp_ms)
+        if self.gesture.update(landmarks, self.processor.arm, time.monotonic()):
+            self.actions.append(action)
+            if action == "pause":
+                self.hands_free = True
+            self.say_line("E3.10")
+
+    def gesture_ring_point(self):
+        """Around the free wrist in the camera view; otherwise in the top-right corner."""
+        wrist, frame = self.gesture.wrist, self.frame
+        if (wrist is not None and frame is not None and self.modal is None and self.director.screen == "dashboard"
+                and not self.controls.avatars):
+            from src import layout
+            stage = layout.STAGE
+            height, width = frame.shape[:2]
+            scale = min(stage.width / width, stage.height / height)
+            x0 = stage.x0 + (stage.width - width * scale) / 2
+            y0 = stage.y0 + (stage.height - height * scale) / 2
+            x = 1 - wrist[0] if self.mirror else wrist[0]
+            return x0 + x * width * scale, y0 + wrist[1] * height * scale
+        return 1180., 120.
 
     # ----------------------------------------------------------------- input
     def on_mouse(self, event, x, y, flags, param):
@@ -864,6 +929,7 @@ class App:
         if event == "set_done":
             self.director.set_done(self.sets.current_set)
             self.screens["dashboard"].on_action(self, "pause")
+            self.hands_free = True  # the patient is away from the computer: resume by gesture too
         elif event == "plan_done":
             self.director.plan_done()
             self.screens["dashboard"].on_action(self, "finish")
