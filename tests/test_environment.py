@@ -3,6 +3,7 @@
 from pathlib import Path
 import pytest
 import yaml
+from tests.conftest import requires_pose_model
 
 
 def test_core_imports():
@@ -18,6 +19,7 @@ def test_core_imports():
     assert streamlit.__version__ is not None
 
 
+@requires_pose_model
 def test_mediapipe_tasks_pose_landmarker():
     """Verify modern MediaPipe Tasks PoseLandmarker loads with local task model."""
     import mediapipe as mp

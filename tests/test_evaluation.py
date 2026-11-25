@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from evaluate_dataset import ConfusionMatrix, analyze_video_file
+from tests.conftest import requires_pose_model
 
 
 def test_confusion_matrix_calculations():
@@ -56,6 +57,7 @@ def test_confusion_matrix_zero_division_guard():
     assert cm.f1_score == 0.0
 
 
+@requires_pose_model
 def test_analyze_video_file_on_synthetic_clip():
     """Verify analyze_video_file reads frames and returns evaluations on a synthetic test clip."""
     with tempfile.TemporaryDirectory() as tmp_dir:

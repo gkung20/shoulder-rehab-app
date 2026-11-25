@@ -1,5 +1,6 @@
 """Real neural synthesis validation, without using an audio device."""
 import io
+import json
 import wave
 import pytest
 
@@ -15,7 +16,9 @@ def test_local_french_voice_produces_valid_audio_and_reuses_cache():
         audio=voice.synthesize("Très bien ! Redescendez doucement le bras.")
         assert voice.synthesize("Très bien ! Redescendez doucement le bras.") is audio
         with wave.open(io.BytesIO(audio)) as wav:
-            assert wav.getframerate() == 22050
+            # Willy keeps the voice's own sample rate (22.05 kHz for most voices, 44.1 kHz for Tom).
+            config = json.loads((VOICE_DIRECTORY / "fr_FR-tom-medium.onnx.json").read_text(encoding="utf-8"))
+            assert wav.getframerate() == config["audio"]["sample_rate"]
             assert wav.getnchannels() == 1
             assert wav.getsampwidth() == 2
             assert wav.getnframes() > wav.getframerate()

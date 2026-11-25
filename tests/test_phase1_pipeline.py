@@ -6,6 +6,7 @@ import pytest
 from src.geometry import Point2D, calculate_abduction_angle, PoseLandmarkIndex
 from src.pose_detector import PoseDetector
 from src.visualizer import draw_hud, draw_skeleton
+from tests.conftest import requires_pose_model
 
 
 def test_get_arm_landmarks_left_and_right():
@@ -33,6 +34,7 @@ def test_get_arm_landmarks_left_and_right():
         PoseDetector.get_arm_landmarks(dummy_landmarks, arm="head")
 
 
+@requires_pose_model
 def test_pose_detector_handles_empty_or_black_frame():
     """Verify PoseDetector gracefully returns None when no human is present."""
     with PoseDetector() as detector:
