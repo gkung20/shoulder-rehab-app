@@ -97,8 +97,10 @@ class _Painter:
         self.draw.line((*self.point(x1,y1),*self.point(x2,y2)),fill=color,width=max(1,round(width*self.scale)))
 
 
-def patient_guidance(analysis,mode,processor,lang="fr",sets=None,now=0.):
+def patient_guidance(analysis,mode,processor,lang="fr",sets=None,now=0.,override=None):
     """(title, body, status) for the guidance column; French, translated when drawn in English."""
+    if override is not None:
+        return override
     if mode == "paused" and sets is not None and sets.waiting:
         if sets.resting:
             return ("Pause entre les séries",
@@ -141,15 +143,19 @@ def _button(p,button):
     if button.primary:
         p.rect(button.bounds,fill=TEXT,radius=5)
         color=(255,255,255)
+    elif getattr(button,"tone","") == "pain":  # calm and warm, not an alarm
+        p.rect(button.bounds,fill=(250,228,220),outline=(196,120,100),radius=5)
+        color,size=(150,60,40),17
     else:
         fill=(239,241,242) if button.selected else (255,255,255)
         outline=TEXT if button.selected else (190,195,199) if button.enabled else LINE
         if not button.enabled:
             fill=BG
         p.rect(button.bounds,fill=fill,outline=outline,radius=4)
-    font=p.font(size,button.primary)
+    bold=button.primary or getattr(button,"tone","") == "pain"
+    font=p.font(size,bold)
     text_width=p.draw.textlength(label,font=font)/p.sx
-    p.text((left+(right-left-text_width)/2,top+(bottom-top-size)/2-3),label,size,color,button.primary)
+    p.text((left+(right-left-text_width)/2,top+(bottom-top-size)/2-3),label,size,color,bold)
 
 
 WILLY_BOX=L.WILLY_BOX  # Right column, beside the repetition count: visible in every view.
@@ -238,7 +244,7 @@ def _silhouette_labels(p,guide_text):
 def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_enabled=True,audio_status="",
                      *,mode="running",details=False,help_visible=False,show_controls=True,output_size=None,
                      avatar_stage=None,avatars=True,avatar_gender="male",willy=None,speaking=False,
-                     silhouette=False,lang="fr",overlay=None,sets=None,now=0.,results=False):
+                     silhouette=False,lang="fr",overlay=None,sets=None,now=0.,results=False,guidance=None):
     """The patient screen. `overlay` (src.willy_overlay.Overlay) adds Willy's bubble and the tour's spotlight."""
     width,height=output_size or CANVAS_SIZE
     if width <= 0 or height <= 0:
@@ -294,7 +300,7 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
                else "Main absente : bras au repos",12,MUTED)
 
     p.rule(892,132,892,706)
-    title,body,status=patient_guidance(analysis,mode,processor,lang,sets,now)
+    title,body,status=patient_guidance(analysis,mode,processor,lang,sets,now,guidance)
     p.text((920,132),status,11,MUTED)
     end=p.wrap((916,178),title,330,37,max_lines=3)
     p.wrap((920,end+18),body,322,18,MUTED,max_lines=4)

@@ -52,6 +52,13 @@ EN = {
     "7 jours": "7 days", "30 jours": "30 days", "Tout": "All", "Exporter": "Export",
     "Mes résultats": "My results",
     "Ouvrir le dossier": "Open the folder",
+    # Pain check and safety
+    "J'ai mal": "It hurts", "Aucune douleur": "No pain", "Douleur maximale": "Worst pain",
+    "Repos 1 minute, puis en douceur": "Rest 1 minute, then gently", "Terminer la séance": "End the session",
+    "Arrêtez l'exercice si la douleur augmente.": "Stop the exercise if the pain gets worse.",
+    "Pause après la douleur": "Break after the pain", "Quand vous voulez": "Whenever you like",
+    "Appuyez sur Reprendre pour continuer en douceur.": "Press Resume to carry on gently.",
+    "PAUSE": "BREAK",
     "L'export n'a pas pu être enregistré.": "The export could not be saved.",
     "REPOS": "REST",
     "PRÊT À REPRENDRE": "READY TO RESUME",

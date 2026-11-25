@@ -918,3 +918,60 @@ E8.02:
   anim: nod
   en: "I've saved the report in the Mouvement folder of your Documents."
   fr: "J'ai enregistré le bilan dans le dossier Mouvement de vos Documents."
+
+# --- Everyday: pain and safety ---------------------------------------------------------------
+E9.01:
+  moment: Before a session, the pain check
+  anim: idle
+  en: "Your shoulder pain right now, from 0 to 10?"
+  fr: "Votre douleur à l'épaule maintenant, de 0 à 10 ?"
+E9.03:
+  moment: Pain in the plan's gentle band before a session
+  anim: calm
+  en: "Let's go gently today: a lower target and fewer movements."
+  fr: "Allons-y en douceur aujourd'hui : une cible plus basse et moins de mouvements."
+E9.04:
+  moment: Pain in the plan's stop band, before a session or after It hurts
+  anim: calm
+  en: "That's a lot of pain. No exercise today: rest, and call your physio if it lasts."
+  fr: "C'est beaucoup. Pas d'exercice aujourd'hui : reposez-vous, et appelez votre kiné si ça dure."
+E9.05:
+  moment: After a session, the pain check again
+  anim: idle
+  en: "And now, your shoulder pain from 0 to 10?"
+  fr: "Et maintenant, votre douleur à l'épaule de 0 à 10 ?"
+E9.06:
+  moment: Pain went up by 2 points or more during the session
+  anim: calm
+  en: "Your pain went up during the session. Tell your physio about it."
+  fr: "Votre douleur a augmenté pendant la séance. Parlez-en à votre kiné."
+E9.07:
+  moment: It hurts pressed during the exercise
+  anim: calm
+  en: "Let's stop here. Breathe and let your arm rest."
+  fr: "On s'arrête là. Respirez et laissez reposer votre bras."
+E9.08:
+  moment: After It hurts, the two choices
+  anim: idle
+  en: "Rest a minute and continue gently, or end the session?"
+  fr: "Une minute de repos puis on continue en douceur, ou on termine ?"
+E9.09:
+  moment: The plan's longest session time is reached
+  anim: nod
+  en: "That's enough for today. Well done for your effort."
+  fr: "C'est assez pour aujourd'hui. Bravo pour vos efforts."
+E9.10:
+  moment: Signs of fatigue (lower angles or repeated compensations)
+  anim: calm
+  en: "Your arm seems tired. Take a short break if you need one."
+  fr: "Votre bras semble fatigué. Faites une petite pause si besoin."
+E9.11:
+  moment: It hurts pressed a second time in one session
+  anim: calm
+  en: "Let's end the session here. Rest well."
+  fr: "Terminons la séance ici. Reposez-vous bien."
+E9.12:
+  moment: Session start in seated mode (camera setup)
+  anim: point
+  en: "Sit facing the camera, placed at chest height, 1.5 to 2 metres away."
+  fr: "Asseyez-vous face à la caméra, posée à hauteur de poitrine, à 1,5 à 2 mètres."

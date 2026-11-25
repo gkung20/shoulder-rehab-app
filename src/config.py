@@ -49,6 +49,16 @@ class CalibrationConfig:
 
 
 @dataclass
+class SafetyConfig:
+    """Gentle stop rules (Phase 4.3). The longest session is in the physio's plan."""
+    fatigue_drop_deg: float = 15.0      # last reps peak this much lower than the first ones: suggest a break
+    fatigue_window_reps: int = 3        # how many first and last reps are compared
+    compensation_streak: int = 3        # this many reps in a row with compensations: suggest a break
+    fatigue_cooldown_sec: float = 180.0 # at most one break suggestion per this many seconds
+    max_pain_stops: int = 2             # "It hurts" this many times in one session ends it
+
+
+@dataclass
 class CameraConfig:
     index: int = 0
     width: int = 1280
@@ -88,6 +98,7 @@ class ExerciseConfig:
     camera: CameraConfig = field(default_factory=CameraConfig)
     pose: PoseConfig = field(default_factory=PoseConfig)
     audio: AudioConfig = field(default_factory=AudioConfig)
+    safety: SafetyConfig = field(default_factory=SafetyConfig)
 
     def __post_init__(self):
         # Dataclasses used by pure rule tests may omit camera-only settings.
@@ -130,6 +141,11 @@ class ExerciseConfig:
                 or isinstance(audio.announce_every_reps, bool) or audio.announce_every_reps < 1
                 or not math.isfinite(audio.willy_pitch) or not 1 <= audio.willy_pitch <= 1.6):
             raise ValueError("Invalid French audio settings")
+        safety = self.safety
+        if not (0 < safety.fatigue_drop_deg <= 90 and 1 <= safety.fatigue_window_reps <= 10
+                and 1 <= safety.compensation_streak <= 20 and safety.fatigue_cooldown_sec >= 0
+                and 1 <= safety.max_pain_stops <= 5):
+            raise ValueError("Invalid safety settings")
         camera = self.camera
         if (any(not isinstance(v, int) or isinstance(v, bool) for v in (camera.index, camera.width, camera.height, camera.fps))
                 or camera.index < 0 or min(camera.width, camera.height, camera.fps) <= 0
@@ -193,4 +209,6 @@ class ExerciseConfig:
                 duration_sec=float(calib.get("duration_sec", 3.0)),
                 max_variance_ratio=float(calib.get("max_variance_ratio", 0.05)),
             ),
+            safety=SafetyConfig(**{k: v for k, v in (raw.get("safety") or {}).items()
+                                   if k in SafetyConfig.__dataclass_fields__}),
         )

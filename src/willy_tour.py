@@ -174,6 +174,13 @@ class WillyDirector:
         if last:
             self.say("E6.11", compact=True)
 
+    def hurt_pressed(self):
+        """'J'ai mal': the pause that follows is not an ordinary pause (no pause lines)."""
+        self._set_rest = True
+
+    def rest_done(self):
+        self._set_rest = False
+
     def plan_done(self):
         """The last set is done: the session-end lines start with E6.03 (goal reached)."""
         self._goal_reached = True
@@ -755,7 +762,7 @@ class WillyDirector:
         # A new session: forget the last one's counters.
         if mode == "ready" and previous not in (None, "ready"):
             self._last_reps, self._correct_run, self._session_recorded = 0, 0, False
-            self._set_rest = self._goal_reached = False
+            self._set_rest = self._goal_reached = self.pain_rose = False
             self._stop_episode()
         if self._episode is not None:
             self._run_episode(now)
@@ -873,6 +880,10 @@ class WillyDirector:
         tip = most_frequent_tip(session.evaluations)
         if tip:
             self.say("S8.09", tip=self.script.text(tip, self.language), compact=not first)
+            yield _Speech()
+        if getattr(self, "pain_rose", False):
+            self.pain_rose = False
+            self.say("E9.06", compact=not first)
             yield _Speech()
         if not self._session_recorded and total > 0:
             self._session_recorded = True

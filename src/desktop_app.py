@@ -27,10 +27,12 @@ from src.hand_detector import HandDetector, MODEL_PATH as HAND_MODEL_PATH
 from src.home_screen import render_home
 from src.patient_controls import PatientControls, dashboard_action_at
 from src import physio_settings as physio
+from src.pain_screen import QUESTIONS as PAIN_QUESTIONS, PainCheck, render_pain
 from src.pose_detector import PoseDetector
 from src.results_screen import render_history, render_results, results_lines
 from src.rules_engine import FeedbackLevel
 from src import history_export, session_store
+from src.safety import SafetyMonitor
 from src.session_plan import SetTracker
 from src.session_processor import FrameAnalysis, SessionProcessor
 from src.silhouette import patient_alignment
@@ -45,7 +47,8 @@ WINDOW_NAME = "Mouvement - Coach epaule"
 ESCAPE, ENTER, SPACE, NO_KEY = 27, 13, 32, 255
 PRIMARY_BY_MODE = {"ready": "start", "running": "pause", "paused": "resume", "finished": "restart"}
 SHORTCUTS = {ord('l'): "arm_left", ord('r'): "arm_right", ord('a'): "audio", ord('s'): "finish",
-             ord('m'): "mirror", ord('h'): "help", ord('d'): "details", ord('v'): "avatars", ord('g'): "silhouette"}
+             ord('m'): "mirror", ord('h'): "help", ord('d'): "details", ord('v'): "avatars", ord('g'): "silhouette",
+             ord('p'): "hurt"}
 
 
 def show_startup_error(error):
@@ -140,7 +143,8 @@ class ExerciseScreen(Screen):
                                 avatar_stage=app.avatar_stage, avatars=c.avatars, avatar_gender=c.avatar_gender,
                                 speaking=app.audio.speaking, silhouette=c.silhouette, willy=app.guide,
                                 lang=app.director.language, overlay=app.director.overlay,
-                                sets=app.sets, now=time.monotonic(), results=app.last_record is not None)
+                                sets=app.sets, now=time.monotonic(), results=app.last_record is not None,
+                                guidance=app.pain_rest_guidance())
 
     def action_at(self, app, point):
         c = app.controls
@@ -163,14 +167,19 @@ class ExerciseScreen(Screen):
             audio.silence()
         elif action == "start":
             app.processor.recalibrate(timestamp_sec=app.now_sec)
-            app.sets = SetTracker.from_plan(app.plan)
+            app.sets = SetTracker.from_plan(app.plan, gentle=app.session_plan is not app.plan)
+            app.safety = SafetyMonitor.from_config(app.config.safety, app.session_plan)
+            app.active_sec = 0.
             app.begin_log()
             audio.begin_session()
         elif action in ("pause", "finish") or (action == "help" and old_mode == "running"):
             app.processor.finish()
             audio.silence()
             if action == "finish":
-                app.save_session()
+                app.after_session()
+        elif action == "resume" and app.pain_rest_until is not None:
+            app.pain_rest_until = None
+            app.director.rest_done()
         elif action == "resume" and app.sets is not None and app.sets.waiting:
             app.sets.next_set()
             app.director.set_started(app.sets.current_set, app.sets.is_last_set)
@@ -181,8 +190,9 @@ class ExerciseScreen(Screen):
         elif action == "restart":
             app.save_session()
             app.director.session_recorded(app.processor.rules_engine.session)
+            app.session_plan = app.plan
             app.new_processor()
-            app.sets = None
+            app.sets = app.safety = None
             audio.silence()
         elif action in ("arm_left", "arm_right"):
             app.processor.recalibrate("left" if action == "arm_left" else "right", app.now_sec)
@@ -285,6 +295,40 @@ class SettingsScreen(Screen):
         return True
 
 
+class PainScreen(Screen):
+    """The pain check (0-10), before and after a session and after "J'ai mal"."""
+
+    name = "pain"
+
+    def __init__(self):
+        self.check = PainCheck()
+        self.hit_boxes = []
+
+    def draw(self, app, output_size):
+        line = "E9.08" if self.check.choices and self.check.can_continue else PAIN_QUESTIONS[self.check.moment]
+        if self.check.choices and not self.check.can_continue:
+            line = "E9.11" if app.safety and app.safety.pain_stops >= app.safety.max_pain_stops else "E9.04"
+        question = shared_script().text(line, app.director.language)
+        image, self.hit_boxes = render_pain(self.check, question, output_size, app.director.language, app.guide)
+        return image
+
+    def action_at(self, app, point):
+        return physio.action_at(self.hit_boxes, *point)
+
+    def on_action(self, app, action):
+        if action.startswith("pain:"):
+            app.pain_answer(int(action.split(":", 1)[1]))
+        elif action in ("hurt_rest", "hurt_end"):
+            app.hurt_choice(action)
+
+    def on_key(self, app, key):
+        if ord('0') <= key <= ord('9') and not self.check.choices:
+            app.pain_answer(key - ord('0'))
+        elif key == ESCAPE:
+            app.pain_escape()
+        return True
+
+
 class ResultsScreen(Screen):
     """One session's results ("Mon bilan")."""
 
@@ -377,10 +421,15 @@ class App:
         self.quitting = False
         self._last_audio_status = None
         self.screens = {screen.name: screen for screen in (HomeScreen(), ExerciseScreen(), PinScreen(),
-                                                           SettingsScreen(), ResultsScreen(), HistoryScreen())}
+                                                           SettingsScreen(), ResultsScreen(), HistoryScreen(),
+                                                           PainScreen())}
         self.modal = None  # a screen shown over Willy's flow (PIN pad, settings); Willy waits meanwhile
         self._calibrations_seen = 0
         self.sets = None   # sets of the plan, from Start to the end of the session
+        self.session_plan = self.plan  # the plan of this session (gentle when pain is in the middle band)
+        self.safety = None  # gentle stop rules of this session (src.safety)
+        self.active_sec = 0.
+        self.pain_rest_until = None  # the minute of rest after "J'ai mal"
         self.log = None    # the session being recorded (src.session_store.SessionLog)
         self.last_record = None
         self._session_t0 = 0.
@@ -532,6 +581,13 @@ class App:
             if action in ("open_results", "results"):
                 self.open_modal("results")
                 continue
+            if (action == "start" and self.director.screen == "dashboard" and self.controls.mode == "ready"
+                    and self.director.permits(action)):
+                self.ask_pain("before")  # the session starts once the pain is known
+                continue
+            if action == "hurt":
+                self.hurt()
+                continue
             if action in TOUR_ACTIONS or self.director.screen == "home" or action in ("language", "quit"):
                 self.director.notify(action)
                 self.quitting = self.quitting or action == "quit"
@@ -543,7 +599,12 @@ class App:
     def tick(self, frame, timestamp_ms, fps):
         """Analyse a camera frame (only while a session runs, or while the tour checks the framing)."""
         self.frame, self.fps = frame, fps
-        self.now_sec = timestamp_ms / 1000.
+        previous, self.now_sec = self.now_sec, timestamp_ms / 1000.
+        if self.controls.mode == "running" and self.director.screen == "dashboard":
+            self.active_sec += min(.5, max(0., self.now_sec - previous))
+            if self.safety is not None and self.safety.time_up(self.active_sec):
+                self.director.say("E9.09")
+                self.screens["dashboard"].on_action(self, "finish")
         height, width = frame.shape[:2]
         director, controls = self.director, self.controls
         alignment = None
@@ -562,6 +623,8 @@ class App:
                 self.audio.speak_evaluation(analysis.new_evaluation)
             if analysis.new_evaluation and self.log is not None:
                 self.log.add_rep(analysis.new_evaluation, self.now_sec - self._session_t0)
+            if analysis.new_evaluation and self.safety is not None:
+                self.check_fatigue(analysis.new_evaluation)
             if analysis.new_evaluation and self.sets is not None:
                 self.count_for_plan()
         elif director.wants_tracking:
@@ -628,7 +691,7 @@ class App:
 
     # ----------------------------------------------------------------- helpers
     def begin_log(self):
-        self.log = session_store.SessionLog.start(self.exercise.id, self.processor.arm, self.plan)
+        self.log = session_store.SessionLog.start(self.exercise.id, self.processor.arm, self.session_plan)
         self._session_t0 = self.now_sec
 
     def save_session(self, partial=False):
@@ -666,6 +729,134 @@ class App:
         screen.message = f"Fichiers enregistrés dans {folder.parent.name}{os.sep}{folder.name}"
         self.say_line("E8.02")
         return folder
+
+    # ----------------------------------------------------------------- pain and safety
+    def ask_pain(self, moment):
+        self.screens["pain"].check = PainCheck(moment)
+        self.modal = "pain"
+        self.say_line(PAIN_QUESTIONS[moment])
+
+    def pain_answer(self, value):
+        check = self.screens["pain"].check
+        if check.choices:
+            return
+        check.value = value
+        if check.moment == "before":
+            self.close_modal()
+            self.start_session(value)
+        elif check.moment == "after":
+            self.close_modal()
+            self.finish_with_pain(value)
+        else:
+            self.hurt_answer(value)
+
+    def pain_escape(self):
+        """Esc on the pain check: before, no session; after, save without it; after 'J'ai mal', end."""
+        check = self.screens["pain"].check
+        if check.moment == "hurt":
+            self.hurt_choice("hurt_end")
+            return
+        self.close_modal()
+        if check.moment == "after":
+            self.save_session()
+
+    def start_session(self, pain):
+        """Pain 0-3: the plan; 4-6: a gentle session; 7-10: no session today (bands from the plan)."""
+        band = self.plan.pain_band(pain)
+        if band == "stop":
+            self.log = session_store.SessionLog.start(self.exercise.id, self.processor.arm, self.plan)
+            self.log.pain_before = pain
+            self.save_session()
+            self.say_line("E9.04")
+            return
+        self.session_plan = self.plan.gentle() if band == "gentle" else self.plan
+        self.processor.set_plan(self.session_plan)
+        self.screens["dashboard"].on_action(self, "start")
+        self.log.pain_before, self.log.gentle = pain, band == "gentle"
+        if band == "gentle":
+            self.say_line("E9.03")
+        if self.session_plan.seated:
+            self.say_line("E9.12")
+
+    def after_session(self):
+        """End of a session: ask the pain again (when it was asked before), then save."""
+        log = self.log
+        if log is not None and not log.saved and log.pain_before is not None and log.pain_after is None:
+            self.ask_pain("after")
+        else:
+            self.save_session()
+
+    def finish_with_pain(self, value):
+        log = self.log
+        if log is not None and not log.saved:
+            log.pain_after = value
+            if log.pain_before is not None and value - log.pain_before >= 2:
+                self.director.pain_rose = True  # Willy adds E9.06 to the end-of-session lines
+        self.save_session()
+
+    def hurt(self):
+        """'J'ai mal': stop counting at once, then ask the pain level."""
+        if self.controls.mode not in ("running", "paused") or self.log is None or self.modal is not None:
+            return
+        self.director.hurt_pressed()
+        if self.controls.mode == "running":
+            self.screens["dashboard"].on_action(self, "pause")
+        self.log.add_stop("pain", self.now_sec - self._session_t0)
+        must_end = self.safety is not None and self.safety.on_pain_stop() == "end"
+        self.screens["pain"].check = PainCheck("hurt", can_continue=not must_end)
+        self.modal = "pain"
+        self.say_line("E9.07")
+        self.say_line("E9.01")
+
+    def hurt_answer(self, value):
+        check = self.screens["pain"].check
+        check.value, check.choices = value, True
+        if self.log is not None and self.log.stops:
+            self.log.stops[-1]["pain"] = value
+        if self.session_plan.pain_band(value) == "stop":
+            check.can_continue = False
+            self.say_line("E9.04")
+        elif not check.can_continue:
+            self.say_line("E9.11")
+        else:
+            self.say_line("E9.08")
+
+    def hurt_choice(self, action):
+        check = self.screens["pain"].check
+        self.close_modal()
+        if action == "hurt_rest" and check.can_continue:
+            self.session_plan = self.plan.gentle()
+            self.processor.set_plan(self.session_plan)
+            if self.log is not None:
+                self.log.gentle = True
+            self.pain_rest_until = time.monotonic() + 60.
+            return
+        if self.log is not None and check.value is not None:
+            self.log.pain_after = check.value
+        self.pain_rest_until = None
+        self.director.rest_done()
+        self.screens["dashboard"].on_action(self, "finish")
+
+    def pain_rest_guidance(self):
+        """The guidance column during the minute of rest after 'J'ai mal'."""
+        if self.pain_rest_until is None or self.controls.mode != "paused":
+            return None
+        left = self.pain_rest_until - time.monotonic()
+        if left > 0:
+            return ("Pause après la douleur",
+                    f"Reprise possible dans {max(1, round(left))} s. Relâchez l'épaule et respirez.", "PAUSE")
+        return "Quand vous voulez", "Appuyez sur Reprendre pour continuer en douceur.", "PRÊT À REPRENDRE"
+
+    def check_fatigue(self, evaluation):
+        metrics = evaluation.metrics
+        quality = ("unknown" if evaluation.status_label == "INDETERMINE"
+                   else "correct" if evaluation.is_correct else "to_fix")
+        event = self.safety.on_rep(metrics.peak_abduction_deg if metrics else None, quality,
+                                   [e.category for e in evaluation.errors], time.monotonic())
+        if event == "fatigue":
+            self.director.say("E9.10", compact=True, interrupt=False)
+            if self.log is not None:
+                self.log.add_stop("fatigue", self.now_sec - self._session_t0)
 
     def count_for_plan(self):
         """A counted movement: at the end of a set, rest; at the end of the plan, finish."""

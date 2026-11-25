@@ -27,7 +27,7 @@ def test_tour_zones_come_from_the_layout_and_contain_their_buttons():
         "main_button": ("pause",),
         "finish_button": ("finish",),
         "view_button": ("avatars",),
-        "details_button": ("details",),
+        "details_button": ("hurt",),  # during a session; "Mesures" there before and after
         "help_button": ("help",),
         "close_button": ("quit",),
     }
@@ -35,6 +35,8 @@ def test_tour_zones_come_from_the_layout_and_contain_their_buttons():
     for zone, actions in groups.items():
         for action in actions:
             assert L.Rect(*ZONES[zone]).encloses(buttons[action]), (zone, action)
+    ready = {b.action: b.bounds for b in patient_buttons(mode="ready")}
+    assert L.Rect(*ZONES["details_button"]).encloses(ready["details"])
     for silhouette in (False, True):
         toggle = {b.action: b.bounds for b in patient_buttons(avatars=False, silhouette=silhouette)}["silhouette"]
         assert L.Rect(*ZONES["silhouette_button"]).encloses(toggle)

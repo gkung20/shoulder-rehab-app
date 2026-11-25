@@ -12,6 +12,7 @@ class PatientButton:
     enabled: bool = True
     selected: bool = False
     primary: bool = False
+    tone: str = ""        # "pain": the calm, warm "J'ai mal" button
 
 
 LANGUAGE_BUTTON = L.LANGUAGE_BUTTON
@@ -34,7 +35,9 @@ def patient_buttons(mode="running", arm="right", audio_enabled=True, details=Fal
                       "Terminer" if mode in ("running","paused") else "Mon bilan", L.FINISH_BUTTON,
                       mode in ("running","paused") or results),
         PatientButton("avatars", "Voir la caméra" if avatars else "Voir les avatars", L.VIEW_BUTTON, selected=avatars),
-        PatientButton("details", "Masquer les mesures" if details else "Mesures", L.DETAILS_BUTTON, selected=details),
+        # During a session this place belongs to "J'ai mal" (key P); "Mesures" stays on key D.
+        (PatientButton("hurt", "J'ai mal", L.DETAILS_BUTTON, tone="pain") if mode in ("running", "paused") else
+         PatientButton("details", "Masquer les mesures" if details else "Mesures", L.DETAILS_BUTTON, selected=details)),
         PatientButton("help", "Fermer l’aide" if help_visible else "Aide", L.HELP_BUTTON, selected=help_visible),
         PatientButton("quit", "Fermer", L.QUIT_BUTTON),
         # The other language, written in that language: always readable by whoever needs it.

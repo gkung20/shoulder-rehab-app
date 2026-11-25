@@ -65,6 +65,12 @@ CALIBRATION_MARGIN_DEG = 15.  # calibration accepts a resting arm up to target m
 REST_MARGIN_DEG = 8.          # rest threshold = resting angle + 8 deg
 RISE_MARGIN_DEG = 7.          # rise threshold = rest threshold + 7 deg
 TARGET_GAP_DEG = 10.          # the rise threshold stays at least 10 deg below the target
+SEATED_TILT_ALLOWANCE_DEG = 5.  # seated: shoulder-line tilt allowed before it counts as leaning
+
+
+def shoulder_line_tilt(left, right):
+    """Angle of the shoulder line from horizontal, in degrees (0 = level)."""
+    return abs(math.degrees(math.atan2(left.y - right.y, abs(left.x - right.x) or 1e-9)))
 
 
 class SessionProcessor:
@@ -74,7 +80,8 @@ class SessionProcessor:
         below reads the effective `self.config`."""
         self.exercise = exercise or get_exercise()
         self.plan = plan
-        self.config = self.exercise.apply(config or ExerciseConfig.from_yaml())
+        self._base_config = config or ExerciseConfig.from_yaml()
+        self.config = self.exercise.apply(self._base_config)
         if plan is not None:
             self.config = plan.apply(self.config)
         self.arm = arm
@@ -107,6 +114,23 @@ class SessionProcessor:
         self.interrupted_attempts = 0
         self.frames_total = 0
         self.frames_tracked = 0
+
+    def set_plan(self, plan):
+        """Change the plan during a session (gentle after "It hurts") without losing its movements."""
+        self.plan = plan
+        config = self.exercise.apply(self._base_config)
+        self.config = plan.apply(config) if plan is not None else config
+        self._planned_abduction = self.config.abduction
+        self.rules_engine.config = self.config
+        machine, a = self.state_machine, self.config.abduction
+        machine.target_min_deg, machine.target_max_deg = a.target_min_deg, a.target_max_deg
+        if hasattr(machine, "min_hold_time_sec"):
+            machine.min_hold_time_sec = self.config.timing.min_hold_time_sec
+        if self.calibrations_done:
+            self.calibrations_done -= 1  # re-adapting is not a new calibration
+            self._adapt_rest(self.resting_angle)
+        else:
+            machine.rest_threshold_deg, machine.rising_start_deg = a.rest_threshold_deg, a.rising_start_deg
 
     def _adapt_rest(self, resting):
         """Rest threshold = max(planned rest, resting + 8 deg); rise = rest + 7 deg, unless the
@@ -222,6 +246,10 @@ class SessionProcessor:
         if visible(torso) and math.hypot((pts[I.LEFT_SHOULDER].x + pts[I.RIGHT_SHOULDER].x - pts[I.LEFT_HIP].x - pts[I.RIGHT_HIP].x) / 2,
                 (pts[I.LEFT_SHOULDER].y + pts[I.RIGHT_SHOULDER].y - pts[I.LEFT_HIP].y - pts[I.RIGHT_HIP].y) / 2) > .1:
             raw["lean"] = calculate_trunk_lean(*(pts[i] for i in torso))
+        elif self.plan is not None and self.plan.seated and shoulders_ok:
+            # Seated, hips hidden by the chair or table: the shoulder line's tilt stands in for the
+            # trunk lean, minus a few degrees of natural tilt as the arm rises (Phase 4.4).
+            raw["lean"] = max(0., shoulder_line_tilt(pts[I.LEFT_SHOULDER], pts[I.RIGHT_SHOULDER]) - SEATED_TILT_ALLOWANCE_DEG)
         if baseline.is_calibrated and baseline.baseline_ear_shoulder_dist is not None and visible((ear, sh)):
             raw["shrug"] = calculate_shoulder_shrug(pts[ear], pts[sh], baseline.baseline_ear_shoulder_dist, baseline.baseline_shoulder_width)
         if world_landmarks and len(world_landmarks) >= 33:

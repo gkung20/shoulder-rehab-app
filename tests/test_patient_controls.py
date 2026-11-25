@@ -142,6 +142,8 @@ def test_native_mouse_buttons_pause_inference_and_finish_before_closing(monkeypa
             mouse["callback"](app.cv2.EVENT_LBUTTONUP,x,y,None,None)
         return 255
     monkeypatch.setattr(app.cv2,"waitKey",wait_key)
+    # The pain check (tested in test_safety.py) answers 0 here, so the clicks stay the same.
+    monkeypatch.setattr(app.App,"ask_pain",lambda self,moment: self.start_session(0) if moment == "before" else self.finish_with_pain(0))
     assert cli.main(["--skip-home"]) == 0
     assert created[0].process.call_count == 4
     assert detector.detect.call_count == 4

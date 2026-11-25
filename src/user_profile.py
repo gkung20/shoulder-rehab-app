@@ -112,6 +112,11 @@ class Plan:
                             overshoot_warn_deg=min(180., max(a.overshoot_warn_deg, self.target_max_deg + 10.)))
         return replace(config, abduction=abduction, timing=replace(t, min_hold_time_sec=self.hold_sec))
 
+    def gentle(self):
+        """The plan for a gentle session (pain in the middle band): target max 10 deg lower."""
+        top = max(PLAN_BOUNDS["target_max_deg"][0], self.target_max_deg - 10)
+        return replace(self, target_max_deg=top, target_min_deg=min(self.target_min_deg, top)).clamped()
+
     def pain_band(self, pain):
         """"go", "gentle" or "stop" for a pain score from 0 to 10."""
         if pain <= self.pain_go_max:

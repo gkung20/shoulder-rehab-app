@@ -58,9 +58,10 @@ class FakeDetector:
 class ScriptedWindow:
     """A window whose patient is a function: `script(window)` runs after each frame."""
 
-    def __init__(self, script=None, size=(1280, 840)):
+    def __init__(self, script=None, size=(1280, 840), auto_pain=1):
         self.app = None
         self.script = script
+        self.auto_pain = auto_pain  # answers the pain check with this score (None: let the script answer)
         self.size = size
         self.shown = 0
         self.closed = False
@@ -94,6 +95,10 @@ class ScriptedWindow:
 
     def read_key(self):
         assert self.shown < 3000, "the scripted patient never finished"
+        app = self.app
+        if (self.auto_pain is not None and app is not None and app.modal == "pain"
+                and not app.screens["pain"].check.choices and not self.keys):
+            return ord(str(self.auto_pain))
         if self.script:
             self.script(self)
         return self.keys.pop(0) if self.keys else 255

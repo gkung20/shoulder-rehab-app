@@ -100,3 +100,12 @@ calibration:
   duration_sec: 3.0
   # Stability check: standard deviation of shoulder position must stay below this pixel ratio
   max_variance_ratio: 0.05
+
+# Gentle stop rules (values to confirm with a physiotherapist). The longest session and the pain
+# bands are in each patient's plan (physio settings in the app).
+safety:
+  fatigue_drop_deg: 15.0       # last reps peak this much lower than the first ones: Willy suggests a break
+  fatigue_window_reps: 3       # how many first and last reps are compared
+  compensation_streak: 3       # reps in a row with compensations before Willy suggests a break
+  fatigue_cooldown_sec: 180.0  # at most one break suggestion per 3 minutes
+  max_pain_stops: 2            # pressing "J'ai mal" this many times in one session ends it kindly
