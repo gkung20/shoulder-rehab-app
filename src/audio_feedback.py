@@ -7,10 +7,10 @@ import queue
 import re
 import threading
 import time
-import unicodedata
 
 from src.rules_engine import FeedbackLevel, LiveFeedback, RepetitionEvaluation
 from src.speech import create_speech_backend
+from src.cues import SETUP as SETUP_CUES, code_of
 from src.willy_lines import LANGUAGES, cue_line_id, result_line, shared_script
 
 LOGGER = logging.getLogger(__name__)
@@ -19,11 +19,13 @@ LOGGER = logging.getLogger(__name__)
 def spoken_french(message):
     """Keep screen-compatible ASCII out of pronunciation; stabilize countdown cues.
 
-    Live messages that Willy has a line for use that line's French wording (assets/willy/lines.yaml).
+    `message` is a LiveFeedback (preferred: it carries its cue code) or plain text. Live cues
+    that Willy has a line for use that line's French wording (assets/willy/lines.yaml).
     """
     line_id = cue_line_id(message)
     if line_id is not None:
         return shared_script().text(line_id, "fr")
+    message = getattr(message, "message", message)
     # Unknown cues remain French text, with common ASCII-only words restored.
     replacements = {"epaules":"épaules", "epaule":"épaule", "coude":"coude", "pret":"prêt",
         "repetez":"répétez", "repetition":"répétition", "controlez":"contrôlez", "serre":"serré",
@@ -264,14 +266,14 @@ class AudioCoach:
         with self._lock:
             self.last_line, self.last_line_at = line, time.monotonic()
 
-    def _cue_line(self, message):
-        line_id = cue_line_id(message)
+    def _cue_line(self, feedback):
+        line_id = cue_line_id(feedback)
         return None if line_id is None else self.script.line(line_id, self.language)
 
     def speak_cue(self, feedback: LiveFeedback):
         if feedback is None:
             return False
-        line = self._cue_line(feedback.message)
+        line = self._cue_line(feedback)
         if self.guidance_mode == "essential":
             text = line.text if line is not None else spoken_french(feedback.message)
             now = time.monotonic()
@@ -285,8 +287,7 @@ class AudioCoach:
                 return self.speak(feedback.message, priority=True, line=line)
             self._warning_text = self._warning_since = None
             # One setup instruction per session. Exercise phases stay on screen.
-            key = unicodedata.normalize("NFKD", feedback.message).encode("ascii", "ignore").decode().lower()
-            setup = any(part in key for part in ("calibration", "epaules", "au repos encore", "images valides"))
+            setup = code_of(feedback) in SETUP_CUES
             if self._setup_announced or not setup:
                 return False
             setup_line = self.script.line("E3.01", self.language)

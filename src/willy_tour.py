@@ -11,6 +11,7 @@ import datetime as dt
 import math
 import time
 
+from src.cues import Cue, code_of
 from src.i18n import ui
 from src.willy import exercise_screen_side
 from src.willy_lines import Line, most_frequent_tip, reading_seconds, result_line, shared_script
@@ -637,10 +638,9 @@ class WillyDirector:
             if ctx.mode != "running" or analysis is None:
                 continue
             status = getattr(analysis, "status", "")
-            message = getattr(getattr(analysis, "cue", None), "message", "") or ""
+            code = code_of(getattr(analysis, "cue", None))
             if status == "CALIBRATION":
-                key = message.lower()
-                if "baissez le bras" in key or "mouvement detect" in key:
+                if code in (Cue.CAL_LOWER_ARM, Cue.CAL_MOVED):
                     every("S7.05", 8., now)
                 elif once("S7.02"):
                     pass
@@ -691,11 +691,11 @@ class WillyDirector:
             if reps == 0:
                 if phase == "REST":
                     once("S7.08")
-                elif phase == "RISING" and "presque" in message.lower():
+                elif phase == "RISING" and code == Cue.ALMOST_TARGET:
                     once("S7.10")
                 elif phase == "RISING":
                     once("S7.09")
-                elif phase == "HOLD" and "redescendez" in message.lower():
+                elif phase == "HOLD" and code == Cue.HOLD_DONE_LOWER:
                     once("S7.12")
                 elif phase == "HOLD":
                     once("S7.11")

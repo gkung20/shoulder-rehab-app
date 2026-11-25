@@ -6,6 +6,7 @@ from typing import Optional
 
 from src.geometry import (PoseLandmarkIndex as I, are_landmarks_visible,
     calculate_shoulder_reference_angle, calculate_distance_2d, calculate_trunk_lean)
+from src.cues import Cue, text as cue_text
 
 
 @dataclass
@@ -34,7 +35,13 @@ class CalibrationManager:
         self._explicit_clock = False
         self._samples = []
         self.calibrated_data = CalibrationData()
-        self.status_message = "Calibration requise : appuyez sur C"
+        self._set(Cue.CAL_REQUIRED)
+
+    def _set(self, code, **values):
+        """Status as a code (for Willy and the voice) plus its screen text."""
+        self.status_code = code
+        self.status_message = cue_text(code, **values)
+        return self.status_message
 
     @property
     def is_calibrating(self):
@@ -51,7 +58,7 @@ class CalibrationManager:
         self._samples.clear()
         # Previous baselines must never survive a failed recalibration or arm switch.
         self.calibrated_data = CalibrationData(arm=arm)
-        self.status_message = "Montrez les deux epaules, gardez le bras au repos"
+        self._set(Cue.CAL_SHOW_SHOULDERS_REST)
 
     def get_progress(self):
         if not self._is_calibrating or self._start_time is None:
@@ -60,11 +67,10 @@ class CalibrationManager:
         elapsed = max(0.0, now - self._start_time)
         return min(1.0, elapsed / self.duration_sec), max(0.0, self.duration_sec - elapsed)
 
-    def _reject(self, message):
+    def _reject(self, code):
         self._samples.clear()
         self._start_time = self._now
-        self.status_message = message
-        return False, message
+        return False, self._set(code)
 
     def update(self, landmarks, arm, timestamp_sec=None):
         if not self._is_calibrating:
@@ -73,12 +79,12 @@ class CalibrationManager:
         if arm != self._active_arm:
             self.start(arm, timestamp_sec)
         if not landmarks or len(landmarks) < 33:
-            return self._reject("Montrez les deux epaules pour commencer")
+            return self._reject(Cue.CAL_SHOW_SHOULDERS)
         sh, hip, el, ear = ((I.LEFT_SHOULDER, I.LEFT_HIP, I.LEFT_ELBOW, I.LEFT_EAR)
                             if arm == "left" else (I.RIGHT_SHOULDER, I.RIGHT_HIP, I.RIGHT_ELBOW, I.RIGHT_EAR))
         required = [landmarks[i] for i in (I.LEFT_SHOULDER, I.RIGHT_SHOULDER)]
         if not are_landmarks_visible(required, self.min_visibility):
-            return self._reject("Calibration en attente : deux epaules peu visibles")
+            return self._reject(Cue.CAL_SHOULDERS_LOW_VISIBILITY)
         width = calculate_distance_2d(landmarks[I.LEFT_SHOULDER], landmarks[I.RIGHT_SHOULDER])
         ear_dist = None
         if are_landmarks_visible([landmarks[ear]], self.min_visibility):
@@ -92,21 +98,21 @@ class CalibrationManager:
                         and calculate_distance_2d(landmarks[sh], landmarks[hip]) > .1)
         lean = calculate_trunk_lean(*(landmarks[i] for i in (I.LEFT_SHOULDER, I.RIGHT_SHOULDER, I.LEFT_HIP, I.RIGHT_HIP))) if hips_visible else None
         if width < 0.05:
-            return self._reject("Montrez les deux epaules bien separees dans l'image")
+            return self._reject(Cue.CAL_SHOULDERS_APART)
         if angle is not None and angle > self.rest_threshold_deg:
-            return self._reject("Baissez le bras pour terminer la calibration")
+            return self._reject(Cue.CAL_LOWER_ARM)
         if lean is not None and lean > self.max_lean_deg:
-            return self._reject("Redressez le buste pour la calibration")
+            return self._reject(Cue.CAL_STRAIGHTEN)
         self._samples.append((ear_dist, width, angle, lean))
         progress, remaining = self.get_progress()
-        self.status_message = f"Restez au repos encore {remaining:.1f} s"
+        self._set(Cue.CAL_HOLD_STILL, remaining=remaining)
         if progress >= 1.0:
             return self._finalize()
         return False, self.status_message
 
     def _finalize(self):
         if len(self._samples) < 15:
-            self.status_message = f"Images valides : {len(self._samples)}/15, restez au repos"
+            self._set(Cue.CAL_SAMPLES, count=len(self._samples))
             return False, self.status_message
         means, stds = [], []
         for i in range(4):
@@ -118,9 +124,9 @@ class CalibrationManager:
         if means[0] is not None and stds[0] / means[1] > self.max_variance_ratio:
             means[0] = None  # An unstable optional ear disables shrug; it cannot block startup.
         if (stds[1] / means[1] > self.max_variance_ratio or stds[2] > 3 or stds[3] > 3):
-            return self._reject("Mouvement detecte : restez au repos, nouvel essai")
+            return self._reject(Cue.CAL_MOVED)
         mode = "torso" if means[3] is not None else "shoulders"
         self.calibrated_data = CalibrationData(True, self._active_arm, *means, reference_mode=mode)
         self._is_calibrating = False
-        self.status_message = "Calibration reussie" + (" : cadrage serre" if mode == "shoulders" else "")
+        self._set(Cue.CAL_DONE_TIGHT if mode == "shoulders" else Cue.CAL_DONE)
         return True, self.status_message

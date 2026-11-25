@@ -11,6 +11,8 @@ import unicodedata
 
 import yaml
 
+from src import cues as cue_lines
+
 LINES_PATH = Path(__file__).resolve().parents[1] / "assets" / "willy" / "lines.yaml"
 LANGUAGES = ("en", "fr")
 ANIMATIONS = ("wave", "idle", "point", "demo", "nod", "cheer", "calm", "mirror")
@@ -134,45 +136,12 @@ def _key(message):
     return unicodedata.normalize("NFKD", str(message)).encode("ascii", "ignore").decode().strip().lower()
 
 
-# Live messages of the rules engine, calibrator and processor -> Willy's everyday line.
-_CUE_LINES = {
-    "pret : levez le bras sur le cote": "E4.01",
-    "montez lentement le bras...": "E4.02",
-    "presque ! rejoignez votre zone cible": "E4.03",
-    "maintenez dans la zone cible, puis redescendez": "E4.04",
-    "bien ! redescendez doucement jusqu'au repos": "E4.05",
-    "controlez la descente lentement": "E4.06",
-    "gardez l'epaule basse !": "E4.07",
-    "gardez le tronc droit !": "E4.08",
-    "gardez le bras tendu !": "E4.09",
-    "gardez le bras dans le plan du corps !": "E4.10",
-    "un peu moins haut : revenez dans la zone cible": "E4.11",
-    "epaules pretes : montrez le coude du bras actif pour compter": "E3.04",
-    "baissez le bras avant de commencer une repetition": "E3.06",
-    "baissez le bras pour terminer la calibration": "E3.05",
-    "montrez les deux epaules, gardez le bras au repos": "E3.02",
-    "montrez les deux epaules et le coude du bras actif": "E3.08",
-    "positionnez-vous face a la camera": "E3.09",
-    "placez-vous face a la camera": "E3.09",
-    "montrez les deux epaules pour commencer": "E3.02",
-    "montrez les deux epaules bien separees dans l'image": "E3.03",
-    "redressez le buste pour la calibration": "E4.08",
-    "mouvement detecte : restez au repos, nouvel essai": "E3.05",
-}
+def cue_line_id(cue):
+    """Willy's everyday line for a live cue (LiveFeedback, src.cues.Cue or, for old callers, its text).
 
-
-def cue_line_id(message):
-    """The everyday line for a live message of the analysis, or None when Willy has nothing to add."""
-    key = _key(message)
-    if key in _CUE_LINES:
-        return _CUE_LINES[key]
-    if key.startswith(("restez au repos encore", "images valides :")):
-        return "E3.05"
-    if key.startswith("calibration en attente"):
-        return "E3.03"
-    if key.startswith("aucun squelette detecte"):
-        return "E3.07"
-    return None
+    The mapping lives in src.cues.LINES and goes by the cue's code, not its French wording.
+    """
+    return cue_lines.line_id(cue)
 
 
 # Error categories of the rules engine -> tip line.

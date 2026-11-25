@@ -113,8 +113,8 @@ def patient_guidance(analysis,mode,processor,lang="fr"):
     if analysis.status == "REPOS REQUIS":
         return "Baissez le bras", "Repartez de la position de repos.", "POSITION DE DÉPART"
     if analysis.cue.level.value == "WARNING":
-        line_id=cue_line_id(analysis.cue.message)
-        title=(shared_script().text(line_id,lang) if line_id and lang == "en" else spoken_french(analysis.cue.message))
+        line_id=cue_line_id(analysis.cue)
+        title=(shared_script().text(line_id,lang) if line_id and lang == "en" else spoken_french(analysis.cue))
         return title.split(".")[0], "Ajustez doucement la position, sans forcer.", "AJUSTEMENT"
     if analysis.phase == ExercisePhase.RISING:
         return "Levez le bras", "Montez doucement sur le côté, vers votre zone de mouvement.", "EN COURS"

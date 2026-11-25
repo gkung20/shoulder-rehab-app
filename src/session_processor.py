@@ -17,7 +17,8 @@ from src.geometry import (
     calculate_shoulder_shrug, calculate_anterior_drift_angle, calculate_distance_2d,
     calculate_shoulder_reference_angle,
 )
-from src.rules_engine import RulesEngine, LiveFeedback, FeedbackLevel, RepetitionEvaluation
+from src.cues import Cue
+from src.rules_engine import RulesEngine, LiveFeedback, FeedbackLevel, RepetitionEvaluation, cue_feedback
 from src.smoothing import MultiMetricSmoother
 from src.state_machine import RepetitionStateMachine, ExercisePhase
 
@@ -28,7 +29,7 @@ class FrameAnalysis:
     landmarks: list = field(default_factory=list)  # Original normalized detector output.
     metrics: dict = field(default_factory=dict)    # Fresh observations only; None = unavailable.
     status: str = "RECHERCHE"
-    cue: LiveFeedback = field(default_factory=lambda: LiveFeedback("Placez-vous face a la camera", FeedbackLevel.INFO))
+    cue: LiveFeedback = field(default_factory=lambda: cue_feedback(Cue.PLACE_FACING))
     calibration_progress: Optional[tuple] = None
     phase: ExercisePhase = ExercisePhase.REST
     hold_seconds: float = 0.0
@@ -138,7 +139,7 @@ class SessionProcessor:
                 self.calibrator.update(None, self.arm, now)
             self._pause(now)
             frame.status = "SUIVI PERDU"
-            frame.cue = LiveFeedback("Aucun squelette detecte : ajustez le cadrage des epaules", FeedbackLevel.INFO)
+            frame.cue = cue_feedback(Cue.NO_SKELETON)
             return frame
 
         pts = to_measurement_space(landmarks, width, height)
@@ -204,15 +205,14 @@ class SessionProcessor:
 
         if not baseline.is_calibrated:
             frame.status = "CALIBRATION"
-            frame.cue = LiveFeedback(self.calibrator.status_message, FeedbackLevel.INFO)
+            frame.cue = LiveFeedback(self.calibrator.status_message, FeedbackLevel.INFO, self.calibrator.status_code)
             return frame
         if not angle_ok:
             frame.metrics["abduction"] = None
             self._pause(now)
             frame.status = "EPAULES PRETES" if shoulders_ok and not elbow_ok else "POSITION A AJUSTER"
-            message = ("Epaules pretes : montrez le coude du bras actif pour compter" if shoulders_ok and not elbow_ok
-                       else "Montrez les deux epaules et le coude du bras actif")
-            frame.cue = LiveFeedback(message, FeedbackLevel.INFO)
+            frame.cue = cue_feedback(Cue.SHOULDERS_READY_SHOW_ELBOW if shoulders_ok and not elbow_ok
+                                     else Cue.SHOW_SHOULDERS_AND_ELBOW)
             return frame
         self.frames_tracked += 1
         self._last_valid_time = now
@@ -220,7 +220,7 @@ class SessionProcessor:
         if self._need_rest:
             if angle > self.config.abduction.rest_threshold_deg:
                 frame.status = "REPOS REQUIS"
-                frame.cue = LiveFeedback("Baissez le bras avant de commencer une repetition", FeedbackLevel.INFO)
+                frame.cue = cue_feedback(Cue.LOWER_BEFORE_REP)
                 return frame
             self._need_rest = False
         missing = tuple(label for name, label in (("lean", "tronc"), ("shrug", "epaule"), ("elbow", "coude"), ("drift", "derive 3D")) if frame.metrics[name] is None)
@@ -234,7 +234,7 @@ class SessionProcessor:
         frame.status = "CADRAGE SERRE" if mode == "shoulders" else "SUIVI ACTIF" if not missing else "MESURES PARTIELLES"
         frame.cue = self.rules_engine.evaluate_live_frame(angle, m["lean"], m["shrug"], m["elbow"], frame.phase, m["drift"])
         if frame.phase == ExercisePhase.HOLD and frame.hold_seconds >= self.config.timing.min_hold_time_sec and frame.cue.level != FeedbackLevel.WARNING:
-            frame.cue = LiveFeedback("Bien ! Redescendez doucement jusqu'au repos", FeedbackLevel.INFO)
+            frame.cue = cue_feedback(Cue.HOLD_DONE_LOWER)
         if rep:
             # Global numbering survives recalibration and arm changes within this processor.
             rep.rep_index = self.rules_engine.session.total_repetitions + 1

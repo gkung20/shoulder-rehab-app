@@ -12,6 +12,7 @@ from enum import Enum
 from typing import List, Optional, Tuple
 
 from src.config import ExerciseConfig
+from src.cues import Cue, text as cue_text
 from src.state_machine import ExercisePhase, RepetitionMetrics
 
 
@@ -24,9 +25,18 @@ class FeedbackLevel(str, Enum):
 
 @dataclass
 class LiveFeedback:
-    """Current live cue displayed to the patient in real time."""
+    """Current live cue displayed to the patient in real time.
+
+    `code` (src.cues.Cue) identifies the message; consumers use it instead of the French text.
+    """
     message: str
     level: FeedbackLevel
+    code: Optional[Cue] = None
+
+
+def cue_feedback(code: Cue, level: FeedbackLevel = FeedbackLevel.INFO, **values) -> LiveFeedback:
+    """A live cue with its screen text taken from src.cues."""
+    return LiveFeedback(cue_text(code, **values), level, code)
 
 
 # Standard diagnostic error categories (used for session histograms and statistics)
@@ -126,40 +136,40 @@ class RulesEngine:
         Prioritizes postural safety corrections before coaching speed or range.
         """
         if current_angle is None:
-            return LiveFeedback("Positionnez-vous face a la camera", FeedbackLevel.INFO)
+            return cue_feedback(Cue.FACE_CAMERA)
 
         # 1. Postural Compensation Checks (Highest Priority)
         if current_shrug is not None and current_shrug > self.config.compensation.max_shrug_ratio:
-            return LiveFeedback("Gardez l'epaule basse !", FeedbackLevel.WARNING)
+            return cue_feedback(Cue.KEEP_SHOULDER_LOW, FeedbackLevel.WARNING)
 
         if current_lean is not None and current_lean > self.config.compensation.max_trunk_lean_deg:
-            return LiveFeedback("Gardez le tronc droit !", FeedbackLevel.WARNING)
+            return cue_feedback(Cue.KEEP_TRUNK_STRAIGHT, FeedbackLevel.WARNING)
 
         if current_elbow is not None and current_elbow < self.config.compensation.min_elbow_angle_deg:
-            return LiveFeedback("Gardez le bras tendu !", FeedbackLevel.WARNING)
+            return cue_feedback(Cue.KEEP_ARM_STRAIGHT, FeedbackLevel.WARNING)
 
         if current_drift is not None and current_drift > self.config.compensation.max_anterior_drift_deg:
-            return LiveFeedback("Gardez le bras dans le plan du corps !", FeedbackLevel.WARNING)
+            return cue_feedback(Cue.KEEP_ARM_IN_PLANE, FeedbackLevel.WARNING)
 
         # 2. Phase-Specific Real-time Guidance
         if current_phase == ExercisePhase.REST:
-            return LiveFeedback("Pret : levez le bras sur le cote", FeedbackLevel.INFO)
+            return cue_feedback(Cue.READY_RAISE)
 
         elif current_phase == ExercisePhase.RISING:
             if current_angle < self.config.abduction.target_min_deg - 10.0:
-                return LiveFeedback("Montez lentement le bras...", FeedbackLevel.INFO)
+                return cue_feedback(Cue.RISE_SLOWLY)
             else:
-                return LiveFeedback("Presque ! Rejoignez votre zone cible", FeedbackLevel.INFO)
+                return cue_feedback(Cue.ALMOST_TARGET)
 
         elif current_phase == ExercisePhase.HOLD:
             if current_angle > self.config.abduction.overshoot_warn_deg:
-                return LiveFeedback("Un peu moins haut : revenez dans la zone cible", FeedbackLevel.WARNING)
-            return LiveFeedback("Maintenez dans la zone cible, puis redescendez", FeedbackLevel.INFO)
+                return cue_feedback(Cue.LOWER_A_LITTLE, FeedbackLevel.WARNING)
+            return cue_feedback(Cue.HOLD_TARGET)
 
         elif current_phase == ExercisePhase.LOWERING:
-            return LiveFeedback("Controlez la descente lentement", FeedbackLevel.INFO)
+            return cue_feedback(Cue.CONTROL_DESCENT)
 
-        return LiveFeedback("Continuez le mouvement", FeedbackLevel.INFO)
+        return cue_feedback(Cue.CONTINUE)
 
     def evaluate_repetition(self, rep: RepetitionMetrics) -> RepetitionEvaluation:
         """Perform comprehensive clinical check on a finished repetition.
