@@ -70,6 +70,22 @@ Willy s’affiche aussi dans sa **bulle** : l’application reste utilisable son
   `Documents\Mouvement\bilan_<date>\` contient `bilan.pdf`, `mouvements.csv` (une ligne par
   mouvement, ouvrable dans Excel) et les fichiers des séances. « Ouvrir le dossier » l'affiche.
 
+## Sécurité : douleur, « J'ai mal », règles d'arrêt, mode assis
+
+- Avant chaque séance, Willy demande la douleur à l'épaule de 0 à 10 (grands boutons, ou touches
+  0 à 9). Avec les bandes du plan : 0-3 séance normale, 4-6 séance douce (cible maximale −10°,
+  30 % de répétitions en moins), 7-10 pas de séance aujourd'hui. La question revient à la fin ; une
+  hausse de 2 points ou plus est signalée (Willy conseille d'en parler au kiné, l'export l'indique).
+- Pendant la séance, le bouton **« J'ai mal »** (touche P) arrête aussitôt le comptage, puis propose
+  une minute de repos et la suite en douceur, ou la fin de la séance. Un deuxième « J'ai mal »
+  termine la séance.
+- Règles douces : durée maximale du plan (15 min par défaut), pause proposée en cas de fatigue
+  (angles en baisse ou compensations répétées). Réglages dans `config/exercise_config.yaml`
+  (section `safety:`).
+- **Mode assis** (réglages kiné) : la calibration et le comptage fonctionnent sans les hanches ;
+  l'inclinaison du buste est estimée par la ligne des épaules.
+- Analyse des risques : `docs/risk-analysis.md`.
+
 ## Silhouette guide en vue caméra
 
 En vue caméra (**Voir la caméra** ou **V**), un petit bouton **Silhouette** en
@@ -422,6 +438,8 @@ shoulder-rehab-app/
 │   ├── session_store.py        # Enregistrement des séances (JSON, sans image)
 │   ├── results_screen.py       # Écrans « Mon bilan » et « Historique »
 │   ├── history_export.py       # Export pour le kiné : PDF, CSV et fichiers des séances
+│   ├── pain_screen.py          # Question de douleur (0-10) et choix après « J'ai mal »
+│   ├── safety.py               # Règles d'arrêt : durée, fatigue, douleur répétée
 │   ├── session_processor.py    # Pipeline commun OpenCV, Streamlit et évaluation vidéo
 │   ├── dashboard.py            # Interface patient minimale dessinée à la résolution native
 │   ├── patient_controls.py     # Boutons et états de la séance, communs au rendu et aux clics

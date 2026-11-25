@@ -18,7 +18,7 @@ Updated after every phase.
 | 1 Foundations | done | cue codes, layout module, App class, exercises in YAML |
 | 2 Plan per patient | done | plan in profile, physio settings (PIN 0000), resting angle, sets |
 | 3 Results and history | done | session files, results screen, 30-day history, export PDF/CSV/JSON |
-| 4 Safety | to do | |
+| 4 Safety | done | pain check, J'ai mal, stop rules, seated mode, risk analysis |
 | 5 Hands-free, camera | to do | 5.2 not chosen |
 | 6 Speed | to do | |
 | 7 Validation tools | to do | |
@@ -33,7 +33,7 @@ Updated after every phase.
 - Installed there: `pose_landmarker_full.task`, `pose_landmarker_lite.task`, `hand_landmarker.task`,
   `fr_FR-tom-medium` and `en_US-ryan-medium`. Python 3.13 on Windows (see `constraints-windows-py313.txt`).
 - No shell on the PC this run, so files are synced by copying.
-- Last synced commit: `2685adb` (end of Phase 2); updated after each phase.
+- Last synced commit: `8d159f3` (end of Phase 3); updated after each phase.
 
 ## Baseline (before)
 
@@ -73,6 +73,13 @@ Marwane's PC numbers will differ; run the same command there to compare.
 - Phase 3.4: no folder dialog (it could freeze the OpenCV window, which can't be checked here); the
   export goes to Documents\Mouvement with an "Open the folder" button. The PDF is a new multi-session
   report; `src/report_generator.py` still makes the one-session report of the web version.
+- Phase 4.2: "J'ai mal" takes the place of "Mesures" during a session (Mesures stays on key D and
+  before/after the session), so the patient always finds it in the bottom bar.
+- Phase 4.4: seated mode estimates the trunk lean from the shoulder line's tilt, minus 5 deg of
+  natural tilt as the arm rises; this is only used when the plan says seated.
+- Phase 4.5: the risk analysis is in French, like the README; it names the tests of later phases,
+  and a test checks that every named test exists once its phase lands.
+- New Willy lines: E9.01, E9.03 to E9.12 (pain and safety).
 - New Willy lines: E6.09, E6.10, E6.11 (sets), E8.01 (plan updated), E7.04 to E7.07 (history trend),
   E8.02 (export saved); in lines.yaml, and added to the script doc at the end of the sprint.
 - `src/synthetic_pose.py`: one synthetic-body helper for tests, previews and tools (both arms,
@@ -80,6 +87,8 @@ Marwane's PC numbers will differ; run the same command there to compare.
 
 ## To test on the PC
 
+- After Phase 4: start a session and answer the pain question (try 2, 5 and 8 on three days); during a
+  session press "J'ai mal" (or P); try the seated mode from the physio settings.
 - After Phase 3: finish a session, press "Mon bilan", then "Historique", choose a period and
   "Exporter"; open `Documents\Mouvement\bilan_...\bilan.pdf` and `mouvements.csv` in Excel.
 - After Phase 2: on Willy's home, press "Réglages kiné", type 0000, change a value, save: Willy
