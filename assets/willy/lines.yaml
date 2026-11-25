@@ -886,6 +886,26 @@ E7.03:
   anim: wave
   en: "Goodbye! Take care of that shoulder. See you next time."
   fr: "Au revoir ! Prenez soin de cette épaule. À la prochaine !"
+E7.04:
+  moment: History, the best angles are going up
+  anim: cheer
+  en: "Your best angles are going up. Lovely progress!"
+  fr: "Vos meilleurs angles augmentent. Beau progrès !"
+E7.05:
+  moment: History, the best angles are steady
+  anim: nod
+  en: "Steady work these last days. Keep going at your own pace."
+  fr: "Un travail régulier ces derniers jours. Continuez à votre rythme."
+E7.06:
+  moment: History, the best angles are lower than usual
+  anim: calm
+  en: "Your angles are a little lower. If it hurts more than usual, tell your physio."
+  fr: "Vos angles sont un peu plus bas. Si vous avez plus mal que d'habitude, parlez-en à votre kiné."
+E7.07:
+  moment: History, not enough sessions yet for a trend
+  anim: idle
+  en: "Your history starts here. Each session adds a dot."
+  fr: "Votre historique commence ici. Chaque séance ajoute un point."
 
 # --- Everyday: physio settings and the patient's plan --------------------------------------
 E8.01:
@@ -893,3 +913,8 @@ E8.01:
   anim: nod
   en: "Your plan has been updated."
   fr: "Votre plan a été mis à jour."
+E8.02:
+  moment: The physio export is saved
+  anim: nod
+  en: "I've saved the report in the Mouvement folder of your Documents."
+  fr: "J'ai enregistré le bilan dans le dossier Mouvement de vos Documents."

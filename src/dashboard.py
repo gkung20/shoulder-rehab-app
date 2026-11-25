@@ -238,7 +238,7 @@ def _silhouette_labels(p,guide_text):
 def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_enabled=True,audio_status="",
                      *,mode="running",details=False,help_visible=False,show_controls=True,output_size=None,
                      avatar_stage=None,avatars=True,avatar_gender="male",willy=None,speaking=False,
-                     silhouette=False,lang="fr",overlay=None,sets=None,now=0.):
+                     silhouette=False,lang="fr",overlay=None,sets=None,now=0.,results=False):
     """The patient screen. `overlay` (src.willy_overlay.Overlay) adds Willy's bubble and the tour's spotlight."""
     width,height=output_size or CANVAS_SIZE
     if width <= 0 or height <= 0:
@@ -371,7 +371,7 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
     guide=_draw_willy(canvas,p,willy,analysis,mode,processor,mirror,speaking,willy_box)
     p.rule(32,732,1248,732)
     if show_controls:
-        for button in patient_buttons(mode,processor.arm,audio_enabled,details,help_visible,avatars,avatar_gender,silhouette,lang):
+        for button in patient_buttons(mode,processor.arm,audio_enabled,details,help_visible,avatars,avatar_gender,silhouette,lang,results):
             _button(p,button)
     else:
         p.text((32,766),"Utilisez les commandes de la page pour mettre en pause ou terminer.",16,MUTED)

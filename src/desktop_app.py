@@ -26,6 +26,7 @@ from src.home_screen import render_home
 from src.patient_controls import PatientControls, dashboard_action_at
 from src import physio_settings as physio
 from src.pose_detector import PoseDetector
+from src.results_screen import render_history, render_results, results_lines
 from src.rules_engine import FeedbackLevel
 from src import session_store
 from src.session_plan import SetTracker
@@ -137,14 +138,14 @@ class ExerciseScreen(Screen):
                                 avatar_stage=app.avatar_stage, avatars=c.avatars, avatar_gender=c.avatar_gender,
                                 speaking=app.audio.speaking, silhouette=c.silhouette, willy=app.guide,
                                 lang=app.director.language, overlay=app.director.overlay,
-                                sets=app.sets, now=time.monotonic())
+                                sets=app.sets, now=time.monotonic(), results=app.last_record is not None)
 
     def action_at(self, app, point):
         c = app.controls
         return dashboard_action_at(*point, mode=c.mode, arm=app.processor.arm, audio_enabled=app.audio.enabled,
                                    details=c.details, help_visible=c.help_visible, avatars=c.avatars,
                                    avatar_gender=c.avatar_gender, silhouette=c.silhouette,
-                                   language=app.director.language)
+                                   language=app.director.language, results=app.last_record is not None)
 
     def on_action(self, app, action):
         controls, audio = app.controls, app.audio
@@ -282,6 +283,71 @@ class SettingsScreen(Screen):
         return True
 
 
+class ResultsScreen(Screen):
+    """One session's results ("Mon bilan")."""
+
+    name = "results"
+
+    def __init__(self):
+        self.record = None
+        self.hit_boxes = []
+
+    def draw(self, app, output_size):
+        image, self.hit_boxes = render_results(self.record, output_size, app.director.language, app.guide)
+        return image
+
+    def action_at(self, app, point):
+        return physio.action_at(self.hit_boxes, *point)
+
+    def on_action(self, app, action):
+        if action == "results_back":
+            app.close_modal()
+        elif action == "results_history":
+            app.open_modal("history")
+
+    def on_key(self, app, key):
+        if key == ESCAPE:
+            app.close_modal()
+        return True
+
+
+class HistoryScreen(Screen):
+    """The last 30 days, and the export for the physio."""
+
+    name = "history"
+
+    def __init__(self):
+        self.records = []
+        self.period = "30"
+        self.message = ""
+        self.hit_boxes = []
+        self.said = False
+
+    def draw(self, app, output_size):
+        image, self.hit_boxes, line_id = render_history(self.records, output_size, app.director.language,
+                                                        app.profile.streak(), self.period, message=self.message)
+        if not self.said:
+            self.said = True
+            app.say_line(line_id)
+        return image
+
+    def action_at(self, app, point):
+        return physio.action_at(self.hit_boxes, *point)
+
+    def on_action(self, app, action):
+        if action == "history_back":
+            app.open_modal("results") if app.screens["results"].record is not None else app.close_modal()
+        elif action.startswith("period:"):
+            self.period = action.split(":", 1)[1]
+        elif action == "history_export":
+            app.export_history(self.period)
+
+    def on_key(self, app, key):
+        if key == ESCAPE:
+            app.close_modal()
+        return True
+
+
 # --------------------------------------------------------------------------- the app
 class App:
     """The running program. `args` are the parsed command-line options."""
@@ -304,7 +370,8 @@ class App:
         self.viewport = None
         self.quitting = False
         self._last_audio_status = None
-        self.screens = {screen.name: screen for screen in (HomeScreen(), ExerciseScreen(), PinScreen(), SettingsScreen())}
+        self.screens = {screen.name: screen for screen in (HomeScreen(), ExerciseScreen(), PinScreen(),
+                                                           SettingsScreen(), ResultsScreen(), HistoryScreen())}
         self.modal = None  # a screen shown over Willy's flow (PIN pad, settings); Willy waits meanwhile
         self._calibrations_seen = 0
         self.sets = None   # sets of the plan, from Start to the end of the session
@@ -327,6 +394,16 @@ class App:
             if screen.form is None:
                 screen.form = self.new_form()
             screen.form.message = message
+        elif name == "results":
+            screen.record = self.last_record or session_store.last_session()
+            if screen.record is None:
+                return
+            if self.modal is None:
+                for line in results_lines(screen.record, self.director.language):
+                    self.audio.say(line, self.director.language, interrupt=False)
+        elif name == "history":
+            screen.records = session_store.load_sessions(since=datetime.date.today() - datetime.timedelta(days=29))
+            screen.said, screen.message = False, ""
         self.modal = name
 
     def close_modal(self):
@@ -396,6 +473,7 @@ class App:
         self.processor.model_info = self.detector.model_info.copy()
         self.guide = shared_guide()
         self.director = WillyDirector(self.profile, self.audio, self.guide, has_avatars=not args.no_avatars)
+        self.director.results_available = bool(session_store.session_files())
         if args.skip_home:
             self.director.screen = "dashboard"
         elif args.tour:
@@ -444,6 +522,9 @@ class App:
                 continue
             if action == "open_settings":
                 self.open_modal("pin")
+                continue
+            if action in ("open_results", "results"):
+                self.open_modal("results")
                 continue
             if action in TOUR_ACTIONS or self.director.screen == "home" or action in ("language", "quit"):
                 self.director.notify(action)
@@ -557,7 +638,16 @@ class App:
             print(f"[SÉANCE] Impossible d'enregistrer la séance : {error}")
             return None
         log.saved, self.last_record = True, record
+        self.director.results_available = True
         return path
+
+    def say_line(self, line_id, **values):
+        """Willy's voice for a line while a modal screen is shown (his flow is paused)."""
+        if line_id:
+            self.audio.say(shared_script().text(line_id, self.director.language, **values), self.director.language)
+
+    def export_history(self, period):
+        """Written in the next step (Phase 3.4)."""
 
     def count_for_plan(self):
         """A counted movement: at the end of a set, rest; at the end of the plan, finish."""

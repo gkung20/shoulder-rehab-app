@@ -133,6 +133,7 @@ class WillyDirector:
         self.allowed = None              # session actions allowed during a tour step (None: all)
         self.coaching = False            # Scenario 7: the tour speaks the first movements itself
         self.in_tour = False
+        self.results_available = False  # a saved session exists: "Mes résultats" on the home screen
         self.closing_until = None
         self._gen = None
         self._wait = None
