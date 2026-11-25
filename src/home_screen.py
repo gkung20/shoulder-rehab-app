@@ -30,6 +30,7 @@ def home_buttons(director):
         buttons.append(("language", other, LANGUAGE_BOX))
         if director.profile.tour_done and not director.in_tour:
             buttons.append(("replay_tour", ui("replay_tour", director.language), REPLAY_BOX))
+            buttons.append(("open_settings", "Réglages kiné", L.HOME_SETTINGS_BUTTON))
     return buttons
 
 

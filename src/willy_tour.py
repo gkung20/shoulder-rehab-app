@@ -159,6 +159,22 @@ class WillyDirector:
         else:
             self._start(self._returning_home())
 
+    def plan_updated(self):
+        """Back from the physio settings after a change: Willy confirms, then his Start button."""
+        self.screen = "home"
+        self._stop_episode()
+        self._start(self._plan_updated())
+
+    def _plan_updated(self):
+        self.in_tour = False
+        self.allowed = None
+        self.say("E8.01")
+        yield _Speech()
+        self.current.buttons = [TourButton("home_start", ui("start", self.language), True)]
+        yield _Choice(("home_start",))
+        self.screen = "dashboard"
+        self.current = None
+
     def replay_tour(self):
         self.screen = "home"
         self._stop_episode()

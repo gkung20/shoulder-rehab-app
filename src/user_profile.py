@@ -150,6 +150,8 @@ class Profile:
     plan: dict | None = None        # the physio's plan (Plan as a dict); None = defaults
     plan_history: list = field(default_factory=list)  # earlier plans: [{"until": iso, "plan": {...}}]
     schema_version: int = SCHEMA_VERSION
+    pin_salt: str = ""              # physio PIN: salt and PBKDF2 hash (src.physio_settings); empty = 0000
+    pin_hash: str = ""
 
     @classmethod
     def load(cls, path=None):

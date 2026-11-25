@@ -871,3 +871,10 @@ E7.03:
   anim: wave
   en: "Goodbye! Take care of that shoulder. See you next time."
   fr: "Au revoir ! Prenez soin de cette épaule. À la prochaine !"
+
+# --- Everyday: physio settings and the patient's plan --------------------------------------
+E8.01:
+  moment: Back on the home screen after the physio saved a new plan
+  anim: nod
+  en: "Your plan has been updated."
+  fr: "Votre plan a été mis à jour."

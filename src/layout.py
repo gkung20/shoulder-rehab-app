@@ -91,6 +91,7 @@ HOME_WILLY_BOX = Rect(70, 120, 590, 800)
 HOME_BUBBLE = Rect(630, 170, 1220, 800)       # left, top and right edges are used
 HOME_LANGUAGE_BUTTON = Rect(1060, 28, 1240, 80)
 HOME_REPLAY_BUTTON = Rect(820, 28, 1044, 80)
+HOME_SETTINGS_BUTTON = Rect(596, 28, 804, 80)
 
 # --- Willy's tour spotlight zones (exercise screen) ---------------------------------------
 _PAD = 6  # spotlight margin around grouped buttons

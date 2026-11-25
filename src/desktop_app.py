@@ -23,6 +23,7 @@ from src.exercises import get_exercise
 from src.hand_detector import HandDetector, MODEL_PATH as HAND_MODEL_PATH
 from src.home_screen import render_home
 from src.patient_controls import PatientControls, dashboard_action_at
+from src import physio_settings as physio
 from src.pose_detector import PoseDetector
 from src.rules_engine import FeedbackLevel
 from src.session_processor import FrameAnalysis, SessionProcessor
@@ -192,6 +193,79 @@ class ExerciseScreen(Screen):
         return True
 
 
+class PinScreen(Screen):
+    """The physio PIN pad (before the settings, or to change the PIN)."""
+
+    name = "pin"
+
+    def __init__(self):
+        self.pad = physio.PinPad()
+        self.hit_boxes = []
+
+    def draw(self, app, output_size):
+        image, self.hit_boxes = physio.render_pin(self.pad, output_size, app.director.language, time.monotonic())
+        return image
+
+    def action_at(self, app, point):
+        return physio.action_at(self.hit_boxes, *point)
+
+    def on_action(self, app, action):
+        if not action.startswith("pin:"):
+            return
+        result = self.pad.press(action[4:], app.profile, time.monotonic())
+        changing = self.pad.mode in ("new", "confirm")
+        if result == "open":
+            app.open_modal("settings")
+        elif result == "changed":
+            app.profile.save()
+            app.open_modal("settings", message="Code modifié.")
+        elif result == "cancel":
+            app.open_modal("settings") if changing else app.close_modal()
+
+    def on_key(self, app, key):
+        names = {8: "back", ENTER: "ok", ESCAPE: "cancel"}
+        if ord('0') <= key <= ord('9'):
+            self.on_action(app, f"pin:{chr(key)}")
+        elif key in names:
+            self.on_action(app, f"pin:{names[key]}")
+        return True
+
+
+class SettingsScreen(Screen):
+    """The patient's plan, changed with big − and + buttons."""
+
+    name = "settings"
+
+    def __init__(self):
+        self.form = None
+        self.hit_boxes = []
+
+    def draw(self, app, output_size):
+        image, self.hit_boxes = physio.render_settings(self.form, output_size, app.director.language)
+        return image
+
+    def action_at(self, app, point):
+        return physio.action_at(self.hit_boxes, *point)
+
+    def on_action(self, app, action):
+        if action.startswith("set:"):
+            _, sign, key = action.split(":", 2)
+            self.form.step(key, 1 if sign == "+" else -1)
+        elif action == "settings_save":
+            app.save_plan(self.form.plan)
+        elif action == "settings_cancel":
+            app.close_modal()
+        elif action == "settings_pin":
+            app.open_modal("pin", mode="new")
+
+    def on_key(self, app, key):
+        if key == ESCAPE:
+            app.close_modal()
+        elif key == ENTER:
+            app.save_plan(self.form.plan)
+        return True
+
+
 # --------------------------------------------------------------------------- the app
 class App:
     """The running program. `args` are the parsed command-line options."""
@@ -214,12 +288,50 @@ class App:
         self.viewport = None
         self.quitting = False
         self._last_audio_status = None
-        self.screens = {screen.name: screen for screen in (HomeScreen(), ExerciseScreen())}
+        self.screens = {screen.name: screen for screen in (HomeScreen(), ExerciseScreen(), PinScreen(), SettingsScreen())}
+        self.modal = None  # a screen shown over Willy's flow (PIN pad, settings); Willy waits meanwhile
         self._devices = ExitStack()
 
     @property
     def screen(self):
-        return self.screens[self.director.screen]
+        return self.screens[self.modal or self.director.screen]
+
+    # ----------------------------------------------------------------- modal screens
+    def open_modal(self, name, mode=None, message=""):
+        """Show the PIN pad or the settings. The settings form survives a PIN change in between."""
+        screen = self.screens[name]
+        if name == "pin":
+            screen.pad = physio.PinPad(mode=mode or "check")
+        elif name == "settings":
+            if screen.form is None:
+                screen.form = self.new_form()
+            screen.form.message = message
+        self.modal = name
+
+    def close_modal(self):
+        self.modal = None
+        self.screens["settings"].form = None
+
+    def new_form(self):
+        form = physio.SettingsForm(self.plan)
+        resting = getattr(self.profile, "resting_angle", None)
+        if resting is not None:
+            form.resting_angle, form.resting_date = resting, getattr(self.profile, "resting_date", "")
+        return form
+
+    def save_plan(self, plan):
+        """Keep the physio's plan, rebuild the session with it, and let Willy confirm."""
+        if plan != self.plan:
+            self.profile.set_plan(plan)
+            self.profile.save()
+            self.plan = self.profile.current_plan(self.exercise.apply(self.config), self.exercise.id)
+            if self.plan.arm:
+                self.processor.arm = self.plan.arm
+            self.new_processor()
+            self.close_modal()
+            self.director.plan_updated()
+        else:
+            self.close_modal()
 
     # ----------------------------------------------------------------- lifecycle
     def run(self):
@@ -290,7 +402,10 @@ class App:
         if not success or frame is None:
             show_startup_error(shared_script().text("E6.08", self.director.language))
             return False
-        self.tick(frame, timestamp_ms, fps)
+        if self.modal is None:
+            self.tick(frame, timestamp_ms, fps)
+        else:
+            self.frame, self.fps = frame, fps  # Willy's flow waits while the physio screens are open
         self.window.show(self.draw())
         key = self.window.read_key()
         if not self.window.is_open():
@@ -300,6 +415,12 @@ class App:
     def handle_actions(self):
         while self.actions:
             action = self.actions.popleft()
+            if self.modal is not None:
+                self.screen.on_action(self, action)
+                continue
+            if action == "open_settings":
+                self.open_modal("pin")
+                continue
             if action in TOUR_ACTIONS or self.director.screen == "home" or action in ("language", "quit"):
                 self.director.notify(action)
                 self.quitting = self.quitting or action == "quit"
@@ -364,13 +485,15 @@ class App:
         if point is None:
             return
         # Willy's buttons (home screen, tour bubble) are on top of the screen's own controls.
-        action = self.director.overlay.action_at(*point)
+        action = self.director.overlay.action_at(*point) if self.modal is None else None
         if action is None:
             action = self.screen.action_at(self, point)
         if action:
             self.actions.append(action)
 
     def on_key(self, key):
+        if self.modal is not None:
+            return self.screen.on_key(self, key)
         director = self.director
         if key != NO_KEY and director.type_key(key):
             return True  # the patient is typing a first name
