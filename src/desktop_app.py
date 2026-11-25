@@ -13,6 +13,7 @@ import os
 import sys
 import time
 from dataclasses import asdict
+from time import perf_counter
 from collections import deque
 from contextlib import ExitStack
 
@@ -96,6 +97,10 @@ class Window:
 
     def read_key(self):
         return cv2.waitKey(1) & 0xFF
+
+    def pump(self):
+        """Let the window paint while the app is still loading (keys are ignored then)."""
+        cv2.waitKey(1)
 
     def is_open(self):
         return cv2.getWindowProperty(self.name, cv2.WND_PROP_VISIBLE) >= 1
@@ -442,6 +447,7 @@ class App:
                                                            PainScreen())}
         self.modal = None  # a screen shown over Willy's flow (PIN pad, settings); Willy waits meanwhile
         self._calibrations_seen = 0
+        self.timings = {}  # startup: seconds to the first window and until ready
         self.sets = None   # sets of the plan, from Start to the end of the session
         self.session_plan = self.plan  # the plan of this session (gentle when pain is in the middle band)
         self.safety = None  # gentle stop rules of this session (src.safety)
@@ -536,29 +542,40 @@ class App:
         return 0
 
     def start(self):
+        """Open the window at once with Willy ("Je me prépare…"), then load the camera, the pose
+        model, the voices and the 3D stage, refreshing the window between steps. Loading stays
+        on the main thread: Panda3D, the OpenCV window and the Windows library order need it."""
+        started = perf_counter()
         enable_high_dpi()
         args, config = self.args, self.config
+        self.guide = shared_guide()
+        self.window.open(window_size(), self.on_mouse)
+        self.show_loading("")
+        self.timings["first_window"] = perf_counter() - started
         # AvatarStage preloads the voice runtime, then initializes graphics before
         # the audio worker starts. Windows native library order matters here.
         if not args.no_avatars:
+            self.show_loading("Préparation des avatars 3D…")
             self.avatar_stage = AvatarStage()
         if not args.no_hands and HAND_MODEL_PATH.exists():
             self.hand_detector = HandDetector()
             print("[MAINS] Suivi detaille des paumes et doigts actif.")
         elif not args.no_hands:
             print("[MAINS] Modele optionnel absent : python models/download_models.py hand_landmarker.task")
+        self.show_loading("Démarrage de la caméra…")
         c = config.camera
         index = c.index if args.camera is not None or self.profile.camera_index is None else self.profile.camera_index
         self.capture = self._devices.enter_context(VideoCaptureManager(
             camera_index=index, width=c.width, height=c.height, target_fps=c.fps, zoom=c.zoom, mirror=False))
+        self.show_loading("Chargement du suivi du mouvement…")
         self.detector = self._devices.enter_context(PoseDetector(model_variant=config.pose.model,
                                                                  num_poses=config.pose.num_poses))
         self.detector.choose = self.person_lock.choose  # follow only the patient (Phase 5.3)
+        self.show_loading("Préparation de ma voix…")
         self.audio = self._devices.enter_context(AudioCoach.from_config(
             config.audio, enabled=self.profile.audio_enabled, language=self.profile.language or "fr"))
         print(self.capture.status_message)
         self.processor.model_info = self.detector.model_info.copy()
-        self.guide = shared_guide()
         self.director = WillyDirector(self.profile, self.audio, self.guide, has_avatars=not args.no_avatars)
         self.director.results_available = bool(session_store.session_files())
         if args.skip_home:
@@ -567,7 +584,16 @@ class App:
             self.director.replay_tour()
         else:
             self.director.open()
-        self.window.open(window_size(), self.on_mouse)
+        self.timings["ready"] = perf_counter() - started
+        print(f"[DÉMARRAGE] Fenêtre en {self.timings['first_window']:.2f} s, prêt en {self.timings['ready']:.2f} s")
+
+    def show_loading(self, step):
+        """Willy and "Je me prépare…" while the app loads (no clicks yet)."""
+        language = self.profile.language or "fr"
+        output_size = self.window.output_size()
+        image, _ = render_notice("Je me prépare…", step, output_size, language, self.guide)
+        self.window.show(image)
+        self.window.pump()
 
     def close(self):
         self.save_session(partial=self.controls.mode in ("running", "paused"))

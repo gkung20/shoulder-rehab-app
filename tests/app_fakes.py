@@ -111,6 +111,9 @@ class ScriptedWindow:
             self.script(self)
         return self.keys.pop(0) if self.keys else 255
 
+    def pump(self):
+        self.pumps = getattr(self, "pumps", 0) + 1
+
     def is_open(self):
         return True
 

@@ -29,3 +29,18 @@ def test_app_runs_headless_from_home_to_a_finished_session(monkeypatch, tmp_path
     assert Profile.load().session_days  # the session was recorded in the profile
     sessions = load_sessions()
     assert len(sessions) == 1 and sessions[0]["totals"]["reps"] >= 2 and not sessions[0]["partial"]
+
+
+def test_the_window_opens_at_once_with_willy_getting_ready(monkeypatch, tmp_path):
+    shown = []
+
+    class Window(ScriptedWindow):
+        def show(self, image):
+            shown.append(self.app.director is None)  # still loading: no Willy flow yet
+            super().show(image)
+
+    window = Window(lambda w: w.press(27))
+    app = make_app(monkeypatch, tmp_path, window, language="en", tour_done=True)
+    assert app.run() == 0
+    assert shown[0] is True and window.pumps >= 3  # loading screens painted before anything else
+    assert app.timings["first_window"] < 1.0 and app.timings["ready"] >= app.timings["first_window"]
