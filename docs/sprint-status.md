@@ -20,7 +20,7 @@ Updated after every phase.
 | 3 Results and history | done | session files, results screen, 30-day history, export PDF/CSV/JSON |
 | 4 Safety | done | pain check, J'ai mal, stop rules, seated mode, risk analysis |
 | 5 Hands-free, camera | done | gesture, person lock, camera reconnect, fast start, face check (5.2 not chosen) |
-| 6 Speed | to do | |
+| 6 Speed | done | camera thread, --debug timings, cached drawing, automatic fast model, hand model off |
 | 7 Validation tools | to do | |
 | 8 Ready to share | to do | 8.2 not chosen |
 | 9 Willy polish | to do | |
@@ -33,7 +33,7 @@ Updated after every phase.
 - Installed there: `pose_landmarker_full.task`, `pose_landmarker_lite.task`, `hand_landmarker.task`,
   `fr_FR-tom-medium` and `en_US-ryan-medium`. Python 3.13 on Windows (see `constraints-windows-py313.txt`).
 - No shell on the PC this run, so files are synced by copying.
-- Last synced commit: `7b224cc` (end of Phase 4); updated after each phase.
+- Last synced: the end of Phase 6 (the commit that adds this line); updated after each phase.
 
 ## Baseline (before)
 
@@ -62,6 +62,10 @@ Marwane's PC numbers will differ; run the same command there to compare.
 The 95th percentiles move a lot between runs here (shared 2-core workspace); the medians are the
 stable numbers. On top of drawing, the pose model now runs in its own thread, so the screen no
 longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py --debug` on the PC.
+
+- Hand model (`hand_landmarker.task`, 1280x720 frame): 11.7 ms per frame here. It only drew palms
+  and fingers on the avatars, so it is now off by default: 11.7 ms saved on every tracked frame.
+- Tests: 324 passed, 19 skipped (from 231 at the start of the sprint).
 
 ## Decisions
 
@@ -102,6 +106,19 @@ longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py 
 - Phase 5.5: loading stays on the main thread (Panda3D, the OpenCV window and the Windows DLL order
   need it); the window is refreshed between steps instead.
 - Phase 5.6: the face check fires from about 24 deg with depth, 32 deg without.
+- Phase 6.1: `--debug` shows each stage's time at the top of the screen and writes
+  `%APPDATA%\Mouvement\timings.csv`; garbage collection was checked and is not what slows the slow
+  frames here (the shared CPU is).
+- Phase 6.2: the camera and the pose model run in a worker thread; the screen takes the newest
+  result. `performance.pose_thread: false` brings back the single loop if anything misbehaves.
+- Phase 6.3: the fixed parts of the session screen are drawn once and reused; Willy's renders are
+  kept up to 48 MB.
+- Phase 6.4: after 3 s of tracking below 15 images/s with the full model, the app switches to lite
+  and saves it in the profile; the physio can choose Automatic / Accurate / Fast in the settings, and
+  `--model` always wins. The default download now includes the lite model (5.5 MB, same licence).
+- Phase 6.5: the hand model is off unless `--hands` or `performance.hand_model: true`.
+- Settings page: long values now shrink to fit their box ("Au choix du patient" used to run under
+  the minus button).
 - New Willy lines: E3.10 (gesture recognised); E6.08 reworded (the app now retries).
 - New Willy lines: E9.01, E9.03 to E9.12 (pain and safety).
 - New Willy lines: E6.09, E6.10, E6.11 (sets), E8.01 (plan updated), E7.04 to E7.07 (history trend),
@@ -111,6 +128,11 @@ longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py 
 
 ## To test on the PC
 
+- After Phase 6: run `python app_live_cv.py --debug`, do a short session and note the stage times
+  shown at the top (and `python tools/benchmark.py`); add them here. Open the physio settings:
+  "Modèle de suivi" says "Automatique", or "Auto (rapide)" if the PC was too slow for the full
+  model. If the screen freezes or stutters, set `performance: pose_thread: false` in
+  `config/exercise_config.yaml` and tell me what happened.
 - After Phase 5: during a session, hold your free hand above your head for 2 s (pause), then again
   (resume); ask someone to walk behind you; unplug the camera for a few seconds and plug it back;
   turn your body about 30 deg and check Willy asks you to face the camera. Note the startup times

@@ -102,6 +102,26 @@ Willy s’affiche aussi dans sa **bulle** : l’application reste utilisable son
 - **Face à la caméra** : si le corps se tourne (environ 25° ou plus), Willy demande de se remettre
   face à la caméra et rien n'est compté, car l'angle 2D serait faux.
 
+## Vitesse : suivi en parallèle, mode --debug, modèle rapide
+
+- **Suivi en parallèle** : la caméra et le modèle de pose tournent dans leur propre fil
+  d'exécution ; l'écran prend toujours la dernière image analysée et ne l'attend plus. Si
+  l'application se comporte mal, `performance: pose_thread: false` (dans
+  `config/exercise_config.yaml`) revient à l'ancienne boucle unique.
+- **Dessin** : les parties fixes de l'écran de séance sont dessinées une fois puis réutilisées ;
+  les images de Willy sont gardées en mémoire (48 Mo au plus).
+- **Mode `--debug`** : `python app_live_cv.py --debug` affiche en haut de l'écran le temps de
+  chaque étape (caméra, pose, analyse, Willy, dessin, affichage) et l'enregistre dans
+  `%APPDATA%\Mouvement\timings.csv`. `python tools/benchmark.py` mesure le dessin seul.
+- **Modèle rapide automatique** : pendant les 3 premières secondes de suivi, si le modèle
+  précis (*full*) analyse moins de 15 images par seconde, l'application passe au modèle rapide
+  (*lite*) et s'en souvient. Les réglages kiné l'indiquent (« Modèle rapide utilisé ») et
+  permettent de choisir : Automatique, Précis ou Rapide. `--model` l'emporte toujours. Le seuil
+  est `performance: auto_lite_fps` (0 pour ne jamais changer).
+- **Mains détaillées désactivées par défaut** : le modèle des mains ne servait qu'à dessiner
+  paumes et doigts sur les avatars et coûtait environ 12 ms par image. Pour le réactiver :
+  `--hands`, ou `performance: hand_model: true`.
+
 ## Silhouette guide en vue caméra
 
 En vue caméra (**Voir la caméra** ou **V**), un petit bouton **Silhouette** en
@@ -171,15 +191,15 @@ positions de l’image avec la même protection devant le corps.
 
 Le suivi détaillé des mains utilise désormais **MediaPipe Hand Landmarker** en
 plus du modèle de pose : 21 points par main, normale de la paume, orientation du
-poignet et flexion des doigts. Il est actif dans l’application OpenCV quand le
-modèle local est présent, sans demander de visage. **Paume et doigts suivis**
-indique qu’une main détaillée est disponible. Le fichier officiel (~7,8 Mo) est
-déjà installé sur ce PC ; pour une autre installation :
+poignet et flexion des doigts. Il n’est plus actif par défaut (environ 12 ms par
+image pour un rendu seulement) : lancez l’application avec `--hands`, ou mettez
+`performance: hand_model: true`, quand le modèle local est présent. **Paume et
+doigts suivis** indique qu’une main détaillée est disponible. Le fichier officiel
+(~7,8 Mo) est téléchargé avec les autres modèles ; pour une autre installation :
 
 ```powershell
 python models/download_models.py hand_landmarker.task
-# Si le suivi détaillé ralentit trop le PC :
-python .\app_live_cv.py --no-hands
+python .\app_live_cv.py --hands
 ```
 
 Le passage du bras devant le corps est aussi moins restreint : la limite visuelle
@@ -298,8 +318,11 @@ processeur et la même horloge de trames.
 # Webcam USB / virtuelle grand-angle : choisir son index et une résolution supportée
 .\.env\Scripts\python.exe app_live_cv.py --camera 1 --width 1920 --height 1080
 
-# Si le Full est trop lent : modèle Lite déjà téléchargé séparément
+# Forcer un modèle (sinon l'application passe seule au Lite si le Full est trop lent)
 .\.env\Scripts\python.exe app_live_cv.py --model lite
+
+# Temps de chaque étape à l'écran et dans timings.csv
+.\.env\Scripts\python.exe app_live_cv.py --debug
 
 # Installation avec les versions de l'environnement Windows / Python 3.13 testé
 python -m pip install -r requirements.txt -c constraints-windows-py313.txt
@@ -459,6 +482,8 @@ shoulder-rehab-app/
 │   ├── gesture.py              # Geste de la main libre (pause / reprise à distance)
 │   ├── person_lock.py          # Suivi du seul patient quand plusieurs personnes sont visibles
 │   ├── notice_screen.py        # Écrans simples avec Willy (chargement, caméra, erreur)
+│   ├── pose_worker.py          # Caméra + modèle de pose dans leur propre fil d'exécution
+│   ├── timings.py              # Temps de chaque étape (mode --debug, timings.csv)
 │   ├── session_processor.py    # Pipeline commun OpenCV, Streamlit et évaluation vidéo
 │   ├── dashboard.py            # Interface patient minimale dessinée à la résolution native
 │   ├── patient_controls.py     # Boutons et états de la séance, communs au rendu et aux clics
@@ -527,7 +552,7 @@ python -m venv .env
 # Installer les bibliothèques requises (Windows / Python 3.13)
 python -m pip install -r requirements.txt -c constraints-windows-py313.txt
 
-# Télécharger MediaPipe Full (~9 Mo), le modèle des mains (~8 Mo)
+# Télécharger MediaPipe Full (~9 Mo) et Lite (~5 Mo), le modèle des mains (~8 Mo)
 # et les deux voix de Willy (Piper « fr_FR-tom-medium » et « en_US-ryan-medium », ~64 Mo chacune)
 python models/download_models.py
 ```
