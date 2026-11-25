@@ -62,11 +62,15 @@ def repetition_log(evaluation):
 
 
 class SessionProcessor:
-    def __init__(self, config=None, arm="right", rules_engine=None, exercise=None):
-        """`exercise` (src.exercises.Exercise, default: abduction) may override the movement
-        thresholds of `config`; everything below reads the effective `self.config`."""
+    def __init__(self, config=None, arm="right", rules_engine=None, exercise=None, plan=None):
+        """`exercise` (src.exercises.Exercise, default: abduction) and then the patient's `plan`
+        (src.user_profile.Plan) may override the movement thresholds of `config`; everything
+        below reads the effective `self.config`."""
         self.exercise = exercise or get_exercise()
+        self.plan = plan
         self.config = self.exercise.apply(config or ExerciseConfig.from_yaml())
+        if plan is not None:
+            self.config = plan.apply(self.config)
         self.arm = arm
         self.rules_engine = rules_engine or RulesEngine(self.config)
         self.rules_engine.config = self.config

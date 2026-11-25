@@ -200,7 +200,9 @@ class App:
         self.args, self.config, self.profile = args, config, profile
         self.window = window or Window()
         self.exercise = get_exercise()
-        self.processor = SessionProcessor(config, profile.arm or "right", exercise=self.exercise)
+        self.plan = profile.current_plan(self.exercise.apply(config), self.exercise.id)
+        self.processor = SessionProcessor(config, self.plan.arm or profile.arm or "right",
+                                          exercise=self.exercise, plan=self.plan)
         self.controls = PatientControls(avatars=not args.no_avatars, avatar_gender=profile.avatar_gender or "male")
         self.mirror = True
         self.actions = deque()
@@ -383,7 +385,7 @@ class App:
 
     # ----------------------------------------------------------------- helpers
     def new_processor(self):
-        self.processor = SessionProcessor(self.config, self.processor.arm, exercise=self.exercise)
+        self.processor = SessionProcessor(self.config, self.processor.arm, exercise=self.exercise, plan=self.plan)
         self.processor.model_info = self.detector.model_info.copy()
 
     def ensure_avatar_stage(self):

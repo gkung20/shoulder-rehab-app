@@ -4,7 +4,7 @@ It stays on this computer (no network): %APPDATA%\\Mouvement\\profile.json on Wi
 ~/.mouvement/profile.json elsewhere. MOUVEMENT_DATA_DIR points it somewhere else (tests).
 No video, image or measurement is stored here.
 """
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields, replace
 import datetime as dt
 import json
 import os
@@ -13,6 +13,114 @@ import sys
 import tempfile
 
 MAX_DAYS = 60
+SCHEMA_VERSION = 2      # 1: before plans (Nov 2026); 2: physio plan and its history
+MAX_PLAN_HISTORY = 20
+
+# Settings the physio can change: (lowest, highest, step). Shared with the settings screen.
+PLAN_BOUNDS = {
+    "target_min_deg": (30, 160, 5),
+    "target_max_deg": (30, 160, 5),
+    "rest_max_deg": (10, 60, 5),
+    "hold_sec": (0, 10, .5),
+    "reps_per_set": (1, 30, 1),
+    "sets": (1, 5, 1),
+    "rest_between_sets_sec": (10, 180, 10),
+    "sessions_per_week": (1, 14, 1),
+    "max_session_min": (5, 30, 1),
+    "pain_go_max": (0, 9, 1),
+    "pain_gentle_max": (1, 10, 1),
+}
+
+
+@dataclass
+class Plan:
+    """The physio's plan for one patient. Defaults come from the exercise configuration.
+
+    Pain bands: 0..pain_go_max = normal session; up to pain_gentle_max = gentle session;
+    above = no session today.
+    """
+    exercise: str = "abduction"
+    arm: str | None = None            # None: the patient picks the arm on the session screen
+    target_min_deg: float = 80.
+    target_max_deg: float = 100.
+    rest_max_deg: float = 25.
+    hold_sec: float = .5
+    reps_per_set: int = 10
+    sets: int = 3
+    rest_between_sets_sec: int = 60
+    sessions_per_week: int = 5
+    max_session_min: int = 15
+    pain_go_max: int = 3
+    pain_gentle_max: int = 6
+    seated: bool = False
+    notes: str = ""
+    updated_at: str = ""
+
+    @classmethod
+    def from_config(cls, config, exercise="abduction"):
+        """The default plan: today's thresholds of the (exercise-adjusted) configuration."""
+        a, t = config.abduction, config.timing
+        return cls(exercise=exercise, target_min_deg=a.target_min_deg, target_max_deg=a.target_max_deg,
+                   rest_max_deg=a.rest_threshold_deg, hold_sec=t.min_hold_time_sec)
+
+    @classmethod
+    def from_dict(cls, raw, fallback=None):
+        plan = fallback or cls()
+        if isinstance(raw, dict):
+            names = {f.name: f.type for f in fields(cls)}
+            values = {}
+            for key, value in raw.items():
+                if key not in names:
+                    continue
+                default = getattr(plan, key)
+                try:
+                    if isinstance(default, bool):
+                        value = value is True
+                    elif isinstance(default, int) and key in PLAN_BOUNDS:
+                        value = int(value)
+                    elif isinstance(default, float):
+                        value = float(value)
+                    elif key == "arm":
+                        value = value if value in ("right", "left") else None
+                    else:
+                        value = str(value or "")
+                except (TypeError, ValueError):
+                    continue
+                values[key] = value
+            plan = replace(plan, **values)
+        return plan.clamped()
+
+    def clamped(self):
+        """The plan with every value inside its bounds and the thresholds in a valid order."""
+        values = {}
+        for key, (low, high, _) in PLAN_BOUNDS.items():
+            value = getattr(self, key)
+            values[key] = type(value)(min(high, max(low, value)))
+        if values["target_max_deg"] < values["target_min_deg"]:
+            values["target_max_deg"] = values["target_min_deg"]
+        # The rise threshold (rest + 7 deg) must stay below the target.
+        values["rest_max_deg"] = min(values["rest_max_deg"], values["target_min_deg"] - 8)
+        values["pain_gentle_max"] = max(values["pain_gentle_max"], values["pain_go_max"])
+        return replace(self, **values, notes=str(self.notes)[:200])
+
+    def apply(self, config):
+        """The configuration with this plan's thresholds (rest, rise, target, hold)."""
+        a, t = config.abduction, config.timing
+        rest = self.rest_max_deg
+        abduction = replace(a, rest_threshold_deg=rest, rising_start_deg=rest + 7.,
+                            target_min_deg=self.target_min_deg, target_max_deg=self.target_max_deg,
+                            overshoot_warn_deg=min(180., max(a.overshoot_warn_deg, self.target_max_deg + 10.)))
+        return replace(config, abduction=abduction, timing=replace(t, min_hold_time_sec=self.hold_sec))
+
+    def pain_band(self, pain):
+        """"go", "gentle" or "stop" for a pain score from 0 to 10."""
+        if pain <= self.pain_go_max:
+            return "go"
+        return "gentle" if pain <= self.pain_gentle_max else "stop"
+
+    @property
+    def total_reps(self):
+        return self.reps_per_set * self.sets
 
 
 def data_dir():
@@ -39,6 +147,9 @@ class Profile:
     seen: list = field(default_factory=list)          # once-only lines already played (Scenario 8)
     session_days: list = field(default_factory=list)  # ISO dates with at least one movement, oldest first
     last_correct: int | None = None                   # spot-on movements in the last session
+    plan: dict | None = None        # the physio's plan (Plan as a dict); None = defaults
+    plan_history: list = field(default_factory=list)  # earlier plans: [{"until": iso, "plan": {...}}]
+    schema_version: int = SCHEMA_VERSION
 
     @classmethod
     def load(cls, path=None):
@@ -59,8 +170,26 @@ class Profile:
         profile.seen = [str(x) for x in profile.seen] if isinstance(profile.seen, list) else []
         days = profile.session_days if isinstance(profile.session_days, list) else []
         profile.session_days = sorted({d for d in days if _parse(d) is not None})[-MAX_DAYS:]
+        # Version 1 profiles (before plans) simply have no plan yet: defaults apply.
+        profile.plan = Plan.from_dict(profile.plan).__dict__.copy() if isinstance(profile.plan, dict) else None
+        history = profile.plan_history if isinstance(profile.plan_history, list) else []
+        profile.plan_history = [h for h in history if isinstance(h, dict)][-MAX_PLAN_HISTORY:]
+        profile.schema_version = SCHEMA_VERSION
         profile._path = path
         return profile
+
+    # ------------------------------------------------------------------ the physio's plan
+    def current_plan(self, config, exercise="abduction"):
+        """The saved plan, or the default one from the configuration."""
+        default = Plan.from_config(config, exercise)
+        return Plan.from_dict(self.plan, default) if self.plan else default
+
+    def set_plan(self, plan, now=None):
+        """Save a new plan; the previous one goes to the history (last 20 kept)."""
+        stamp = (now or dt.datetime.now()).isoformat(timespec="seconds")
+        if self.plan:
+            self.plan_history = (self.plan_history + [{"until": stamp, "plan": dict(self.plan)}])[-MAX_PLAN_HISTORY:]
+        self.plan = asdict(replace(plan.clamped(), updated_at=stamp))
 
     def save(self):
         """Best effort: a profile that cannot be written never stops the exercise."""
