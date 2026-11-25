@@ -35,6 +35,26 @@ Willy s’affiche aussi dans sa **bulle** : l’application reste utilisable son
   une voix Windows anglaise (David, Zira) est utilisée. Licence de Ryan : non
   commerciale, à vérifier avant toute diffusion.
 
+## Plan du kiné : réglages, séries et angle de repos
+
+- **Réglages kiné** : sur l'écran d'accueil de Willy (une fois la visite terminée), le bouton
+  « Réglages kiné » ouvre un pavé numérique. Le code est **0000** tant que le kiné ne l'a pas
+  changé (bouton « Changer le code » dans les réglages) : changez-le dès la première utilisation.
+  Un code modifié est enregistré sous forme de hachage salé (PBKDF2-HMAC-SHA256), jamais en clair.
+  Cinq erreurs bloquent le pavé une minute.
+- **Le plan du patient** se règle avec de grands boutons − et + dans des limites sûres : bras, zone
+  cible (minimum et maximum), repos maximal, temps de maintien, répétitions par série, séries,
+  repos entre les séries, séances par semaine, durée maximale, seuils de douleur, exercice assis.
+  Sans réglage, le plan reprend les valeurs de `config/exercise_config.yaml`. Les 20 derniers plans
+  sont gardés avec leur date dans le profil.
+- **Angle de repos** : la calibration mesure l'angle de repos propre au patient (médiane). Le seuil
+  de repos devient max(repos maximal du plan, repos mesuré + 8°) et le seuil de montée +7°, pour
+  qu'un patient dont le bras reste à 30° soit compté. Si ce seuil se rapproche à moins de 10° de la
+  cible, le plan garde ses valeurs et un avertissement s'affiche dans les réglages.
+- **Séries** : le compteur affiche « SÉRIE 2/3 » et « 6/10 ». À la fin d'une série, un repos avec
+  compte à rebours, puis Willy propose de reprendre ; après la dernière série, la séance se termine
+  seule et Willy annonce l'objectif atteint.
+
 ## Silhouette guide en vue caméra
 
 En vue caméra (**Voir la caméra** ou **V**), un petit bouton **Silhouette** en
@@ -382,6 +402,8 @@ shoulder-rehab-app/
 │   ├── layout.py               # Tous les rectangles des écrans (boutons, panneaux, zones de la visite)
 │   ├── desktop_app.py          # L'application de bureau : boucle, écrans, fenêtre (App)
 │   ├── synthetic_pose.py       # Corps synthétiques pour les tests et les outils (jamais en direct)
+│   ├── physio_settings.py      # Code kiné (PIN) et écran de réglages du plan
+│   ├── session_plan.py         # Séries, repos entre les séries, fin du plan
 │   ├── session_processor.py    # Pipeline commun OpenCV, Streamlit et évaluation vidéo
 │   ├── dashboard.py            # Interface patient minimale dessinée à la résolution native
 │   ├── patient_controls.py     # Boutons et états de la séance, communs au rendu et aux clics

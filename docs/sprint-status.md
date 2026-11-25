@@ -16,7 +16,7 @@ Updated after every phase.
 | --- | --- | --- |
 | 0 Setup and baseline | done | see below |
 | 1 Foundations | done | cue codes, layout module, App class, exercises in YAML |
-| 2 Plan per patient | to do | |
+| 2 Plan per patient | done | plan in profile, physio settings (PIN 0000), resting angle, sets |
 | 3 Results and history | to do | |
 | 4 Safety | to do | |
 | 5 Hands-free, camera | to do | 5.2 not chosen |
@@ -33,7 +33,7 @@ Updated after every phase.
 - Installed there: `pose_landmarker_full.task`, `pose_landmarker_lite.task`, `hand_landmarker.task`,
   `fr_FR-tom-medium` and `en_US-ryan-medium`. Python 3.13 on Windows (see `constraints-windows-py313.txt`).
 - No shell on the PC this run, so files are synced by copying.
-- Last synced commit: `9a40db6` (end of Phase 1).
+- Last synced commit: `3c662d2` (end of Phase 1); updated after each phase.
 
 ## Baseline (before)
 
@@ -65,10 +65,21 @@ Marwane's PC numbers will differ; run the same command there to compare.
   frozen clock: identical.
 - Phase 1.3: the end-to-end tests now patch `src.desktop_app` (where the app lives) instead of
   `app_live_cv`.
+- Phase 2.2: the PIN is 0000 until the physio changes it (chosen at the start of the sprint);
+  the settings button shows on Willy's home once the tour is done, so the tour stays simple.
+- Phase 2.3: calibration now accepts a resting arm up to the target minimum - 15 deg (65 deg by
+  default) so a stiff shoulder can calibrate; an arm raised higher is still refused.
+- Phase 2.4: a gentle session (pain 4-6, Phase 4) will have 30% fewer reps per set.
+- New Willy lines: E6.09, E6.10, E6.11 (sets), E8.01 (plan updated); in lines.yaml and the script doc.
 - `src/synthetic_pose.py`: one synthetic-body helper for tests, previews and tools (both arms,
   turning, seated, free hand raised).
 
 ## To test on the PC
 
+- After Phase 2: on Willy's home, press "Réglages kiné", type 0000, change a value, save: Willy
+  says the plan was updated. Then change the PIN. Start a session with a small plan (2 sets of 2)
+  and check the rest between sets, then that the session ends by itself.
+- After Phase 2: if your resting arm is a little raised, check the measured resting angle in the
+  settings after a session.
 - After Phase 1: run `python app_live_cv.py` once and check that the home screen, the tour and a
   session behave exactly as before (the code was reorganised, nothing should look different).
