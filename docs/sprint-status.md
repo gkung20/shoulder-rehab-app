@@ -22,7 +22,7 @@ Updated after every phase.
 | 5 Hands-free, camera | done | gesture, person lock, camera reconnect, fast start, face check (5.2 not chosen) |
 | 6 Speed | done | camera thread, --debug timings, cached drawing, automatic fast model, hand model off |
 | 7 Validation tools | done | protocol EN/FR with consent form, recorder, report, rotation chart |
-| 8 Ready to share | to do | 8.2 not chosen |
+| 8 Ready to share | done | licences with 6 blockers and their options, journal and error screen; 8.2 not chosen |
 | 9 Willy polish | to do | |
 | 10 More for patients | to do | 10.4 not chosen |
 | 11 New silhouette body | in progress | half-body framing done (Marwane, 27 Nov); the new licensed body is still to do |
@@ -33,7 +33,7 @@ Updated after every phase.
 - Installed there: `pose_landmarker_full.task`, `pose_landmarker_lite.task`, `hand_landmarker.task`,
   `fr_FR-tom-medium` and `en_US-ryan-medium`. Python 3.13 on Windows (see `constraints-windows-py313.txt`).
 - No shell on the PC this run, so files are synced by copying.
-- Last synced: the end of Phase 7 (the commit that adds this line); updated after each phase.
+- Last synced: the end of Phase 8 (the commit that adds this line); updated after each phase.
 
 ## Baseline (before)
 
@@ -65,7 +65,7 @@ longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py 
 
 - Hand model (`hand_landmarker.task`, 1280x720 frame): 11.7 ms per frame here. It only drew palms
   and fingers on the avatars, so it is now off by default: 11.7 ms saved on every tracked frame.
-- Tests: 345 passed, 19 skipped after Phase 7 (from 231 at the start of the sprint).
+- Tests: 358 passed, 19 skipped after Phase 8 (from 231 at the start of the sprint).
 
 ## Decisions
 
@@ -132,6 +132,16 @@ longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py 
   rotation error the app accepts within about 2 deg; at 45 deg it would reach 9 deg.
 - Phase 7.1: the protocol's ethics section names law 28-13 (biomedical research, ethics committee;
   decree of 4 May 2026, AMMPS) and law 09-08 (CNDP) as questions for the supervisor, not advice.
+- Phase 8.1: licences checked at the source on 27 Nov (PyPI metadata of the pinned versions,
+  model cards, project pages). Blockers: piper-tts GPL-3.0-or-later (embeds espeak-ng); the Tom
+  voice comes from an AGPL-3.0 model whose author adds conditions (never name the author in the
+  app, never present the voice as a real person); the Ryan voice's dataset is CC BY-NC-SA 4.0;
+  the GLB avatars and Male-low.OBJ (source of the silhouette frames) have no licence; Segoe UI is
+  loaded from Windows, never bundled. Mouvement's own code has no licence yet: a team decision.
+- Phase 8.3: the journal wraps the console instead of rewriting every print, so nothing printed is
+  lost (with the double-click launcher there is no console at all). The camera thread's errors now
+  reach the screen loop. English button labels were measured in French, so they sat off-centre:
+  fixed for every button.
 - Marwane, 27 Nov: the abduction silhouette doesn't need the whole body; cut it from the hands'
   reach (pelvis) to the head so the patient can stand closer. Done before Phase 8: the silhouette
   stops at the fingertips of the hanging arm (soft edge) and fills the picture from there to the
@@ -151,6 +161,10 @@ longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py 
 
 ## To test on the PC
 
+- After Phase 8: start the app once from the double-click launcher, then open
+  `%APPDATA%\Mouvement\logs\mouvement.log`: it should start with the version, Python and
+  Windows lines. Read `docs/licences.md` with Zakaria and decide B1-B5 (and a licence for
+  Mouvement's own code) before sharing the app outside the student demo.
 - Half-body silhouette: open the camera view with the silhouette (G), stand where your upper body
   fits it (outline green), and check that raising the arm to 90 deg keeps the hand in the picture
   and that the app shows "Suivi actif" (not "Cadrage serré") when you stand a little too close.
