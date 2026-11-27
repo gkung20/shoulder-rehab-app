@@ -688,6 +688,13 @@ python evaluate_dataset.py quality
 
 ## 📚 10. Licences & Références Citées
 
+**Toutes les licences** (bibliothèques Python, modèles, voix, polices, images et modèles 3D),
+avec ce qui bloque un partage hors démonstration étudiante non commerciale et les solutions
+possibles : [docs/licences.md](docs/licences.md). En bref : Piper est sous GPL-3.0, la voix
+anglaise Ryan est non commerciale, la voix française Tom est sous AGPL-3.0 avec des conditions
+de son auteur, et les avatars GLB comme le corps de la silhouette n'ont pas de licence connue.
+Le code de Mouvement lui-même n'a pas encore de licence : décision à prendre en équipe.
+
 Références et attributions du projet. Les mesures publiées par ces projets ne constituent pas une validation de ce prototype :
 
 1. **Google MediaPipe :** Pose Landmarker Tasks API ([Documentation Officielle](https://developers.google.com/mediapipe)) — *Licence Apache 2.0*.
@@ -696,4 +703,4 @@ Références et attributions du projet. Les mesures publiées par ces projets ne
 4. **Python-kunal/physio_app :** Structuration logicielle pour applications de kinésithérapie ([GitHub](https://github.com/Python-kunal/physio_app)) — *Licence MIT*.
 5. **sing1ee/my-pose :** Normalisation géométrique de poses squelettiques ([GitHub](https://github.com/sing1ee/my-pose)) — *Licence MIT*.
 6. **IEEE DataPort :** *"Shoulder Exercise Quality Dataset"* (Vidéos annotées d'exercices d'abduction/adduction de l'épaule) — *Accès de recherche académique IEEE DataPort*.
-7. **Piper / Siwis :** moteur vocal local et voix française ; sources et licences dans [models/voices/README.md](models/voices/README.md).
+7. **Piper, voix Tom, Ryan et Siwis :** moteur vocal local et voix de Willy ; sources et licences dans [docs/licences.md](docs/licences.md) et [models/voices/README.md](models/voices/README.md).
