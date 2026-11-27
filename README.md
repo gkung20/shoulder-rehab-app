@@ -486,6 +486,7 @@ shoulder-rehab-app/
 │   ├── timings.py              # Temps de chaque étape (mode --debug, timings.csv)
 │   ├── validation_data.py      # Fichiers de l'étude de validation (essais, images)
 │   ├── validation_recorder.py  # Fenêtre d'enregistrement de l'étude (record_clip.py angles)
+│   ├── validation_stats.py     # Rapport de l'étude : erreur, Bland–Altman, ICC, graphiques
 │   ├── session_processor.py    # Pipeline commun OpenCV, Streamlit et évaluation vidéo
 │   ├── dashboard.py            # Interface patient minimale dessinée à la résolution native
 │   ├── patient_controls.py     # Boutons et états de la séance, communs au rendu et aux clics
@@ -523,7 +524,7 @@ shoulder-rehab-app/
 ├── tools/benchmark.py          # Temps de dessin et d'analyse, sans caméra ni modèle
 ├── docs/sprint-status.md       # Suivi du sprint d'améliorations (fait, décisions, mesures)
 ├── app_streamlit.py            # Séance patient et exports, réglages avancés repliés
-├── evaluate_dataset.py         # Script d'évaluation hors ligne (Matrice de confusion)
+├── evaluate_dataset.py         # Analyses des études de validation (angles, qualité)
 ├── record_clip.py              # Enregistrements des études de validation (angles, qualité)
 ├── demo.py                     # Démonstrateur autonome (4 scénarios simulés ou caméra directe)
 ├── requirements.txt            # Dépendances ; contraintes Windows dans un fichier séparé
@@ -633,6 +634,17 @@ par l'observateur). Une séance interrompue reprend au premier essai manquant. L
 dans `%APPDATA%\Mouvement\validation` ; la vidéo seulement avec `--save-video` et le
 consentement vidéo du volontaire.*
 
+### Angle et comptage : le rapport
+```powershell
+python evaluate_dataset.py angles           # ou --data <dossier> --out <dossier> --lang en
+```
+*Écrit `validation_report.md` (dans `validation\report`) : erreur absolue moyenne, biais,
+limites d'accord de Bland–Altman (corrigées pour les essais répétés), ICC(2,1), résultats par
+position et par bras, comptage des répétitions, intervalles de confiance par rééchantillonnage
+des volontaires, et trois graphiques (Bland–Altman, application contre goniomètre, écart par
+position). Les cibles proposées (erreur ≤ 5°, limites dans ±10°, ≥ 95 % des répétitions) sont à
+confirmer avec l'encadrant.*
+
 ### Qualité du mouvement, étape 1 : enregistrement d'un clip de test avec consentement
 ```powershell
 python record_clip.py quality
@@ -641,7 +653,7 @@ python record_clip.py quality
 
 ### Qualité du mouvement, étape 2 : évaluation par lot et matrice de confusion
 ```powershell
-python evaluate_dataset.py
+python evaluate_dataset.py quality
 ```
 *Le script traite chaque vidéo hors ligne et génère :*
 - La **Matrice de Confusion** ($2 \times 2$) dans la console.

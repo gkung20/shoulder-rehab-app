@@ -1,6 +1,10 @@
-"""Phase 6: Batch offline video evaluation script.
+"""Analysis of the validation studies (see docs/validation-protocol.md).
 
-Processes recorded video files, generates per-repetition CSV diagnostics,
+    python evaluate_dataset.py angles    report of the angle and repetition-count study:
+                                         error, bias, Bland-Altman, ICC(2,1), charts (Phase 7)
+    python evaluate_dataset.py quality   confusion matrix of the labelled-clip study
+
+`quality` processes recorded video files, generates per-repetition CSV diagnostics,
 and computes clinical statistical agreement with ground-truth human annotations
 (Accuracy, Sensitivity, Specificity, F1-Score, and Confusion Matrix).
 """
@@ -297,16 +301,28 @@ def print_clinical_report(cm: ConfusionMatrix) -> None:
     print(f"[RAPPORT] Metriques globales sauvegardees dans  : {OUTPUT_METRICS_CSV.name}\n")
 
 
-def main():
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv[:1] == ["angles"]:
+        from src.validation_stats import main as angles_report
+        return angles_report(argv[1:])
+    if argv[:1] == ["quality"]:
+        return evaluate_quality()
+    print(__doc__)
+    return 2
+
+
+def evaluate_quality():
     if not GROUND_TRUTH_CSV.exists():
         print(f"[ERREUR] Fichier d'annotations introuvable : {GROUND_TRUTH_CSV}")
-        print("Utilisez 'python record_clip.py' pour enregistrer et annoter vos clips.")
+        print("Utilisez 'python record_clip.py quality' pour enregistrer et annoter vos clips.")
         sys.exit(1)
 
     cm = compute_dataset_metrics(GROUND_TRUTH_CSV)
     if cm.total + cm.unassessed > 0:
         print_clinical_report(cm)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -107,7 +107,7 @@ was copied from them, and their performance does not transfer to this project.
 6. Compare the previous and new implementations on the same held-out clips.
    Synthetic tests verify software invariants, not human accuracy or fairness.
 
-`evaluate_dataset.py` produces global and per-group metrics, including coverage.
+`evaluate_dataset.py quality` produces global and per-group metrics, including coverage.
 Optional annotation columns `lighting`, `camera_view` and `clothing` enable
 condition breakdowns; absent columns are not guessed. Data files remain ignored
 by Git. No representative dataset is bundled, so no accuracy or fairness claim is
