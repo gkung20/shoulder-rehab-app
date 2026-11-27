@@ -484,6 +484,8 @@ shoulder-rehab-app/
 │   ├── notice_screen.py        # Écrans simples avec Willy (chargement, caméra, erreur)
 │   ├── pose_worker.py          # Caméra + modèle de pose dans leur propre fil d'exécution
 │   ├── timings.py              # Temps de chaque étape (mode --debug, timings.csv)
+│   ├── validation_data.py      # Fichiers de l'étude de validation (essais, images)
+│   ├── validation_recorder.py  # Fenêtre d'enregistrement de l'étude (record_clip.py angles)
 │   ├── session_processor.py    # Pipeline commun OpenCV, Streamlit et évaluation vidéo
 │   ├── dashboard.py            # Interface patient minimale dessinée à la résolution native
 │   ├── patient_controls.py     # Boutons et états de la séance, communs au rendu et aux clics
@@ -522,7 +524,7 @@ shoulder-rehab-app/
 ├── docs/sprint-status.md       # Suivi du sprint d'améliorations (fait, décisions, mesures)
 ├── app_streamlit.py            # Séance patient et exports, réglages avancés repliés
 ├── evaluate_dataset.py         # Script d'évaluation hors ligne (Matrice de confusion)
-├── record_clip.py              # Outil d'enregistrement éthique avec recueil de consentement
+├── record_clip.py              # Enregistrements des études de validation (angles, qualité)
 ├── demo.py                     # Démonstrateur autonome (4 scénarios simulés ou caméra directe)
 ├── requirements.txt            # Dépendances ; contraintes Windows dans un fichier séparé
 ├── constraints-windows-py313.txt # Versions de l’environnement Windows testé
@@ -612,15 +614,32 @@ streamlit run app_streamlit.py
 
 ## 🧪 7. Évaluation Hors Ligne & Validation Clinique
 
-Le projet intègre un pipeline complet d'évaluation de la qualité :
+Deux études sont préparées :
 
-### Étape 1 : Enregistrement d'un clip de test avec consentement
+- **Angle et comptage** (protocole complet : [docs/validation-protocol.md](docs/validation-protocol.md)) :
+  l'angle de l'application comparé à un goniomètre, et son comptage des répétitions comparé à
+  celui d'un observateur.
+- **Qualité du mouvement** : des clips vidéo étiquetés « correct » ou « à corriger ».
+
+### Angle et comptage : enregistrer les mesures
 ```powershell
-python record_clip.py
+python record_clip.py angles            # demande le consentement et l'identifiant (V01…)
+python record_clip.py angles --help     # options : --arms, --trials, --save-video…
+```
+*Une fenêtre OpenCV simple, sans Willy : calibration bras le long du corps, puis pour chaque
+essai un compte à rebours, 3 s d'enregistrement de chaque image (angle de l'application et
+points du corps) et la saisie de la lecture du goniomètre (ou du nombre de répétitions compté
+par l'observateur). Une séance interrompue reprend au premier essai manquant. Les fichiers vont
+dans `%APPDATA%\Mouvement\validation` ; la vidéo seulement avec `--save-video` et le
+consentement vidéo du volontaire.*
+
+### Qualité du mouvement, étape 1 : enregistrement d'un clip de test avec consentement
+```powershell
+python record_clip.py quality
 ```
 *Le script invite le participant à confirmer son consentement éclairé, consigne le type de mouvement (correct ou compensation intentionnelle) et sauvegarde la vidéo dans `data/recorded_clips/` avec son annotation dans `data/annotations/ground_truth.csv`.*
 
-### Étape 2 : Évaluation par lot et calcul de la Matrice de Confusion
+### Qualité du mouvement, étape 2 : évaluation par lot et matrice de confusion
 ```powershell
 python evaluate_dataset.py
 ```

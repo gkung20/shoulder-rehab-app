@@ -1,8 +1,12 @@
-"""Tool for recording and labeling local shoulder rehabilitation test clips with consent.
+"""Recordings for the validation studies (see docs/validation-protocol.md).
 
-Ensures ethical data capture: verifies informed consent, tags ground-truth
-movement quality (correct vs compensations), saves the MP4 video locally,
-and appends metadata to data/annotations/ground_truth.csv.
+    python record_clip.py angles    the app's angle against a goniometer, and its repetition
+                                    count against an observer (Phase 7; options: --help)
+    python record_clip.py quality   labelled video clips of correct or compensated movements
+
+`quality` verifies informed consent, tags ground-truth movement quality (correct vs
+compensations), saves the MP4 video locally and appends metadata to
+data/annotations/ground_truth.csv.
 """
 
 import csv
@@ -37,7 +41,18 @@ def ensure_storage():
             ])
 
 
-def main():
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv[:1] == ["angles"]:
+        from src.validation_recorder import main as record_angles
+        return record_angles(argv[1:])
+    if argv[:1] == ["quality"]:
+        return record_quality()
+    print(__doc__)
+    return 2
+
+
+def record_quality():
     ensure_storage()
 
     print("=" * 65)
@@ -183,4 +198,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
