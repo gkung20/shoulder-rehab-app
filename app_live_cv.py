@@ -6,8 +6,10 @@ This file reads the command line; the app itself is `src.desktop_app.App`.
 """
 import sys
 import argparse
+import platform
 from dataclasses import replace
 
+from src import __version__, app_log
 from src.config import ExerciseConfig
 from src.desktop_app import App, show_startup_error, window_size  # noqa: F401  (kept importable from here)
 from src.pose_detector import installed_pose_model
@@ -51,6 +53,9 @@ def build_config(parser, args):
 
 def main(argv=None):
     parser, args = parse_args(argv)
+    journal = app_log.setup()  # %APPDATA%\Mouvement\logs\mouvement.log (Phase 8.3)
+    app_log.logger().info("Mouvement %s, Python %s, %s ; journal : %s", __version__, platform.python_version(),
+                          platform.platform(), journal.path)
     profile = Profile.load()
     config = build_config(parser, args)
     return App(args, config, profile).run()

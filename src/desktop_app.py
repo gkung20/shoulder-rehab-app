@@ -29,6 +29,7 @@ from src.hand_detector import HandDetector, MODEL_PATH as HAND_MODEL_PATH
 from src.home_screen import render_home
 from src.patient_controls import PatientControls, dashboard_action_at
 from src import physio_settings as physio
+from src import app_log
 from src.notice_screen import render_notice
 from src.pain_screen import QUESTIONS as PAIN_QUESTIONS, PainCheck, render_pain
 from src.person_lock import PersonLock
@@ -60,7 +61,8 @@ SHORTCUTS = {ord('l'): "arm_left", ord('r'): "arm_right", ord('a'): "audio", ord
 
 def show_startup_error(error):
     print(f"[DÉMARRAGE] {error}")
-    if sys.stdout is None:  # Double-click launcher: show errors instead of losing them in a hidden console.
+    if sys.stdout is None or not getattr(sys.stdout, "has_console", True):
+        # Double-click launcher: show errors instead of losing them in a hidden console.
         import tkinter as tk
         from tkinter import messagebox
         root = tk.Tk()
@@ -471,6 +473,7 @@ class App:
         self.last_record = None
         self._session_t0 = 0.
         self._devices = ExitStack()
+        self.crash_boxes = None  # buttons of the error screen while it is shown (Phase 8.3)
 
     @property
     def screen(self):
@@ -549,18 +552,76 @@ class App:
         print("L/R bras | C calibration | A audio | S bilan | M miroir | V avatars/camera | G silhouette | Q quitter")
         print("Deux epaules pour commencer ; coude actif visible pour compter. Visage non requis par l'application.")
         try:
-            self.start()
-            while self.step():
-                pass
-        except (RuntimeError, ValueError, FileNotFoundError, ImportError, cv2.error) as exc:
-            show_startup_error(exc)
-            return 1
+            try:
+                self.start()
+            except (RuntimeError, ValueError, FileNotFoundError, ImportError, cv2.error) as exc:
+                app_log.logger().error("Démarrage impossible", exc_info=exc)
+                show_startup_error(exc)
+                return 1
+            try:
+                while self.step():
+                    pass
+            except Exception as exc:  # anything unexpected: keep the results, explain calmly, log it
+                self.crashed(exc)
+                return 2
         finally:
-            self.close()
+            try:
+                self.close()
+            except Exception:
+                app_log.logger().exception("Fermeture incomplète")
         session = self.processor.rules_engine.session
         print(f"Seance : {session.total_repetitions} tentatives terminees, {session.correct_repetitions} conformes, "
               f"{session.total_repetitions - session.assessed_repetitions} indeterminees.")
         return 0
+
+    # ----------------------------------------------------------------- something went wrong
+    def crashed(self, error):
+        """An unexpected error: the traceback goes to the journal, the session is saved as
+        partial, and Willy, calm, says so with "Open the log folder" and "Close"."""
+        log = app_log.logger()
+        log.critical("Erreur inattendue pendant la séance", exc_info=error)
+        try:
+            if self.worker is not None:
+                self.worker.stop()
+        except Exception:
+            log.exception("Arrêt du fil caméra")
+        saved = True
+        try:
+            if self.log is not None and not self.log.saved and self.log.worth_saving:
+                saved = self.save_session(partial=True) is not None
+        except Exception:
+            log.exception("Séance non enregistrée")
+            saved = False
+        self.error_screen(saved)
+
+    def error_screen(self, saved):
+        language = (self.director.language if self.director is not None else self.profile.language) or "fr"
+        title = "Un problème est survenu."
+        body = ("Vos résultats sont enregistrés." if saved else
+                "Vos résultats n'ont pas pu être enregistrés.") + \
+            " Fermez l'application puis relancez-la. Si cela recommence, montrez le journal à votre kiné."
+        buttons = (("open_logs", "Ouvrir le dossier du journal", False), ("close", "Fermer", True))
+        journal = app_log.log_dir() / "mouvement.log"
+        self.actions.clear()
+        self.crash_boxes = []
+        self.crash_text = (title, body)
+        while self.window.is_open():
+            output_size = self.window.output_size()
+            self.viewport = canvas_viewport(CANVAS_SIZE, *output_size)
+            try:
+                image, self.crash_boxes = render_notice(title, body, output_size, language, self.guide, buttons,
+                                                        str(journal))
+            except Exception:  # even Willy failed: the same screen without him
+                image, self.crash_boxes = render_notice(title, body, output_size, language, None, buttons,
+                                                        str(journal))
+            self.window.show(image)
+            key = self.window.read_key()
+            actions = [self.actions.popleft() for _ in range(len(self.actions))]
+            if "open_logs" in actions:
+                app_log.open_folder(app_log.log_dir())
+            if "close" in actions or key in (ord('q'), ord('Q'), ESCAPE):
+                break
+        self.crash_boxes = None
 
     def start(self):
         """Open the window at once with Willy ("Je me prépare…"), then load the camera, the pose
@@ -932,6 +993,11 @@ class App:
             return
         point = self.viewport.canvas_point(x, y)
         if point is None:
+            return
+        if self.crash_boxes is not None:  # the error screen: only its two buttons
+            for action, (x1, y1, x2, y2) in self.crash_boxes:
+                if x1 <= point[0] <= x2 and y1 <= point[1] <= y2:
+                    self.actions.append(action)
             return
         # Willy's buttons (home screen, tour bubble) are on top of the screen's own controls.
         action = self.director.overlay.action_at(*point) if self.modal is None else None

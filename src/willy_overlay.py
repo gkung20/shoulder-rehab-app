@@ -93,7 +93,8 @@ def draw_button(p, bounds, label, primary=False, size=17):
     else:
         p.rect(bounds, fill=(255, 255, 255), outline=(150, 156, 161), radius=8)
         color = TEXT
-    width = p.draw.textlength(label, font=p.font(size, True)) / p.sx
+    from src.i18n import tr
+    width = p.draw.textlength(tr(str(label), getattr(p, "lang", "fr")), font=p.font(size, True)) / p.sx  # as drawn
     left, top, right, bottom = bounds
     p.text((left + (right - left - width) / 2, top + (bottom - top - size) / 2 - 3), label, size, color, True)
 

@@ -62,6 +62,15 @@ EN = {
     "Caméra (numéro)": "Camera (number)",
     "Modèle de suivi": "Tracking model", "Automatique": "Automatic", "Précis": "Accurate", "Rapide": "Fast",
     "Auto (rapide)": "Auto (fast)",
+    # the error screen (Phase 8.3)
+    "Un problème est survenu.": "Something went wrong.",
+    "Vos résultats sont enregistrés. Fermez l'application puis relancez-la. Si cela recommence, montrez le "
+    "journal à votre kiné.": "Your results are saved. Close the app and start it again. If it happens again, "
+                             "show the log to your physio.",
+    "Vos résultats n'ont pas pu être enregistrés. Fermez l'application puis relancez-la. Si cela recommence, "
+    "montrez le journal à votre kiné.": "Your results could not be saved. Close the app and start it again. If "
+                                        "it happens again, show the log to your physio.",
+    "Ouvrir le dossier du journal": "Open the log folder",
     "Modèle rapide utilisé (ce PC est lent pour le modèle précis)":
         "Fast model in use (this PC is slow for the accurate model)",
     "Je me prépare…": "Getting ready…", "Préparation des avatars 3D…": "Preparing the 3D avatars…",

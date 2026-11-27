@@ -11,6 +11,7 @@ from PIL import Image
 
 from src.dashboard import CANVAS_SIZE, MUTED, TEXT, _Painter
 from src.home_screen import _background
+from src.i18n import tr
 from src.willy_overlay import draw_button
 from src.window_viewport import canvas_viewport
 
@@ -36,7 +37,7 @@ def render_notice(title, body="", output_size=None, language="fr", guide=None, b
     hit_boxes = []
     x = 600
     for action, label, primary in buttons:
-        w = max(200, p.draw.textlength(label, font=p.font(20, True)) / p.sx + 64)
+        w = max(200, p.draw.textlength(tr(label, language), font=p.font(20, True)) / p.sx + 64)  # as drawn
         bounds = (x, 640, x + w, 706)
         draw_button(p, bounds, label, primary=primary, size=20)
         hit_boxes.append((action, bounds))

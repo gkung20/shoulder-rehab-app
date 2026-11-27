@@ -9,6 +9,7 @@ When the camera stops, the worker tries to reopen it every 2 seconds.
 """
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from dataclasses import dataclass
@@ -42,6 +43,7 @@ class PoseWorker:
         self._stop = threading.Event()
         self._thread = None
         self._next_retry = 0.
+        self.error = None  # an error of the camera thread, raised again by poll() in the screen loop
 
     # ------------------------------------------------------------------ lifecycle
     def start(self):
@@ -69,16 +71,23 @@ class PoseWorker:
         """The newest result, or None before the first frame."""
         if not self.threaded:
             return self._grab()
+        if self.error is not None:
+            error, self.error = self.error, None
+            raise error
         with self._lock:
             return self._latest
 
     def _run(self):
-        while not self._stop.is_set():
-            result = self._grab()
-            with self._lock:
-                self._latest = result
-            if not result.ok:
-                self._stop.wait(.05)  # the camera is gone: don't spin
+        try:
+            while not self._stop.is_set():
+                result = self._grab()
+                with self._lock:
+                    self._latest = result
+                if not result.ok:
+                    self._stop.wait(.05)  # the camera is gone: don't spin
+        except Exception as error:  # the screen loop shows the error screen (Phase 8.3)
+            logging.getLogger("mouvement").error("Erreur dans le fil caméra et pose", exc_info=error)
+            self.error = error
 
     def _grab(self):
         started = time.perf_counter()

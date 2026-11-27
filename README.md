@@ -122,6 +122,18 @@ Willy s’affiche aussi dans sa **bulle** : l’application reste utilisable son
   paumes et doigts sur les avatars et coûtait environ 12 ms par image. Pour le réactiver :
   `--hands`, ou `performance: hand_model: true`.
 
+## Journal et écran d'erreur
+
+Tout ce que la console affiche, et chaque erreur non prévue avec sa trace, va aussi dans le
+journal `%APPDATA%\Mouvement\logs\mouvement.log` (1 Mo par fichier, les 5 précédents
+gardés). Avec le lanceur par double-clic, sans console, c'est le seul endroit où ces messages
+restent. Le journal ne contient ni image ni nom : les mêmes lignes que la console.
+
+Si une erreur imprévue survient pendant la séance (dans la boucle de l'écran ou dans le fil de
+la caméra), la séance en cours est enregistrée comme **partielle**, puis Willy, calme, affiche
+« Un problème est survenu. Vos résultats sont enregistrés. », avec **Ouvrir le dossier du
+journal** et **Fermer**, au lieu d'une trace dans la console.
+
 ## Silhouette guide en vue caméra
 
 En vue caméra (**Voir la caméra** ou **V**), un petit bouton **Silhouette** en
@@ -487,6 +499,7 @@ shoulder-rehab-app/
 │   ├── gesture.py              # Geste de la main libre (pause / reprise à distance)
 │   ├── person_lock.py          # Suivi du seul patient quand plusieurs personnes sont visibles
 │   ├── notice_screen.py        # Écrans simples avec Willy (chargement, caméra, erreur)
+│   ├── app_log.py              # Journal %APPDATA%\Mouvement\logs\mouvement.log, erreurs non gérées
 │   ├── pose_worker.py          # Caméra + modèle de pose dans leur propre fil d'exécution
 │   ├── timings.py              # Temps de chaque étape (mode --debug, timings.csv)
 │   ├── validation_data.py      # Fichiers de l'étude de validation (essais, images)
