@@ -8,12 +8,13 @@ from src.config import ExerciseConfig
 from src.dashboard import render_dashboard
 from src.patient_controls import PatientControls, dashboard_action_at, patient_buttons
 from src.session_processor import FrameAnalysis, SessionProcessor
+from src import silhouette
 from src.silhouette import SilhouetteGuide, draw_silhouette, layout, patient_alignment, silhouette_coverage
 
 
-def _landmarks(width, height, scale=1., shift=0., mirror=True):
+def _landmarks(width, height, scale=1., shift=0., mirror=True, side=None):
     """Shoulders placed relative to the silhouette, given in displayed-frame terms."""
-    ideal = layout(width, height)
+    ideal = layout(width, height, side)
     half = ideal["sw"] * scale / 2
     xs = [ideal["cx"] + shift * ideal["sw"] + half, ideal["cx"] + shift * ideal["sw"] - half]
     if mirror:
@@ -96,3 +97,44 @@ def test_dashboard_draws_silhouette_over_camera(mode):
     guided = render_dashboard(camera, FrameAnalysis(0.), processor, mode=mode, avatars=False, silhouette=True)
     video = (slice(200, 560), slice(250, 640))
     assert np.abs(guided[video].astype(int) - plain[video].astype(int)).sum(axis=2).mean() > 10
+
+
+def test_half_body_stops_at_the_hands_reach_with_a_soft_edge():
+    w, h = 1280, 720
+    ideal = layout(w, h)
+    cover = silhouette_coverage(w, h, "R", 5.)
+    reach = int(ideal["sy"] + silhouette.REACH_BELOW_SHOULDERS * ideal["sw"])
+    hips = int(ideal["sy"] + silhouette.HIPS_BELOW_SHOULDERS * ideal["sw"])
+    assert cover[hips].max() > .9  # the pelvis is in the silhouette
+    assert cover[reach + 2:].max() == 0  # nothing below the hands
+    edge = cover[reach - int(silhouette.FADE * ideal["sw"] * .6)]
+    assert 0 < edge.max() < .95  # faded, not cut
+
+
+def test_the_framing_keeps_head_hips_and_raised_arm_in_the_picture():
+    for w, h in ((1280, 720), (640, 360), (960, 720), (640, 480)):
+        for side in ("R", "L"):
+            ideal = layout(w, h, side)
+            top = ideal["sy"] - silhouette.HEAD_ABOVE_SHOULDERS * ideal["sw"]
+            hips = ideal["sy"] + silhouette.HIPS_BELOW_SHOULDERS * ideal["sw"]
+            assert top >= .04 * h and hips <= .85 * h, (w, h)
+            raised = silhouette_coverage(w, h, side, 90.)
+            columns = np.nonzero(raised.max(axis=0) > .05)[0]
+            assert columns.min() > 0 and columns.max() < w - 1, (w, h, side)  # the hand stays in view
+    # 16:9: centred; 4:3: the body moves away from the raised arm, symmetrically
+    assert layout(1280, 720, "R")["cx"] == 640
+    assert layout(960, 720, "R")["cx"] < 480 < layout(960, 720, "L")["cx"]
+    assert layout(960, 720, "R")["cx"] + layout(960, 720, "L")["cx"] == 960
+
+
+def test_the_patient_stands_about_a_quarter_closer_than_with_the_whole_body():
+    assert .35 <= silhouette.SHOULDER_WIDTH <= .40  # was .28: the patient was ~1.3x farther
+
+
+def test_alignment_follows_the_shifted_silhouette_and_keeps_the_hips_in_view():
+    w, h = 960, 720
+    assert patient_alignment(_landmarks(w, h, side="R"), w, h, side="R") == (True, "Bonne position")
+    # half a shoulder width to the screen's right of the shifted silhouette: step to their left
+    assert patient_alignment(_landmarks(w, h, shift=.5, side="R"), w, h, side="R")[1] == "Décalez-vous vers la gauche"
+    # 1.2x the ideal size would put the hips near the bottom edge: step back
+    assert patient_alignment(_landmarks(w, h, scale=1.2), w, h)[1] == "Reculez un peu"

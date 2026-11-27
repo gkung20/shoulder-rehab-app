@@ -43,7 +43,7 @@ from src.safety import SafetyMonitor
 from src.session_plan import SetTracker
 from src.session_processor import FrameAnalysis, SessionProcessor
 from src.silhouette import patient_alignment
-from src.willy import shared_guide
+from src.willy import exercise_screen_side, shared_guide
 from src.willy_lines import shared_script
 from src.willy_tour import Moment, TOUR_ACTIONS, WillyDirector
 from src.window_viewport import canvas_viewport, enable_high_dpi, native_window_size
@@ -793,7 +793,8 @@ class App:
         elif director.wants_tracking:
             # Camera setup of the tour: find the shoulders to check the placement, count nothing.
             analysis = FrameAnalysis(self.now_sec, landmarks=landmarks or [], metrics={}, status=controls.mode.upper())
-            alignment = patient_alignment(analysis.landmarks, width, height, self.mirror)
+            alignment = patient_alignment(analysis.landmarks, width, height, self.mirror,
+                                          side=exercise_screen_side(self.processor.arm, self.mirror))
         else:
             analysis = FrameAnalysis(self.now_sec, metrics={}, status=controls.mode.upper())
         if controls.mode != "paused":

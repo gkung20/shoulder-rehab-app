@@ -1,11 +1,14 @@
 """Transparent 3D guide silhouette drawn over the camera view.
 
-A full 3D body (pre-rendered from body-1/Male-low.OBJ by
-tools/silhouette_frames/render_frames.py) is blended see-through over the
-video. The silhouette shows where to stand (a fixed, well-framed position) and performs
-the abduction at a slow, steady rhythm the patient can follow. When the pose
-model sees the patient, its outline turns green once the shoulders line up with
-the silhouette's. It is a visual aid only: nothing here feeds counting or scoring.
+A 3D body (pre-rendered from body-1/Male-low.OBJ by tools/silhouette_frames/render_frames.py)
+is blended see-through over the video. The silhouette shows where to stand (a fixed,
+well-framed position) and performs the abduction at a slow, steady rhythm the patient can
+follow. When the pose model sees the patient, its outline turns green once the shoulders line
+up with the silhouette's. It is a visual aid only: nothing here feeds counting or scoring.
+
+Half body: the abduction needs the head, shoulders, elbows and hips, not the legs, so the
+silhouette stops at the hands' reach and fills the picture from there to the head. The patient
+stands about a quarter closer to the screen than with the whole body (Marwane, 27 Nov).
 """
 import json
 import math
@@ -21,9 +24,23 @@ from src.willy import exercise_screen_side
 
 ASSET_DIR = Path(__file__).resolve().parents[1] / "assets" / "silhouette"
 
-# Ideal framing, as fractions of the frame height (shoulder width) and size.
-SHOULDER_WIDTH = .28      # x frame height (distance between shoulder joints)
-SHOULDER_Y = .40          # x frame height
+# Body proportions, in shoulder widths (distance between the shoulder joints), measured on the frames.
+HEAD_ABOVE_SHOULDERS = .89    # top of the head, above the shoulder joints
+REACH_BELOW_SHOULDERS = 1.65  # fingertips of a hanging arm: where the half body stops
+FADE = .15                    # the cut fades out over this height
+ARM_REACH_SIDE = 2.0          # hand of the raised arm (90-100 deg), from the middle of the body
+OTHER_SIDE = .75              # the hanging arm, on the other side
+# Ideal framing: the head 5% below the top of the picture, the hands' reach at 98%.
+TOP, BOTTOM, EDGE = .05, .98, .02     # x frame height, x frame height, x frame width
+SHOULDER_WIDTH = (BOTTOM - TOP) / (HEAD_ABOVE_SHOULDERS + REACH_BELOW_SHOULDERS)  # x frame height (.37)
+SHOULDER_Y = TOP + HEAD_ABOVE_SHOULDERS * SHOULDER_WIDTH                           # x frame height (.38)
+# The hips (1.14 shoulder widths below the shoulders) must stay well inside the picture: the app
+# measures the arm against the shoulder-hip line, and without the hips falls back to a rougher
+# angle. Closer than 1.15x the ideal size, or shoulders more than .3 shoulder width too high or
+# too low, the patient is asked to step back or to move the camera.
+HIPS_BELOW_SHOULDERS = 1.14
+TOO_CLOSE = 1.15
+HEIGHT_TOLERANCE = .3
 FILL = (176, 98, 10)      # BGR: deep blue body
 OUTLINE_IDLE = (255, 215, 120)   # light blue rim
 OUTLINE_GOOD = (90, 190, 60)     # green
@@ -54,16 +71,40 @@ class SilhouetteGuide:
         return angle, label
 
 
-def layout(width, height):
-    """Pixel anchors of the ideal standing position in the displayed (possibly mirrored) frame."""
+def layout(width, height, side=None):
+    """Pixel anchors of the ideal position in the displayed (possibly mirrored) frame.
+
+    `side` is the screen side of the raised arm ("R" or "L"). The body is centred, unless the
+    raised hand would leave a narrow (4:3) picture: then it moves to the other side, just enough.
+    """
     sw = SHOULDER_WIDTH * height
-    return {"cx": width / 2, "sy": SHOULDER_Y * height, "sw": sw}
+    cx = width / 2
+    arm_limit, other_limit = width * (1 - EDGE) - ARM_REACH_SIDE * sw, width * EDGE + OTHER_SIDE * sw
+    if side == "R":
+        cx = max(min(cx, arm_limit), other_limit)
+    elif side == "L":
+        cx = min(max(cx, width - arm_limit), width - other_limit)
+    return {"cx": cx, "sy": SHOULDER_Y * height, "sw": sw}
 
 
-def patient_alignment(landmarks, width, height, mirror=True, min_visibility=.5):
+def half_body(channels, shoulders):
+    """Coverage faded out below the hands' reach, and the rows under it dropped."""
+    (lx, ly), (rx, ry) = shoulders
+    width = float(np.hypot(rx - lx, ry - ly))
+    reach = (ly + ry) / 2 + REACH_BELOW_SHOULDERS * width
+    rows = np.arange(channels.shape[0], dtype=np.float32)
+    t = np.clip((reach - rows) / (FADE * width), 0., 1.)
+    keep = t * t * (3 - 2 * t)  # smoothstep: a soft edge, not a hard cut
+    out = channels[:int(np.ceil(reach)) + 1].copy()
+    out[..., 2] = (out[..., 2] * keep[:len(out), None]).astype(np.uint8)
+    return out
+
+
+def patient_alignment(landmarks, width, height, mirror=True, min_visibility=.5, side=None):
     """Compare the patient's shoulders with the silhouette's; None when they are not both visible.
 
     Returns (is_aligned, advice) with advice phrased from the patient's own point of view.
+    `side` is the screen side of the exercising arm, as for `layout`.
     """
     if not landmarks or len(landmarks) <= max(I.LEFT_SHOULDER, I.RIGHT_SHOULDER):
         return None
@@ -75,21 +116,21 @@ def patient_alignment(landmarks, width, height, mirror=True, min_visibility=.5):
         xs = [width - x for x in xs]
     mid_x, mid_y = sum(xs) / 2, (left.y + right.y) / 2 * height
     span = math.hypot(xs[0] - xs[1], (left.y - right.y) * height)
-    ideal = layout(width, height)
+    ideal = layout(width, height, side)
     sw = ideal["sw"]
     scale, dx, dy = span / sw, (mid_x - ideal["cx"]) / sw, (mid_y - ideal["sy"]) / sw
     if scale < .78:
         return False, "Approchez-vous un peu"
-    if scale > 1.28:
+    if scale > TOO_CLOSE:
         return False, "Reculez un peu"
     if abs(dx) > .3:
         # In a mirror view, the image follows the patient's own left/right.
         toward_screen_right = dx < 0
         patient_right = toward_screen_right if mirror else not toward_screen_right
         return False, "Décalez-vous vers la " + ("droite" if patient_right else "gauche")
-    if dy > .4:
+    if dy > HEIGHT_TOLERANCE:
         return False, "Baissez un peu la caméra"
-    if dy < -.4:
+    if dy < -HEIGHT_TOLERANCE:
         return False, "Montez un peu la caméra"
     return True, "Bonne position"  # no word that changes with the patient's gender
 
@@ -114,12 +155,12 @@ class _Frames:
             if rgba is None:
                 raise FileNotFoundError(f"Silhouette introuvable : arm_{self.angles[index]:03d}.png")
             # Stored channels (BGRA on disk): R = shading, G = rim, A = coverage.
-            channels = np.dstack([rgba[..., 2], rgba[..., 1], rgba[..., 3]])
+            channels = half_body(np.dstack([rgba[..., 2], rgba[..., 1], rgba[..., 3]]), self.shoulders)
             left, right = self.shoulders
             if side == "L":  # the frames raise the screen-right arm: mirror them
                 channels = channels[:, ::-1]
                 left, right = (self.size[0] - right[0], right[1]), (self.size[0] - left[0], left[1])
-            ideal = layout(width, height)
+            ideal = layout(width, height, side)
             scale = ideal["sw"] / max(1., float(np.hypot(*(np.subtract(right, left)))))
             mid = (np.add(left, right)) / 2 * scale
             ox, oy = ideal["cx"] - mid[0], ideal["sy"] - mid[1]
@@ -197,7 +238,8 @@ def silhouette_frame(video, analysis, mode, processor, mirror, guide, now=None):
     target = (abduction.target_min_deg + abduction.target_max_deg) / 2
     angle, instruction = guide.step(target, processor.config.timing.min_hold_time_sec)
     h, w = video.shape[:2]
-    alignment = patient_alignment(getattr(analysis, "landmarks", None), w, h, mirror)
-    draw_silhouette(video, angle, exercise_screen_side(processor.arm, mirror), alignment)
+    side = exercise_screen_side(processor.arm, mirror)
+    alignment = patient_alignment(getattr(analysis, "landmarks", None), w, h, mirror, side=side)
+    draw_silhouette(video, angle, side, alignment)
     placement = "Placez-vous dans la silhouette" if alignment is None else alignment[1]
     return instruction, placement, alignment

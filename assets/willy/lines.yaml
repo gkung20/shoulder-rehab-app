@@ -150,8 +150,8 @@ S4.01:
 S4.02:
   moment: Framing
   anim: idle
-  en: "Step back until your head, both shoulders and elbows are on screen."
-  fr: "Reculez jusqu'à voir votre tête, vos deux épaules et vos coudes à l'écran."
+  en: "Step back until your head, shoulders, elbows and hips are on screen."
+  fr: "Reculez jusqu'à voir votre tête, vos épaules, vos coudes et vos hanches à l'écran."
 S4.03:
   moment: Lighting
   anim: idle
@@ -160,8 +160,8 @@ S4.03:
 S4.04:
   moment: Silhouette appears
   anim: point
-  en: "See this blue shape? Stand so your body fits inside it."
-  fr: "Vous voyez cette forme bleue ? Placez-vous pour que votre corps rentre dedans."
+  en: "See this blue shape? Stand so your upper body fits inside it."
+  fr: "Vous voyez cette forme bleue ? Placez-vous pour que le haut de votre corps rentre dedans."
 S4.05:
   moment: Too far
   anim: point

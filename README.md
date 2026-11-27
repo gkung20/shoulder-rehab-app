@@ -126,8 +126,13 @@ Willy s’affiche aussi dans sa **bulle** : l’application reste utilisable son
 
 En vue caméra (**Voir la caméra** ou **V**), un petit bouton **Silhouette** en
 haut à droite de la vidéo (ou la touche **G**) affiche une **silhouette 3D
-transparente** (corps entier, bleu translucide avec contour lumineux). Elle montre **où se placer** et fait le mouvement au rythme du
+transparente** (bleu translucide avec contour lumineux). Elle montre **où se placer** et fait le mouvement au rythme du
 coach (repos, lever, maintenir, redescendre), avec le bras choisi, en miroir.
+C'est un **demi-corps**, de la tête jusqu'aux mains bras le long du corps : l'abduction n'a
+pas besoin des jambes, donc le patient se place environ un quart plus près de l'écran
+qu'avec le corps entier. Les hanches restent bien dans l'image, car l'angle se mesure par
+rapport à la ligne épaule-hanche. Avec une caméra 4:3, la silhouette se décale du côté opposé
+au bras levé pour que la main reste visible.
 Une étiquette indique l’étape à suivre. Quand le suivi voit les deux épaules,
 le contour devient **vert** (« Bonne position ») ou **orange** avec un conseil :
 approchez-vous, reculez, décalez-vous vers la gauche/droite, montez ou baissez

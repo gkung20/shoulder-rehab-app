@@ -25,7 +25,7 @@ Updated after every phase.
 | 8 Ready to share | to do | 8.2 not chosen |
 | 9 Willy polish | to do | |
 | 10 More for patients | to do | 10.4 not chosen |
-| 11 New silhouette body | to do | half-body framing first (Marwane, 27 Nov), right after Phase 7 |
+| 11 New silhouette body | in progress | half-body framing done (Marwane, 27 Nov); the new licensed body is still to do |
 
 ## Desktop folder
 
@@ -133,7 +133,15 @@ longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py 
 - Phase 7.1: the protocol's ethics section names law 28-13 (biomedical research, ethics committee;
   decree of 4 May 2026, AMMPS) and law 09-08 (CNDP) as questions for the supervisor, not advice.
 - Marwane, 27 Nov: the abduction silhouette doesn't need the whole body; cut it from the hands'
-  reach (pelvis) to the head so the patient can stand closer. Done next, before Phase 8.
+  reach (pelvis) to the head so the patient can stand closer. Done before Phase 8: the silhouette
+  stops at the fingertips of the hanging arm (soft edge) and fills the picture from there to the
+  head, so the shoulders are 0.37 of the picture's height instead of 0.28 (the patient stands about
+  a quarter closer: roughly 1.4 m instead of 1.8 m from a usual webcam). Not cut higher, at the
+  pelvis: the hips would sit at the bottom edge, and without them the app measures against the
+  shoulder line, a rougher angle. "Step back" now comes from 1.15x the ideal size (was 1.28x) and the
+  camera-height advice from 0.3 shoulder width (was 0.4), so the hips stay in view. On a 4:3 camera
+  the silhouette moves away from the raised arm so the hand stays in the picture. Willy's lines
+  S4.02 and S4.04 now say "upper body" and "hips".
 - New Willy lines: E3.10 (gesture recognised); E6.08 reworded (the app now retries).
 - New Willy lines: E9.01, E9.03 to E9.12 (pain and safety).
 - New Willy lines: E6.09, E6.10, E6.11 (sets), E8.01 (plan updated), E7.04 to E7.07 (history trend),
@@ -143,6 +151,9 @@ longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py 
 
 ## To test on the PC
 
+- Half-body silhouette: open the camera view with the silhouette (G), stand where your upper body
+  fits it (outline green), and check that raising the arm to 90 deg keeps the hand in the picture
+  and that the app shows "Suivi actif" (not "Cadrage serré") when you stand a little too close.
 - After Phase 7: a dry run of the study with a teammate, before the real afternoon:
   `python record_clip.py angles --subject TEST --arms right --trials 1 --blind`, then
   `python evaluate_dataset.py angles`, and open `%APPDATA%\Mouvement\validation\report`.

@@ -33,9 +33,11 @@ after the supervisor's ethics decision (section 7).
 #### 2.2 Camera and room
 
 - **Camera height:** about the volunteer's chest or shoulder height (1.2–1.4 m), level, not tilted.
-- **Distance:** about 1.5–2 m between camera and volunteer. Before the first trial, check that
-  the head, both shoulders and both hips are in the picture, and that the elbow (and if
-  possible the hand) stays in the picture with the arm raised to 120°. Mark the feet on the floor.
+- **Distance:** the one patients will use. Before the study, open the app with the silhouette
+  on (key G), stand a team member where their upper body fits it (green outline, about 1.3–1.6 m
+  from a usual webcam), and mark that spot on the floor for every volunteer. Check that the
+  head, both shoulders and both hips are in the picture, and that the elbow (and if possible
+  the hand) stays in the picture with the arm raised to 120°.
 - **Facing the camera:** feet and shoulders square to the camera. The app stops measuring
   from about 24° of trunk rotation (section 5).
 - **Lighting:** even light from the front or the ceiling; no window behind the volunteer.
@@ -249,9 +251,11 @@ ensuite, et seulement après la décision de l'encadrant sur l'éthique (section
 #### 2.2 Caméra et salle
 
 - **Hauteur de la caméra :** environ à hauteur de poitrine ou d'épaules (1,2 à 1,4 m), droite, non inclinée.
-- **Distance :** environ 1,5 à 2 m entre la caméra et le volontaire. Avant le premier essai,
-  vérifiez que la tête, les deux épaules et les deux hanches sont dans l'image, et que le
-  coude (et si possible la main) reste dans l'image bras levé à 120°. Marquez les pieds au sol.
+- **Distance :** celle des patients. Avant l'étude, ouvrez l'application avec la silhouette
+  (touche G), placez un membre de l'équipe pour que le haut de son corps y rentre (contour vert,
+  environ 1,3 à 1,6 m d'une webcam courante) et marquez cet endroit au sol pour tous les
+  volontaires. Vérifiez que la tête, les deux épaules et les deux hanches sont dans l'image, et
+  que le coude (et si possible la main) reste dans l'image bras levé à 120°.
 - **Face à la caméra :** pieds et épaules face à l'objectif. L'application arrête de mesurer à
   partir d'environ 24° de rotation du buste (section 5).
 - **Éclairage :** lumière homogène de face ou du plafond ; pas de fenêtre derrière le volontaire.
