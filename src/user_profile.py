@@ -162,6 +162,7 @@ class Profile:
     rest_warning: bool = False      # resting too close to the target: the plan's thresholds were kept
     camera_index: int | None = None # camera chosen in the physio settings (None: the configured one)
     pose_model: str | None = None   # "full" or "lite" forced by the physio; None = automatic
+    chattiness: str = "normal"      # how much Willy talks: "lots", "normal" or "little" (Phase 9.5)
     auto_lite: bool = False         # the app switched to lite by itself because the PC was too slow
 
     @classmethod
@@ -194,6 +195,7 @@ class Profile:
         profile.rest_warning = profile.rest_warning is True
         profile.pose_model = profile.pose_model if profile.pose_model in ("full", "lite") else None
         profile.auto_lite = profile.auto_lite is True
+        profile.chattiness = profile.chattiness if profile.chattiness in ("lots", "normal", "little") else "normal"
         camera = profile.camera_index
         profile.camera_index = camera if isinstance(camera, int) and not isinstance(camera, bool) and 0 <= camera <= 9 else None
         profile._path = path

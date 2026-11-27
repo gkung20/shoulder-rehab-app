@@ -505,10 +505,17 @@ class App:
         self.modal = None
         self.screens["settings"].form = None
 
+    def apply_chattiness(self):
+        """How much Willy talks (Phase 9.5): the coach's pauses; the director reads the profile."""
+        setter = getattr(self.audio, "set_chattiness", None)
+        if callable(setter):
+            setter(self.profile.chattiness, self.config.audio)
+
     def new_form(self):
         form = physio.SettingsForm(self.plan)
         form.camera = self.capture.camera_index if self.capture is not None else 0
         form.model, form.auto_lite = self.profile.pose_model, self.profile.auto_lite
+        form.chattiness = self.profile.chattiness
         if self.profile.resting_angle is not None:
             form.resting_angle = self.profile.resting_angle
             form.resting_date = physio.short_date(self.profile.resting_date)
@@ -535,6 +542,10 @@ class App:
             if wanted != self.pose_model and self.detector is not None:
                 self.pose_model = wanted
                 self.open_pose_model(wanted)
+        if form is not None and form.chattiness != self.profile.chattiness:
+            self.profile.chattiness = form.chattiness
+            self.profile.save()
+            self.apply_chattiness()
         if plan != self.plan:
             self.profile.set_plan(plan)
             self.profile.save()
@@ -658,6 +669,7 @@ class App:
         self.show_loading("Préparation de ma voix…")
         self.audio = self._devices.enter_context(AudioCoach.from_config(
             config.audio, enabled=self.profile.audio_enabled, language=self.profile.language or "fr"))
+        self.apply_chattiness()
         print(self.capture.status_message)
         self.processor.model_info = self.detector.model_info.copy()
         self.director = WillyDirector(self.profile, self.audio, self.guide, has_avatars=not args.no_avatars)

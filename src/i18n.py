@@ -71,6 +71,7 @@ EN = {
     "montrez le journal à votre kiné.": "Your results could not be saved. Close the app and start it again. If "
                                         "it happens again, show the log to your physio.",
     "Ouvrir le dossier du journal": "Open the log folder",
+    "Willy parle": "Willy talks", "Beaucoup": "A lot", "Normalement": "Normally", "Peu": "A little",
     "Modèle rapide utilisé (ce PC est lent pour le modèle précis)":
         "Fast model in use (this PC is slow for the accurate model)",
     "Je me prépare…": "Getting ready…", "Préparation des avatars 3D…": "Preparing the 3D avatars…",

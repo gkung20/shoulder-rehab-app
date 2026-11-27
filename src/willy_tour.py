@@ -11,6 +11,7 @@ import datetime as dt
 import math
 import time
 
+from src import chattiness
 from src.cues import Cue, code_of
 from src import layout as L
 from src.i18n import ui
@@ -467,7 +468,7 @@ class WillyDirector:
         if self.profile.done_today(today):
             return "E1.04", {}
         streak = self.profile.streak(today)
-        if streak >= 3:
+        if streak >= 3 and self.plays("E1.06"):
             return "E1.06", {"n": streak}
         since = self.profile.days_since_last(today)
         if since == 1:
@@ -747,6 +748,14 @@ class WillyDirector:
             self.profile.save()
 
     # ------------------------------------------------------------------ everyday lines (Scenario 8, E6, E7)
+    @property
+    def chattiness(self):
+        """How much Willy talks: "lots", "normal" or "little" (Phase 9.5)."""
+        return chattiness.level_of(getattr(self.profile, "chattiness", None))
+
+    def plays(self, line_id):
+        return chattiness.plays(line_id, self.chattiness)
+
     def _once(self, line_id):
         if self.profile.has_seen(line_id):
             return False
@@ -773,11 +782,11 @@ class WillyDirector:
             self._idle_since, self._idle_said = now, False
             self._correct_run = self._correct_run + 1 if evaluation.is_correct else 0
             if not self.coaching:
-                if self._correct_run == 3:
+                if self._correct_run == 3 and self.plays("E6.02"):
                     self.say("E6.02", compact=True, interrupt=False)
-                elif evaluation.rep_index == 4 and self._once("S8.01"):
+                elif evaluation.rep_index == 4 and self.plays("S8.01") and self._once("S8.01"):
                     self.say("S8.01", spotlight="main_button", compact=True, interrupt=False)
-                elif evaluation.rep_index == 8 and self._once("S8.04"):
+                elif evaluation.rep_index == 8 and self.plays("S8.04") and self._once("S8.04"):
                     self.say("S8.04", spotlight="finish_button", compact=True, interrupt=False)
         self._last_reps = reps
         # Pause, and a long pause.
@@ -796,7 +805,8 @@ class WillyDirector:
         if mode == "running" and not self.coaching:
             if self._idle_since is None or phase not in ("REST", ""):
                 self._idle_since, self._idle_said = now, False
-            elif now - self._idle_since > 30 and not self._idle_said:
+            elif (chattiness.IDLE_AFTER[self.chattiness] is not None and not self._idle_said
+                  and now - self._idle_since > chattiness.IDLE_AFTER[self.chattiness]):
                 self._idle_said = True
                 self.say("E6.04", compact=True)
         else:
@@ -867,18 +877,18 @@ class WillyDirector:
             return
         self.say("S8.06", n=total, spotlight="result_line" if first else None, compact=not first)
         yield _Speech()
-        if unmeasured > 0:
+        if unmeasured > 0 and self.plays("S8.07"):
             self.say("S8.07", k=unmeasured, compact=not first)
             yield _Speech()
         if correct > 0:
             self.say("S8.08", c=correct, compact=not first)
             yield _Speech()
         last = self.profile.last_correct
-        if last is not None and correct > last:
+        if last is not None and correct > last and self.plays("E7.02"):
             self.say("E7.02", compact=not first)
             yield _Speech()
         tip = most_frequent_tip(session.evaluations)
-        if tip:
+        if tip and self.plays("S8.09"):
             self.say("S8.09", tip=self.script.text(tip, self.language), compact=not first)
             yield _Speech()
         if getattr(self, "pain_rose", False):

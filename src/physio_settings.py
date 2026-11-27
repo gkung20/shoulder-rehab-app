@@ -15,6 +15,7 @@ from dataclasses import dataclass, field, replace
 import cv2
 import numpy as np
 
+from src import chattiness
 from src.dashboard import CANVAS_SIZE, MUTED, TEXT, _Painter
 from src.home_screen import _background
 from src.user_profile import PLAN_BOUNDS, Plan
@@ -133,6 +134,7 @@ FIELDS = (
     ("seated", "Exercice assis", ""),
     ("camera", "Caméra (numéro)", ""),
     ("model", "Modèle de suivi", ""),
+    ("chattiness", "Willy parle", ""),
 )
 MODEL_CHOICES = (None, "full", "lite")
 MODEL_LABELS = {None: "Automatique", "full": "Précis", "lite": "Rapide"}
@@ -152,6 +154,7 @@ class SettingsForm:
     message: str = ""
     camera: int = 0
     model: str | None = None      # forced pose model; None = automatic
+    chattiness: str = "normal"    # how much Willy talks (src.chattiness)
     auto_lite: bool = False       # shown as "Modèle rapide utilisé" when automatic chose lite
 
     def __post_init__(self):
@@ -172,6 +175,9 @@ class SettingsForm:
             self.camera = min(CAMERA_RANGE[1], max(CAMERA_RANGE[0], self.camera + direction))
         elif key == "model":
             self.model = MODEL_CHOICES[(MODEL_CHOICES.index(self.model) + direction) % len(MODEL_CHOICES)]
+        elif key == "chattiness":
+            levels = chattiness.LEVELS
+            self.chattiness = levels[(levels.index(chattiness.level_of(self.chattiness)) + direction) % len(levels)]
         else:
             low, high, step = PLAN_BOUNDS[key]
             value = getattr(self.plan, key) + direction * step
@@ -191,6 +197,8 @@ class SettingsForm:
             if self.model is None and self.auto_lite:
                 return "Auto (rapide)"
             return MODEL_LABELS[self.model]
+        if key == "chattiness":
+            return chattiness.LABELS[chattiness.level_of(self.chattiness)]
         text = f"{value:g}"
         if language == "fr":
             text = text.replace(".", ",")

@@ -113,6 +113,13 @@ class AudioCoach:
     def available(self, value):
         self._lang_available[self.language] = value
 
+    def set_chattiness(self, level, base):
+        """Pauses between lines and rep announcements for a level (src.chattiness), from the
+        configured audio settings `base`. Warnings and safety lines still play at every level."""
+        from src.chattiness import coach_settings
+        for name, value in coach_settings(level, base).items():
+            setattr(self, name, value)
+
     def _lip_started(self, envelope):
         self._lip = LipTrack(envelope)
 

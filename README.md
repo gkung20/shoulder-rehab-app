@@ -53,6 +53,11 @@ Willy s’affiche aussi dans sa **bulle** : l’application reste utilisable son
   de repos devient max(repos maximal du plan, repos mesuré + 8°) et le seuil de montée +7°, pour
   qu'un patient dont le bras reste à 30° soit compté. Si ce seuil se rapproche à moins de 10° de la
   cible, le plan garde ses valeurs et un avertissement s'affiche dans les réglages.
+- **Willy parle : beaucoup / normalement / peu** (dernière ligne des réglages) : « beaucoup »
+  raccourcit les pauses entre ses phrases, annonce le compte toutes les 3 répétitions et commente
+  chaque étape ; « peu » double les pauses, n'annonce que toutes les 10 répétitions et supprime les
+  encouragements, les astuces, le « Toujours là ? » et les détails de fin de séance. Les messages de
+  sécurité et de douleur, la caméra, les séries et le début et la fin de séance sont toujours dits.
 - **Séries** : le compteur affiche « SÉRIE 2/3 » et « 6/10 ». À la fin d'une série, un repos avec
   compte à rebours, puis Willy propose de reprendre ; après la dernière série, la séance se termine
   seule et Willy annonce l'objectif atteint.
@@ -502,6 +507,7 @@ shoulder-rehab-app/
 │   ├── person_lock.py          # Suivi du seul patient quand plusieurs personnes sont visibles
 │   ├── notice_screen.py        # Écrans simples avec Willy (chargement, caméra, erreur)
 │   ├── lip_sync.py             # La bouche de Willy suit le volume de sa voix
+│   ├── chattiness.py           # Willy parle : beaucoup / normalement / peu
 │   ├── app_log.py              # Journal %APPDATA%\Mouvement\logs\mouvement.log, erreurs non gérées
 │   ├── pose_worker.py          # Caméra + modèle de pose dans leur propre fil d'exécution
 │   ├── timings.py              # Temps de chaque étape (mode --debug, timings.csv)
