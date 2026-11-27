@@ -17,7 +17,7 @@ avec `--no-avatars` et dans la page Streamlit (barre latérale + tableau de bord
 | Répétition conforme | Lève les deux bras et sautille |
 | Répétition à ajuster | Hoche la tête pour encourager, jamais de visage triste |
 | Bilan | Fête la fin de séance |
-| Voix en cours | Bouche animée pendant que la phrase est jouée |
+| Voix en cours | Bouche qui suit le volume de la voix, mesuré toutes les 40 ms : fermée dans les pauses, entrouverte (talk1) ou ouverte (talk2) ; d'après le texte (5 syllabes/s) pour une voix Windows sans audio |
 
 Willy ne fait que **refléter** l’analyse : rien de ce qu’il affiche n’entre dans
 le comptage ou l’évaluation.

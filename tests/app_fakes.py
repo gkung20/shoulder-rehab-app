@@ -145,6 +145,7 @@ def make_app(monkeypatch, tmp_path, window, args=("--no-avatars", "--no-hands"),
 
     audio = Mock(enabled=True, available=True, busy=False, speaking=False, last_line=None, status_message="Fake voice")
     audio.say.return_value = True
+    audio.mouth.return_value = False  # silent Willy (lip sync, Phase 9.1)
     audio.__enter__ = Mock(return_value=audio)
     audio.__exit__ = Mock(return_value=False)
     monkeypatch.setattr(desktop, "VideoCaptureManager", FakeCapture)

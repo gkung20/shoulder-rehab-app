@@ -169,7 +169,8 @@ class WillyGuide:
             pose.bob += math.sin(now * 2.) * 2.5
             pose.tilt += math.sin(now * .7) * 2.
         pose.eyes = "happy" if happy else self._blink(now)
-        pose.mouth = self._talk(now) if speaking else "smile"
+        # `speaking` is the mouth matching the voice's loudness (lip sync), or True/False
+        pose.mouth = speaking if isinstance(speaking, str) else self._talk(now) if speaking else "smile"
         self.pose = pose
         return pose
 

@@ -10,6 +10,8 @@ import wave
 
 import numpy as np
 
+from src.lip_sync import SYLLABLES_PER_SEC, text_loudness, wav_loudness
+
 VOICE_DIRECTORY = Path(__file__).resolve().parents[1] / "models" / "voices"
 # Willy's voice is the "Cartoon buddy" the user picked: a male voice (the sample used Piper's
 # Ryan; Tom is its French counterpart), pitch and timbre raised 1.45x, with a light 6 Hz vibrato.
@@ -145,9 +147,12 @@ class PiperSpeech:
             self._cache.popitem(last=False)
         return data
 
-    def say(self, text, cancel):
+    def say(self, text, cancel, on_start=None):
+        """Play a line; `on_start(envelope)` gets its loudness just before it starts (lip sync)."""
         data = self.synthesize(text)
         if not cancel.is_set():
+            if on_start is not None:
+                on_start(wav_loudness(data))
             play_wav(data, cancel)
 
     def close(self):
@@ -238,7 +243,7 @@ class WindowsSpeech:
                 pass
         return _willy_wav(data, self.willy_pitch)
 
-    def say(self, text, cancel):
+    def say(self, text, cancel, on_start=None):
         if cancel.is_set():
             return
         if self.willy_pitch > 1:
@@ -251,8 +256,12 @@ class WindowsSpeech:
                 self.label = self.label.replace(" / voix de Willy", "")
             else:
                 if not cancel.is_set():
+                    if on_start is not None:
+                        on_start(wav_loudness(data))
                     play_wav(data, cancel)
                 return
+        if on_start is not None:  # no audio to measure: the mouth follows the text
+            on_start(text_loudness(text, rate=SYLLABLES_PER_SEC * self.speech_rate / 130.))
         self.engine.say(text)
         self.engine.runAndWait()
 

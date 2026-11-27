@@ -150,7 +150,7 @@ class HomeScreen(Screen):
     name = "home"
 
     def draw(self, app, output_size):
-        return render_home(app.director, app.guide, output_size, speaking=app.audio.speaking is True)
+        return render_home(app.director, app.guide, output_size, speaking=app.audio.mouth())
 
 
 class ExerciseScreen(Screen):
@@ -164,7 +164,7 @@ class ExerciseScreen(Screen):
                                 app.audio.enabled, app.audio.status_message, mode=c.mode, details=c.details,
                                 help_visible=c.help_visible, output_size=output_size,
                                 avatar_stage=app.avatar_stage, avatars=c.avatars, avatar_gender=c.avatar_gender,
-                                speaking=app.audio.speaking, silhouette=c.silhouette, willy=app.guide,
+                                speaking=app.audio.mouth(), silhouette=c.silhouette, willy=app.guide,
                                 lang=app.director.language, overlay=app.director.overlay,
                                 sets=app.sets, now=time.monotonic(), results=app.last_record is not None,
                                 guidance=app.pain_rest_guidance())

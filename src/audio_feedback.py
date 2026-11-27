@@ -1,6 +1,7 @@
 """Non-blocking coaching in Willy's voice, in French or English, with fresh guidance."""
 from collections import OrderedDict
 from dataclasses import asdict, dataclass
+import inspect
 import logging
 from pathlib import Path
 import queue
@@ -8,6 +9,7 @@ import re
 import threading
 import time
 
+from src.lip_sync import LipTrack
 from src.rules_engine import FeedbackLevel, LiveFeedback, RepetitionEvaluation
 from src.speech import create_speech_backend
 from src.cues import SETUP as SETUP_CUES, code_of
@@ -32,6 +34,14 @@ def spoken_french(message):
         "detecte":"détecté", "evaluee":"évaluée", "camera":"caméra", "baissez":"baissez"}
     return re.sub(r"\b(" + "|".join(replacements) + r")\b",
                   lambda match: replacements[match.group(0).lower()], message.strip(), flags=re.IGNORECASE)
+
+
+def _accepts_on_start(engine):
+    """Speech engines take `on_start` for lip sync; simpler ones (tests, old backends) don't."""
+    try:
+        return "on_start" in inspect.signature(engine.say).parameters
+    except (TypeError, ValueError):
+        return False
 
 
 @dataclass
@@ -72,6 +82,7 @@ class AudioCoach:
         self.announce_every_reps = announce_every_reps
         self.willy_pitch = willy_pitch
         self.speaking = False  # True while a sentence plays: Willy moves his mouth
+        self._lip = None       # the line playing, with its loudness (src.lip_sync.LipTrack)
         self._setup_announced = False
         self._warning_text = None
         self._warning_since = None
@@ -101,6 +112,17 @@ class AudioCoach:
     @available.setter
     def available(self, value):
         self._lang_available[self.language] = value
+
+    def _lip_started(self, envelope):
+        self._lip = LipTrack(envelope)
+
+    def mouth(self, now=None):
+        """Willy's mouth now: False when silent, the shape matching the voice's loudness while a
+        line plays, True (generic talking) when the voice gave no loudness."""
+        if not self.speaking:
+            return False
+        lip = self._lip
+        return lip.mouth(now) if lip is not None else True
 
     @property
     def busy(self):
@@ -166,9 +188,12 @@ class AudioCoach:
                         continue
                     self.speaking = True
                     try:
-                        engine.say(item.text, self._playback_cancel)
+                        if _accepts_on_start(engine):
+                            engine.say(item.text, self._playback_cancel, on_start=self._lip_started)
+                        else:
+                            engine.say(item.text, self._playback_cancel)
                     finally:
-                        self.speaking = False
+                        self.speaking, self._lip = False, None
                 finally:
                     self._queue.task_done()
         except Exception as error:

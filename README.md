@@ -4,7 +4,9 @@
 
 **Willy**, un petit robot guide, reste visible à droite de l’écran dans toutes
 les vues : il salue avant la séance, lève le bras avec le patient (en miroir),
-fête les répétitions réussies et bouge la bouche quand la voix parle. La voix
+fête les répétitions réussies et bouge la bouche au rythme de sa voix (bouche fermée dans
+les pauses, entrouverte ou ouverte selon le volume mesuré toutes les 40 ms ; avec une voix
+Windows sans audio à mesurer, d'après le texte, environ 5 syllabes par seconde). La voix
 française devient la **voix de Willy** (« Cartoon buddy » : voix masculine Tom,
 1,45× plus aiguë avec un léger vibrato, `audio.willy_pitch`).
 Il ne modifie aucune mesure. Détails : [docs/willy.md](docs/willy.md).
@@ -499,6 +501,7 @@ shoulder-rehab-app/
 │   ├── gesture.py              # Geste de la main libre (pause / reprise à distance)
 │   ├── person_lock.py          # Suivi du seul patient quand plusieurs personnes sont visibles
 │   ├── notice_screen.py        # Écrans simples avec Willy (chargement, caméra, erreur)
+│   ├── lip_sync.py             # La bouche de Willy suit le volume de sa voix
 │   ├── app_log.py              # Journal %APPDATA%\Mouvement\logs\mouvement.log, erreurs non gérées
 │   ├── pose_worker.py          # Caméra + modèle de pose dans leur propre fil d'exécution
 │   ├── timings.py              # Temps de chaque étape (mode --debug, timings.csv)
