@@ -223,7 +223,9 @@ def tr(text, language="fr"):
 UI = {
     "next": ("Next", "Suivant"),
     "skip": ("Skip", "Passer"),
-    "start_tour": ("Start the tour", "Commencer la visite"),
+    "start_tour": ("Full tour", "Visite complète"),
+    "express_tour": ("Express tour", "Visite express"),
+    "back": ("Back", "Retour"),
     "understand": ("I understand", "J'ai compris"),
     "watch_again": ("Watch again", "Revoir"),
     "start": ("Start", "Commencer"),

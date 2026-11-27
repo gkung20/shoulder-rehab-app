@@ -156,6 +156,18 @@ longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py 
 - New Willy lines: E9.01, E9.03 to E9.12 (pain and safety).
 - New Willy lines: E6.09, E6.10, E6.11 (sets), E8.01 (plan updated), E7.04 to E7.07 (history trend),
   E8.02 (export saved); in lines.yaml, and added to the script doc at the end of the sprint.
+- Phase 9.1: Willy's mouth follows the loudness of his voice (every 40 ms: closed, half open, open);
+  with the Windows voice, which gives no sound to measure, it follows the rhythm of the text instead.
+- Phase 9.5: "Willy parle : beaucoup / normalement / peu" is the last row of the physio settings.
+  "Normalement" is the app as before. "Peu" doubles the pauses between lines, counts every 10
+  movements and drops the everyday lines (encouragements, "still there?", tips, button reminders);
+  "beaucoup" shortens the pauses and counts every 3. Safety and pain lines, and the lines needed to
+  go on (framing, camera, sets, start and end), play at every level.
+- Phase 9.4: the express tour also asks which arm (otherwise the first movements could be on the
+  wrong side), so it is safety, arm, camera and the first movements. It is the highlighted button;
+  the full tour is the other button and stays in Help. The dots under the bubble count the tour's
+  stages (4 or 6), not each line, so they move at a pace the patient can follow. Back is only in the
+  screen tour, the one part that is a sequence of things to look at; elsewhere a step is a choice.
 - `src/synthetic_pose.py`: one synthetic-body helper for tests, previews and tools (both arms,
   turning, seated, free hand raised).
 

@@ -37,6 +37,7 @@ class Overlay:
     sample_button: str | None = None              # a glowing button drawn for show (Scenario 2)
     compact: bool = False                         # an everyday line: small bubble, no buttons
     dim: bool = True                              # False during exercise: ring the zone, keep the screen bright
+    progress: tuple | None = None                 # (stage, stages) of the tour: dots in the bubble
     hit_boxes: list = field(default_factory=list)
 
     def action_at(self, x, y):
@@ -86,6 +87,22 @@ def _button_width(p, label, size=17):
     return p.draw.textlength(label, font=p.font(size, True)) / p.sx + 40
 
 
+def draw_dots(p, x, y, progress, radius=5, gap=7):
+    """The tour's stages as dots: the stages done and the current one filled (●●●○○○). Returns the width."""
+    if not progress:
+        return 0
+    stage, stages = progress
+    for index in range(stages):
+        cx = x + radius + index * (2 * radius + gap)
+        x1, y1 = p.point(cx - radius, y - radius)
+        x2, y2 = p.point(cx + radius, y + radius)
+        if index < stage:
+            p.draw.ellipse((x1, y1, x2, y2), fill=ACCENT)
+        else:
+            p.draw.ellipse((x1, y1, x2, y2), outline=(170, 176, 180), width=max(1, round(1.5 * p.scale)))
+    return stages * (2 * radius + gap) - gap
+
+
 def draw_button(p, bounds, label, primary=False, size=17):
     if primary:
         p.rect(bounds, fill=TEXT, radius=8)
@@ -106,7 +123,7 @@ def bubble_layout(p, overlay, candidates, width, size):
     height = 16 + sum(len(lines) for lines in paragraphs) * line_h + max(0, len(paragraphs) - 1) * 10 + 10
     if overlay.text_field is not None:
         height += 86
-    height += 58 if overlay.buttons else 6
+    height += 58 if overlay.buttons else (24 if overlay.progress else 6)
     chosen = None
     for anchor_x, anchor_y, align in candidates:
         left = anchor_x if align.endswith("left") else anchor_x - width
@@ -149,6 +166,8 @@ def draw_bubble(canvas, p, overlay, candidates, tail_to, width=360, size=20):
         p.text((box[0] + 14, box[1] + 11), (value or "") + caret, size, TEXT)
         p.text((left + 22, y + 52), hint, 14, MUTED)
         y += 86
+    if overlay.progress:
+        draw_dots(p, left + 22, bottom - 34 if overlay.buttons else bottom - 14, overlay.progress, radius=4, gap=6)
     if overlay.buttons:
         x = right - 18
         row_top = bottom - 56

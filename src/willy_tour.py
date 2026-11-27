@@ -37,8 +37,12 @@ PLACEMENT_LINES = {
     "Montez un peu la caméra": ("S4.08", 0), "Baissez un peu la caméra": ("S4.08", 1),
 }
 
+# The tour's stages, shown as dots in Willy's bubble (Phase 9.4).
+FULL_TOUR = ("safety", "profile", "camera", "screen", "movement", "start")
+EXPRESS_TOUR = ("safety", "arm", "camera", "start")
+
 # Tour actions that never reach the session controls.
-TOUR_ACTIONS = ("next", "skip", "start_tour", "understand", "watch_again", "lang_en", "lang_fr",
+TOUR_ACTIONS = ("next", "back", "skip", "start_tour", "express_tour", "understand", "watch_again", "lang_en", "lang_fr",
                 "name_ok", "skip_name", "home_start")
 ALWAYS_ALLOWED = ("quit", "language")
 TRACKED = ("SUIVI ACTIF", "MESURES PARTIELLES", "CADRAGE SERRE")
@@ -141,6 +145,7 @@ class WillyDirector:
         self._pressed = None
         self._demo = None                # (start time, kind) of Willy's demo movement
         self._episode = None             # a sequence of everyday lines (end of session)
+        self.tour_progress = None        # (stage, stages) of the tour, shown as dots (Phase 9.4)
         self._last_mode = None
         self._last_reps = 0
         self._correct_run = 0
@@ -394,7 +399,8 @@ class WillyDirector:
         self.in_tour = True
         self.screen = "home"
         self.want_avatars = self.want_silhouette = None
-        skipped = False
+        self.tour_progress = None        # no dots until the tour itself starts (and none left from a replay)
+        skipped = express = False
         if self.profile.language is None:
             self.say("S1.01", bilingual=True)
             yield _Speech()
@@ -415,12 +421,18 @@ class WillyDirector:
             yield _Speech()
             self.say("S1.05")
             yield _Speech()
+            # The express tour comes first (safety, the arm, the camera, Start: about a minute);
+            # the full tour is the other choice now, and later from Help.
             self.say("S1.06", buttons=[TourButton("skip", ui("skip", self.language)),
-                                       TourButton("start_tour", ui("start_tour", self.language), True)])
-            choice = yield _Choice(("start_tour", "skip"))
+                                       TourButton("start_tour", ui("start_tour", self.language)),
+                                       TourButton("express_tour", ui("express_tour", self.language), True)])
+            choice = yield _Choice(("express_tour", "start_tour", "skip"))
             skipped = choice == "skip"
+            express = choice == "express_tour"
             self.say("S1.07" if skipped else "S1.08")
             yield _Speech()
+        stages = EXPRESS_TOUR if express else FULL_TOUR
+        self._stage(stages, "safety", skipped)
         yield from self._safety()
         if skipped:
             self._finish_tour()
@@ -428,11 +440,25 @@ class WillyDirector:
             self.current = None
             return
         self.screen = "dashboard"
-        yield from self._profile_setup()
+        if express:
+            self._stage(stages, "arm")
+            yield from self._arm_step()
+        else:
+            self._stage(stages, "profile")
+            yield from self._profile_setup()
+        self._stage(stages, "camera")
         yield from self._camera_setup()
-        yield from self._screen_tour()
-        yield from self._exercise_demo()
+        if not express:
+            self._stage(stages, "screen")
+            yield from self._screen_tour()
+            self._stage(stages, "movement")
+            yield from self._exercise_demo()
+        self._stage(stages, "start")
         yield from self._first_session()
+
+    def _stage(self, stages, name, skipped=False):
+        """Dots in the bubble: this stage of the tour and the ones before it filled."""
+        self.tour_progress = None if skipped else (stages.index(name) + 1, len(stages))
 
     def _safety(self):
         self.allowed = ()
@@ -481,6 +507,17 @@ class WillyDirector:
     def _next(self):
         return [TourButton("next", ui("next", self.language), True)]
 
+    def _arm_step(self):
+        """Which arm? (Scenario 3, also in the express tour)"""
+        self.want_avatars, self.want_silhouette = (True if self.has_avatars else None), False
+        self.allowed = ("arm_left", "arm_right")
+        self.say("S3.04", spotlight="arm_buttons", buttons=self._next())
+        yield _Choice(("arm_left", "arm_right", "next"))
+        arm = getattr(self.ctx.processor, "arm", self.profile.arm or "right")
+        self.allowed = ()
+        self.say("S3.05", choice=0 if arm == "right" else 1)
+        yield _Speech()
+
     def _profile_setup(self):
         self.allowed = ()
         self.want_avatars, self.want_silhouette = (True if self.has_avatars else None), False
@@ -497,13 +534,7 @@ class WillyDirector:
         self.profile.save()
         self.say("S3.03", name=name)
         yield _Speech()
-        self.allowed = ("arm_left", "arm_right")
-        self.say("S3.04", spotlight="arm_buttons", buttons=self._next())
-        yield _Choice(("arm_left", "arm_right", "next"))
-        arm = getattr(self.ctx.processor, "arm", self.profile.arm or "right")
-        self.allowed = ()
-        self.say("S3.05", choice=0 if arm == "right" else 1)
-        yield _Speech()
+        yield from self._arm_step()
         self.allowed = ("avatar_male", "avatar_female")
         self.say("S3.06", spotlight="avatar_buttons", buttons=self._next())
         yield _Choice(("avatar_male", "avatar_female", "next"))
@@ -566,13 +597,19 @@ class WillyDirector:
 
     # ------------------------------------------------------------------ Scenario 5: the screen
     def _screen_tour(self):
+        """Each zone of the screen in turn; "Back" shows the previous one again."""
         self.allowed = ()
         self.want_avatars, self.want_silhouette = (True if self.has_avatars else None), False
-        for line_id, zone in SCREEN_TOUR:
-            if not self.has_avatars and line_id in AVATAR_ONLY:
-                continue
-            self.say(line_id, spotlight=zone, buttons=self._next())
-            yield _Choice(("next",))
+        steps = [(line_id, zone) for line_id, zone in SCREEN_TOUR if self.has_avatars or line_id not in AVATAR_ONLY]
+        index = 0
+        while index < len(steps):
+            line_id, zone = steps[index]
+            buttons = self._next()
+            if index > 0:
+                buttons = [TourButton("back", ui("back", self.language))] + buttons
+            self.say(line_id, spotlight=zone, buttons=buttons)
+            choice = yield _Choice(("back", "next") if index > 0 else ("next",))
+            index = index - 1 if choice == "back" else index + 1
 
     # ------------------------------------------------------------------ Scenario 6: the movement
     def _exercise_demo(self):
@@ -629,7 +666,7 @@ class WillyDirector:
         self.allowed = ("start",)
         self.say("S7.01", spotlight="main_button")
         yield _Choice(("start",))
-        # The patient has seen the whole tour: closing during these first movements won't replay it.
+        # The patient has seen the tour (express or full): closing during these first movements won't replay it.
         self.profile.tour_done = True
         self.profile.save()
         self.allowed = None
@@ -955,6 +992,8 @@ class WillyDirector:
         overlay.highlight = current.highlight if current else None
         overlay.sample_button = current.sample if current else None
         overlay.compact = bool(current and current.compact and not current.spotlight)
+        overlay.progress = (self.tour_progress if self.in_tour and not self.coaching and current is not None
+                            and not current.compact else None)
         overlay.dim = self.ctx.mode != "running"  # never darken the screen while the patient exercises
         overlay.text_field = ((self.name_buffer, ui("name_hint", self.language))
                               if current is not None and current.text_field else None)

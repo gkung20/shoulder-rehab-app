@@ -107,8 +107,9 @@ def test_first_use_tour_walks_through_every_scenario(tmp_path):
     h.press("lang_en")
     assert h.profile.language == "en" and h.audio.language == "en" and h.line == "S1.03"
     h.until("S1.06")
-    assert {b.action for b in d.current.buttons} == {"start_tour", "skip"}
-    h.press("start_tour")
+    assert {b.action for b in d.current.buttons} == {"express_tour", "start_tour", "skip"}
+    assert d.current.buttons[-1].action == "express_tour" and d.current.buttons[-1].primary  # offered first
+    h.press("start_tour")  # the full tour
     assert h.line == "S1.08"
     # Scenario 2: safety, confirmed with one button; nothing else is allowed meanwhile.
     h.until("S2.03")
@@ -251,8 +252,9 @@ def test_language_switch_repeats_the_current_line(tmp_path):
     d.open()
     h.until("S1.06")
     d.notify("language")
-    assert d.language == "en" and h.line == "S1.06" and h.text == "You can skip it and watch it later from Help."
-    assert {b.action for b in d.current.buttons} == {"start_tour", "skip"}
+    assert d.language == "en" and h.line == "S1.06"
+    assert h.text == "The full tour takes about 7 minutes. You can watch it later from Help."
+    assert {b.action for b in d.current.buttons} == {"express_tour", "start_tour", "skip"}
 
 
 def _finish_session(h, results):

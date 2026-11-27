@@ -15,10 +15,14 @@ Il ne modifie aucune mesure. Détails : [docs/willy.md](docs/willy.md).
 
 `app_live_cv.py` s’ouvre sur **l’écran d’accueil de Willy**. À la première
 ouverture, Willy salue en anglais et en français, fait choisir la langue, puis
-propose la **visite guidée** (environ 7 minutes) : règles de sécurité (jamais
-passées, même avec **Passer**), prénom facultatif, bras, coach et son, réglage de
-la caméra avec la silhouette, tour de l’écran avec une zone éclairée à la fois,
-démonstration du mouvement par Willy, puis les trois premiers mouvements guidés.
+propose d’abord la **visite express** (environ une minute) : règles de sécurité,
+bras à exercer, réglage de la caméra avec la silhouette, puis les trois premiers
+mouvements guidés. L’autre choix est la **visite complète** (environ 7 minutes) :
+règles de sécurité (jamais passées, même avec **Passer**), prénom facultatif, bras,
+coach et son, réglage de la caméra, tour de l’écran avec une zone éclairée à la
+fois (bouton **Retour** pour revoir la zone d’avant), démonstration du mouvement
+par Willy, puis les trois premiers mouvements guidés. Des points sous la bulle
+(●●○○) montrent l’étape de la visite.
 Ensuite, Willy accueille le patient (« Bonjour ! On fait vos exercices ? ») et la
 séance démarre depuis son bouton **Commencer**. Pendant la séance, ce que dit
 Willy s’affiche aussi dans sa **bulle** : l’application reste utilisable son coupé.
@@ -27,7 +31,7 @@ Willy s’affiche aussi dans sa **bulle** : l’application reste utilisable son
   boutons et consignes passent dans la langue choisie.
 - **Répliques** : toutes dans `assets/willy/lines.yaml` (EN/FR, une ligne par ID
   du document de scénarios). Modifiez le texte là, jamais dans le code.
-- **Revoir la visite** : bouton dans **Aide**, ou `python app_live_cv.py --tour`.
+- **Revoir la visite** (la visite complète) : bouton dans **Aide**, ou `python app_live_cv.py --tour`.
   `--skip-home` ouvre directement la séance (tests, démonstrations).
 - **Profil local** (langue, visite faite, prénom, bras, coach, son, jours de
   séance) : `%APPDATA%\Mouvement\profile.json` sous Windows. Aucune image ni mesure

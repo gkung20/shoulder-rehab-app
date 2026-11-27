@@ -32,15 +32,15 @@ S1.04:
   en: "I'm your rehab buddy. I'll help you do your shoulder exercise safely."
   fr: "Je suis votre compagnon de rééducation. Je vais vous aider à faire votre exercice d'épaule en sécurité."
 S1.05:
-  moment: Tour offer
+  moment: Tour offer (the express tour comes first)
   anim: point
-  en: "It's your first time here, so let me show you around. It takes about 7 minutes."
-  fr: "C'est votre première visite : je vais vous montrer l'application. Cela prend environ 7 minutes."
+  en: "It's your first time here: let me give you an express tour, about a minute."
+  fr: "C'est votre première visite : je vous propose une visite express, environ une minute."
 S1.06:
-  moment: Tour buttons appear
+  moment: Tour buttons appear (Skip, Full tour, Express tour)
   anim: idle
-  en: "You can skip it and watch it later from Help."
-  fr: "Vous pouvez la passer et la revoir plus tard depuis Aide."
+  en: "The full tour takes about 7 minutes. You can watch it later from Help."
+  fr: "La visite complète prend environ 7 minutes. Vous pourrez la revoir depuis Aide."
 S1.07:
   moment: Patient skips
   anim: wave

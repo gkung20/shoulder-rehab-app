@@ -14,7 +14,7 @@ from src import layout as L
 from src.dashboard import CANVAS_SIZE, MUTED, TEXT, _Painter
 from src.i18n import ui
 from src.window_viewport import canvas_viewport
-from src.willy_overlay import GLOW, _wrap, draw_button
+from src.willy_overlay import GLOW, _wrap, draw_button, draw_dots
 
 HOME_WILLY_BOX = L.HOME_WILLY_BOX
 BUBBLE_LEFT, BUBBLE_TOP, BUBBLE_RIGHT = L.HOME_BUBBLE.x0, L.HOME_BUBBLE.y0, L.HOME_BUBBLE.x1
@@ -75,6 +75,9 @@ def render_home(director, guide=None, output_size=None, speaking=False):
     bottom = BUBBLE_TOP
     if overlay.bubble:
         bottom = _bubble(p, overlay.bubble, mouth)
+    if overlay.progress:  # the tour's stages, under the bubble
+        draw_dots(p, BUBBLE_LEFT + 8, bottom + 22, overlay.progress, radius=6, gap=8)
+        bottom += 22
     y = bottom + 34
     if overlay.sample_button:
         label = ui("pause_sample", director.language)
@@ -84,13 +87,19 @@ def render_home(director, guide=None, output_size=None, speaking=False):
             p.rect((bounds[0] - grow, bounds[1] - grow, bounds[2] + grow, bounds[3] + grow), outline=GLOW, radius=12 + grow)
         draw_button(p, bounds, label, primary=True, size=19)
         y += 92
+    # The buttons in one row under the bubble; smaller when three of them would not fit.
+    available = 1240 - BUBBLE_LEFT
+    for size, least, gap in ((21, 190, 18), (19, 150, 14), (17, 120, 12)):
+        widths = [max(least, p.draw.textlength(b.label, font=p.font(size, True)) / p.sx + 2.6 * size)
+                  for b in overlay.buttons]
+        if sum(widths) + gap * max(0, len(widths) - 1) <= available:
+            break
     x = BUBBLE_LEFT
-    for button in overlay.buttons:
-        w = max(190, p.draw.textlength(button.label, font=p.font(21, True)) / p.sx + 64)
+    for button, w in zip(overlay.buttons, widths):
         bounds = (x, y, x + w, y + 66)
-        draw_button(p, bounds, button.label, button.primary, size=21)
+        draw_button(p, bounds, button.label, button.primary, size=size)
         hit_boxes.append((button.action, bounds))
-        x += w + 18
+        x += w + gap
     overlay.hit_boxes = hit_boxes
     p.text((48, 812), "Prototype éducatif · Mesures estimées. Arrêtez en cas de douleur.", 12, MUTED)
     return cv2.cvtColor(np.asarray(canvas), cv2.COLOR_RGB2BGR)
