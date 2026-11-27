@@ -111,8 +111,9 @@ was copied from them, and their performance does not transfer to this project.
 Optional annotation columns `lighting`, `camera_view` and `clothing` enable
 condition breakdowns; absent columns are not guessed. Data files remain ignored
 by Git. No representative dataset is bundled, so no accuracy or fairness claim is
-made. A future evaluation should also include confidence intervals and independent
-angle/count annotations rather than just the current binary clip labels.
+made. The angle and repetition-count study, with independent goniometer readings and
+observer counts, is prepared in [validation-protocol.md](validation-protocol.md)
+(`record_clip.py angles`, `evaluate_dataset.py angles`).
 
 ## Avatar integration — native prototype
 

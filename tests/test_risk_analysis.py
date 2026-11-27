@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 # Controls of later sprint phases; each name leaves this set when its phase lands.
-PENDING = {"tests/test_crash_screen.py", "docs/validation-protocol.md"}
+PENDING = {"tests/test_crash_screen.py"}
 
 
 def test_risk_analysis_references_exist():

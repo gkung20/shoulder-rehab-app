@@ -617,15 +617,16 @@ streamlit run app_streamlit.py
 
 Deux études sont préparées :
 
-- **Angle et comptage** (protocole complet : [docs/validation-protocol.md](docs/validation-protocol.md)) :
-  l'angle de l'application comparé à un goniomètre, et son comptage des répétitions comparé à
-  celui d'un observateur.
+- **Angle et comptage** (protocole complet, en français et en anglais, avec le formulaire de
+  consentement : [docs/validation-protocol.md](docs/validation-protocol.md)) : l'angle de
+  l'application comparé à un goniomètre, et son comptage des répétitions comparé à celui d'un
+  observateur, sur au moins 10 volontaires sains, en un après-midi.
 - **Qualité du mouvement** : des clips vidéo étiquetés « correct » ou « à corriger ».
 
 ### Angle et comptage : enregistrer les mesures
 ```powershell
 python record_clip.py angles            # demande le consentement et l'identifiant (V01…)
-python record_clip.py angles --help     # options : --arms, --trials, --save-video…
+python record_clip.py angles --help     # options : --blind, --shuffle, --save-video…
 ```
 *Une fenêtre OpenCV simple, sans Willy : calibration bras le long du corps, puis pour chaque
 essai un compte à rebours, 3 s d'enregistrement de chaque image (angle de l'application et

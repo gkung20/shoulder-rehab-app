@@ -21,11 +21,11 @@ Updated after every phase.
 | 4 Safety | done | pain check, J'ai mal, stop rules, seated mode, risk analysis |
 | 5 Hands-free, camera | done | gesture, person lock, camera reconnect, fast start, face check (5.2 not chosen) |
 | 6 Speed | done | camera thread, --debug timings, cached drawing, automatic fast model, hand model off |
-| 7 Validation tools | to do | |
+| 7 Validation tools | done | protocol EN/FR with consent form, recorder, report, rotation chart |
 | 8 Ready to share | to do | 8.2 not chosen |
 | 9 Willy polish | to do | |
 | 10 More for patients | to do | 10.4 not chosen |
-| 11 New silhouette body | to do | |
+| 11 New silhouette body | to do | half-body framing first (Marwane, 27 Nov), right after Phase 7 |
 
 ## Desktop folder
 
@@ -33,7 +33,7 @@ Updated after every phase.
 - Installed there: `pose_landmarker_full.task`, `pose_landmarker_lite.task`, `hand_landmarker.task`,
   `fr_FR-tom-medium` and `en_US-ryan-medium`. Python 3.13 on Windows (see `constraints-windows-py313.txt`).
 - No shell on the PC this run, so files are synced by copying.
-- Last synced: the end of Phase 6 (the commit that adds this line); updated after each phase.
+- Last synced: the end of Phase 7 (the commit that adds this line); updated after each phase.
 
 ## Baseline (before)
 
@@ -65,7 +65,7 @@ longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py 
 
 - Hand model (`hand_landmarker.task`, 1280x720 frame): 11.7 ms per frame here. It only drew palms
   and fingers on the avatars, so it is now off by default: 11.7 ms saved on every tracked frame.
-- Tests: 324 passed, 19 skipped (from 231 at the start of the sprint).
+- Tests: 345 passed, 19 skipped after Phase 7 (from 231 at the start of the sprint).
 
 ## Decisions
 
@@ -119,6 +119,21 @@ longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py 
 - Phase 6.5: the hand model is off unless `--hands` or `performance.hand_model: true`.
 - Settings page: long values now shrink to fit their box ("Au choix du patient" used to run under
   the minus button).
+- Phase 7: the two earlier root tools became subcommands: `record_clip.py angles` (new) and
+  `record_clip.py quality` (the labelled clips), `evaluate_dataset.py angles` and `quality`.
+- Phase 7.2: study files go to `%APPDATA%\Mouvement\validation`, next to the patient data and out
+  of the code folder. A stopped session resumes at the first missing trial; `--shuffle` mixes the
+  positions of each round; `--blind` hides the app's angle from whoever reads the goniometer
+  (added because the protocol asks for it).
+- Phase 7.3: Bland-Altman limits use the correction for several trials per volunteer (Bland &
+  Altman 2007); confidence intervals resample volunteers. The ICC code gives Shrout & Fleiss's
+  published 0.29 on their example. numpy and matplotlib only (no new library).
+- Phase 7.4: in the synthetic model, the 24 deg (depth) and 32 deg (width) thresholds keep the
+  rotation error the app accepts within about 2 deg; at 45 deg it would reach 9 deg.
+- Phase 7.1: the protocol's ethics section names law 28-13 (biomedical research, ethics committee;
+  decree of 4 May 2026, AMMPS) and law 09-08 (CNDP) as questions for the supervisor, not advice.
+- Marwane, 27 Nov: the abduction silhouette doesn't need the whole body; cut it from the hands'
+  reach (pelvis) to the head so the patient can stand closer. Done next, before Phase 8.
 - New Willy lines: E3.10 (gesture recognised); E6.08 reworded (the app now retries).
 - New Willy lines: E9.01, E9.03 to E9.12 (pain and safety).
 - New Willy lines: E6.09, E6.10, E6.11 (sets), E8.01 (plan updated), E7.04 to E7.07 (history trend),
@@ -128,6 +143,12 @@ longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py 
 
 ## To test on the PC
 
+- After Phase 7: a dry run of the study with a teammate, before the real afternoon:
+  `python record_clip.py angles --subject TEST --arms right --trials 1 --blind`, then
+  `python evaluate_dataset.py angles`, and open `%APPDATA%\Mouvement\validation\report`.
+  Check the camera distance (section 2.2 of the protocol) and that the window keys respond.
+  Give the consent form (appendix A of the protocol) to the supervisor to review, with the ethics
+  questions of section 7.
 - After Phase 6: run `python app_live_cv.py --debug`, do a short session and note the stage times
   shown at the top (and `python tools/benchmark.py`); add them here. Open the physio settings:
   "Modèle de suivi" says "Automatique", or "Auto (rapide)" if the PC was too slow for the full
