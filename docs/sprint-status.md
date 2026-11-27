@@ -163,6 +163,13 @@ longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py 
   movements and drops the everyday lines (encouragements, "still there?", tips, button reminders);
   "beaucoup" shortens the pauses and counts every 3. Safety and pain lines, and the lines needed to
   go on (framing, camera, sets, start and end), play at every level.
+- Phase 9.3: the pass read 392 texts (every line, every {a / b} option and singular form, and the
+  screen cues the French voice may read). The French voice read 3 words the English way: "Willy"
+  (wˈɪli, now "Houili": the silent h stops "Je suis‿z‿Ouili"), "express" and "coach". No symbols,
+  abbreviations or sounds missing from the voices; the numbers read right (1,5 is "un virgule
+  cinq"). Units after a number (°, %, m, cm, s, min) are respelled in both languages for future
+  lines. The CI renders every line on Linux; a manual run ("Run workflow") keeps all_fr.wav and
+  all_en.wav for a week (not on every push: 190 MB).
 - Phase 9.4: the express tour also asks which arm (otherwise the first movements could be on the
   wrong side), so it is safety, arm, camera and the first movements. It is the highlighted button;
   the full tour is the other button and stays in Help. The dots under the bubble count the tour's

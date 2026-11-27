@@ -11,6 +11,7 @@ import wave
 import numpy as np
 
 from src.lip_sync import SYLLABLES_PER_SEC, text_loudness, wav_loudness
+from src.pronounce import spoken
 
 VOICE_DIRECTORY = Path(__file__).resolve().parents[1] / "models" / "voices"
 # Willy's voice is the "Cartoon buddy" the user picked: a male voice (the sample used Piper's
@@ -132,13 +133,16 @@ class PiperSpeech:
         self._cache = OrderedDict()
 
     def synthesize(self, text):
-        """Bounded in-memory cache for repeated guidance; no patient speech cache on disk."""
+        """Bounded in-memory cache for repeated guidance; no patient speech cache on disk.
+
+        The voice reads `text` as respelled by assets/willy/pronounce.yaml (Phase 9.3).
+        """
         if text in self._cache:
             self._cache.move_to_end(text)
             return self._cache[text]
         buffer = io.BytesIO()
         with wave.open(buffer, "wb") as wav:
-            self.voice.synthesize_wav(text, wav, syn_config=self.settings)
+            self.voice.synthesize_wav(spoken(text, self.language), wav, syn_config=self.settings)
         data = buffer.getvalue()
         if self.willy_pitch > 1:
             data = _willy_wav(data, self.willy_pitch)
@@ -246,6 +250,7 @@ class WindowsSpeech:
     def say(self, text, cancel, on_start=None):
         if cancel.is_set():
             return
+        text = spoken(text, self.language)  # respellings for the voice only (Phase 9.3)
         if self.willy_pitch > 1:
             try:
                 data = self._render(text)

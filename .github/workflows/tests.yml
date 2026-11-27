@@ -1,6 +1,9 @@
 name: Python checks
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:   # "Run workflow" on GitHub; such a run also keeps Willy's voices to download
 
 permissions:
   contents: read
@@ -37,3 +40,18 @@ jobs:
         run: python models/download_models.py
       - name: Tests
         run: python -m pytest -q
+      # Every line Willy says, synthesised as the app does (Phase 9.3), so a line the voice can't
+      # read fails here. On a manual run, all_fr.wav and all_en.wav (with the time of each line in
+      # all_fr.txt and all_en.txt) can be downloaded from the run's page for a week.
+      - name: Render Willy's lines
+        if: runner.os == 'Linux'
+        run: python tools/render_voices.py --out voices
+      - name: Keep Willy's voices (manual runs)
+        if: runner.os == 'Linux' && github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: willy-voices
+          path: |
+            voices/all_*.wav
+            voices/all_*.txt
+          retention-days: 7

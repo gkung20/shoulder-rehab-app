@@ -31,6 +31,14 @@ Willy s’affiche aussi dans sa **bulle** : l’application reste utilisable son
   boutons et consignes passent dans la langue choisie.
 - **Répliques** : toutes dans `assets/willy/lines.yaml` (EN/FR, une ligne par ID
   du document de scénarios). Modifiez le texte là, jamais dans le code.
+- **Prononciation** : `assets/willy/pronounce.yaml` corrige ce que la voix lit, jamais
+  l’écran (par exemple « Willy » lu à la française, « coach », « ° » → « degrés »).
+  `python tools/pronunciation_check.py` passe chaque réplique au phonétiseur de sa voix
+  et signale les mots anglais dans une phrase française, symboles, sigles et nombres
+  (résultat : `docs/pronunciation.md`). `python tools/render_voices.py` écrit chaque
+  réplique en WAV dans `output/voices`, et toutes à la suite dans `all_fr.wav` et
+  `all_en.wav` (avec l’heure de chaque réplique dans `all_fr.txt`) pour tout écouter
+  d’un coup ; `--only S1.01 E9` pour quelques-unes.
 - **Revoir la visite** (la visite complète) : bouton dans **Aide**, ou `python app_live_cv.py --tour`.
   `--skip-home` ouvre directement la séance (tests, démonstrations).
 - **Profil local** (langue, visite faite, prénom, bras, coach, son, jours de
@@ -512,6 +520,7 @@ shoulder-rehab-app/
 │   ├── notice_screen.py        # Écrans simples avec Willy (chargement, caméra, erreur)
 │   ├── lip_sync.py             # La bouche de Willy suit le volume de sa voix
 │   ├── chattiness.py           # Willy parle : beaucoup / normalement / peu
+│   ├── pronounce.py            # Ce que lit la voix de Willy (assets/willy/pronounce.yaml)
 │   ├── app_log.py              # Journal %APPDATA%\Mouvement\logs\mouvement.log, erreurs non gérées
 │   ├── pose_worker.py          # Caméra + modèle de pose dans leur propre fil d'exécution
 │   ├── timings.py              # Temps de chaque étape (mode --debug, timings.csv)
@@ -553,6 +562,8 @@ shoulder-rehab-app/
 ├── Ouvrir Mouvement.cmd        # Lanceur Windows par double-clic, sans saisie dans un terminal
 ├── app_live_cv.py              # Lance l'application de bureau (lit la ligne de commande)
 ├── tools/benchmark.py          # Temps de dessin et d'analyse, sans caméra ni modèle
+├── tools/pronunciation_check.py # Chaque réplique passée au phonétiseur de sa voix (rapport)
+├── tools/render_voices.py      # Chaque réplique en WAV, et toutes à la suite, pour les écouter
 ├── docs/sprint-status.md       # Suivi du sprint d'améliorations (fait, décisions, mesures)
 ├── app_streamlit.py            # Séance patient et exports, réglages avancés repliés
 ├── evaluate_dataset.py         # Analyses des études de validation (angles, qualité)

@@ -27,6 +27,7 @@ le comptage ou l’évaluation.
 | Fichier | Rôle |
 | --- | --- |
 | `assets/willy/lines.yaml` | Toutes les répliques, anglais et français, par ID (S1.01 à S8.14, E1 à E7) |
+| `assets/willy/pronounce.yaml` | Réécritures pour la voix seule (« Willy » à la française, unités, symboles) ; l’écran garde la réplique |
 | `src/willy_lines.py` | Lit les répliques, remplit `{n}`, `{name}`, `{tip}`, `{droit / gauche}`, singulier |
 | `src/willy_tour.py` | Le « metteur en scène » : visite guidée (scénarios 1 à 7), répliques uniques du scénario 8, lignes du quotidien |
 | `src/home_screen.py` | Écran d’accueil : Willy en grand, sa bulle, les boutons de l’étape |

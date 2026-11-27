@@ -1,0 +1,45 @@
+# How Willy's voice reads some words (Phase 9.3). Applied only to what he says, never to the
+# text on screen. Check every line after a change:
+#     python tools/pronunciation_check.py
+# and listen to the lines you changed:
+#     python tools/render_voices.py --only S1.01 E9.12
+#
+#   words:    a whole word, written as in lines.yaml (capitals matter) -> what the voice reads
+#   units:    a unit right after a number -> [after 1, after any other number]
+#   symbols:  a character anywhere -> what the voice reads
+#   checked:  words that sound foreign to the voice but were checked by ear and kept as they are
+
+fr:
+  words:
+    # The French voice reads these the English way, with English sounds (pronunciation pass,
+    # 27 Nov 2026). The respellings give the French pronunciation.
+    Willy: Houili         # wˈɪli -> wilˈi; the silent h stops a liaison ("Je suis‿z‿Ouili")
+    express: expresse     # ɛkspɹˈɛs -> ɛkspʁˈɛs ("visite express")
+    coach: kôtch          # kˈəʊtʃ -> kˈoːtʃ
+  units:
+    "°": [degré, degrés]
+    "%": [pour cent, pour cent]
+    m: [mètre, mètres]
+    cm: [centimètre, centimètres]
+    s: [seconde, secondes]
+    min: [minute, minutes]
+  symbols:
+    "°": " degrés"
+    "%": " pour cent"
+  checked:
+    - C                   # "appuyez sur C": the key, read as the letter
+
+en:
+  words: {}
+  units:
+    "°": [degree, degrees]
+    "%": [percent, percent]
+    m: [metre, metres]
+    cm: [centimetre, centimetres]
+    s: [second, seconds]
+    min: [minute, minutes]
+  symbols:
+    "°": " degrees"
+    "%": " percent"
+  checked:
+    - OK                  # read "okay"
