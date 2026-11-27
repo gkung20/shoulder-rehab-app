@@ -242,3 +242,23 @@ def test_record_clip_offers_both_studies(capsys):
     import record_clip
     assert record_clip.main([]) == 2
     assert "record_clip.py angles" in capsys.readouterr().out
+
+
+def test_blind_mode_hides_the_apps_angle(tmp_path):
+    shown = []
+    rec = recorder(tmp_path, [Item("right", "hold", 60, 1)], blind=True)
+    original = rec.draw
+
+    def spy(frame):
+        shown.append((rec.angle_text(), rec.reading_text() if rec.state == "reading" else None))
+        return original(frame)
+
+    rec.draw = spy
+    rec.run()
+    assert {text for (text, _), _ in shown} <= {"✓", "—"}  # never a number
+    readings = [reading for _, reading in shown if reading is not None]
+    assert readings and all("masquée" in detail for _, detail in readings)
+    [row] = trials(tmp_path)
+    assert abs(float(row["app_deg"]) - 63.) < .5  # still recorded
+    rec.blind = False
+    assert rec.reading_text()[1] == "Application : 63,0°"

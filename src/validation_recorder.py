@@ -96,7 +96,7 @@ class Window:
 class Recorder:
     def __init__(self, subject, folder, capture, detector, window, config=None, *, items=None, trials=3,
                  reps_sets=1, hold_sec=3., countdown_sec=3., reps_max_sec=180., save_video=False,
-                 writer_factory=None, model="", camera="", mirror=False):
+                 writer_factory=None, model="", camera="", mirror=False, blind=False):
         self.subject, self.folder = subject, Path(folder)
         self.capture, self.detector, self.window = capture, detector, window
         self.config = config or ExerciseConfig.from_yaml()
@@ -105,6 +105,7 @@ class Recorder:
         self.hold_sec, self.countdown_sec, self.reps_max_sec = hold_sec, countdown_sec, reps_max_sec
         self.save_video, self.writer_factory = save_video, writer_factory or self._video_writer
         self.model, self.camera, self.mirror = model, camera, mirror
+        self.blind = blind  # hide the app's angle, so whoever reads the goniometer can't be swayed by it
         self.done = vd.done_ids(self.folder, subject)
         self.skipped = set()
         self.processors = {}
@@ -395,10 +396,9 @@ class Recorder:
         text, colour = self.status_line()
         draw.text((size(20), size(56)), text, font=_font(size(20)), fill=colour)
         draw.text((size(20), size(94)), self.keys_line(), font=_font(size(15)), fill=MUTED)
-        angle = self.last.metrics.get("abduction") if self.last is not None else None
-        shown = "—" if angle is None else f"{decimal(angle)}°"
+        shown, caption = self.angle_text()
         draw.text((width - size(20), size(12)), shown, font=_font(size(50), True), fill=INK, anchor="ra")
-        draw.text((width - size(20), size(76)), "angle de l'application", font=_font(size(15)), fill=MUTED, anchor="ra")
+        draw.text((width - size(20), size(76)), caption, font=_font(size(15)), fill=MUTED, anchor="ra")
         done = sum(1 for item in self.items if item.id(self.subject) in self.done)
         draw.text((size(20), height - size(34)), f"Mesures faites : {done} / {len(self.items)}",
                   font=_font(size(18), True), fill=(255, 255, 255), stroke_width=2, stroke_fill=(0, 0, 0))
@@ -414,10 +414,15 @@ class Recorder:
             self.draw_reading(draw, width, height, size)
         return cv2.cvtColor(np.asarray(canvas), cv2.COLOR_RGB2BGR)
 
-    def draw_reading(self, draw, width, height, size):
-        box = (width // 2 - size(330), height // 2 - size(150), width // 2 + size(330), height // 2 + size(150))
-        draw.rounded_rectangle(box, size(24), fill=(255, 255, 255, 245))
-        x, y = box[0] + size(36), box[1] + size(30)
+    def angle_text(self):
+        """The live angle shown top right, and its caption (in blind mode only whether there is one)."""
+        angle = self.last.metrics.get("abduction") if self.last is not None else None
+        if self.blind:
+            return ("✓" if angle is not None else "—"), "angle masqué (--blind)"
+        return ("—" if angle is None else f"{decimal(angle)}°"), "angle de l'application"
+
+    def reading_text(self):
+        """The question of the reading box and the app's own value (hidden in blind mode)."""
         if self.item.kind == "hold":
             question = "Lecture du goniomètre (en degrés)"
             app = "angle non mesurable (trop peu d'images)" if self.app_value is None else f"{decimal(self.app_value)}°"
@@ -425,6 +430,13 @@ class Recorder:
         else:
             question = "Répétitions comptées par l'observateur"
             detail = f"Application : {self.app_value} répétition(s)"
+        return question, "Valeur de l'application masquée (--blind)." if self.blind else detail
+
+    def draw_reading(self, draw, width, height, size):
+        box = (width // 2 - size(330), height // 2 - size(150), width // 2 + size(330), height // 2 + size(150))
+        draw.rounded_rectangle(box, size(24), fill=(255, 255, 255, 245))
+        x, y = box[0] + size(36), box[1] + size(30)
+        question, detail = self.reading_text()
         draw.text((x, y), question, font=_font(size(26), True), fill=INK)
         draw.text((x, y + size(56)), (self.typed.replace(".", ",") or " ") + "▏", font=_font(size(64), True), fill=ACCENT)
         draw.text((x, y + size(150)), detail, font=_font(size(18)), fill=MUTED)
@@ -466,6 +478,8 @@ def parse_args(argv=None):
     parser.add_argument("--shuffle", action="store_true", help="ordre des positions mélangé à chaque tour")
     parser.add_argument("--save-video", action="store_true", help="vidéo aussi, après consentement vidéo")
     parser.add_argument("--mirror", action="store_true", help="image en miroir (par défaut : vue de l'opérateur)")
+    parser.add_argument("--blind", action="store_true",
+                        help="masquer l'angle de l'application à l'écran (lecture du goniomètre en aveugle)")
     parser.add_argument("--model", choices=("lite", "full", "heavy"), help="modèle de pose (par défaut : l'installé)")
     return parser.parse_args(argv)
 
@@ -520,7 +534,7 @@ def main(argv=None, ask=input, open_camera=_open_camera, open_detector=_open_det
     recorder = Recorder(subject, folder, capture, detector, window, config, items=items, trials=args.trials,
                         reps_sets=args.reps_sets, hold_sec=args.hold, countdown_sec=args.countdown,
                         save_video=save_video, model=f"pose_landmarker_{variant}", camera=camera_name,
-                        mirror=args.mirror)
+                        mirror=args.mirror, blind=args.blind)
     try:
         recorder.run()
     finally:
