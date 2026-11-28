@@ -23,7 +23,7 @@ Updated after every phase.
 | 6 Speed | done | camera thread, --debug timings, cached drawing, automatic fast model, hand model off |
 | 7 Validation tools | done | protocol EN/FR with consent form, recorder, report, rotation chart |
 | 8 Ready to share | done | licences with 6 blockers and their options, journal and error screen; 8.2 not chosen |
-| 9 Willy polish | to do | |
+| 9 Willy polish | done | mouth follows the voice, points and looks at each zone, idle variety, pronunciation pass, express tour, chattiness |
 | 10 More for patients | to do | 10.4 not chosen |
 | 11 New silhouette body | in progress | half-body framing done (Marwane, 27 Nov); the new licensed body is still to do |
 
@@ -33,7 +33,7 @@ Updated after every phase.
 - Installed there: `pose_landmarker_full.task`, `pose_landmarker_lite.task`, `hand_landmarker.task`,
   `fr_FR-tom-medium` and `en_US-ryan-medium`. Python 3.13 on Windows (see `constraints-windows-py313.txt`).
 - No shell on the PC this run, so files are synced by copying.
-- Last synced: the end of Phase 8 (the commit that adds this line); updated after each phase.
+- Last synced: the end of Phase 9 (the commit that adds this line); updated after each phase.
 
 ## Baseline (before)
 
@@ -189,6 +189,14 @@ longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py 
 
 ## To test on the PC
 
+- After Phase 9: delete nothing, just run the app with sound. Listen to Willy: his mouth should
+  open and close with his voice, and in French he should say "Willy", "visite express" and
+  "coach" the French way. To hear every line: `python tools/render_voices.py`, then play
+  `output\voices\all_fr.wav` (the times of each line are in `all_fr.txt`); tell me any word he
+  says wrong and I'll add it to `assets/willy/pronounce.yaml`. Replay the tour from Aide: the
+  dots move under the bubble, Retour works in the screen tour, and Willy points at each zone.
+  Leave the home screen alone for two minutes: he blinks, glances, stretches or waves. Try
+  "Willy parle : peu" in the physio settings during a short session.
 - After Phase 8: start the app once from the double-click launcher, then open
   `%APPDATA%\Mouvement\logs\mouvement.log`: it should start with the version, Python and
   Windows lines. Read `docs/licences.md` with Zakaria and decide B1-B5 (and a licence for
