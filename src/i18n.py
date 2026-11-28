@@ -79,6 +79,9 @@ EN = {
     "Plan du patient": "Patient's plan", "Écran et voix": "Screen and voice",
     "Grand texte": "Large text", "Contraste élevé": "High contrast", "Voix plus lente": "Slower voice",
     "Sous-titres toujours": "Subtitles always",
+    # Body of the guide silhouette (Phase 11, src.physio_settings.SILHOUETTE_LABELS)
+    "Corps de la silhouette": "Silhouette body", "Actuelle": "Current",
+    "Nouvelle, femme": "New, woman", "Nouvelle, homme": "New, man",
     # Guidance for the both-arm exercise (src.dashboard.BOTH_ARMS_TEXT)
     "Gardez les deux épaules et les deux coudes visibles, puis commencez.":
         "Keep both shoulders and both elbows in view, then start.",

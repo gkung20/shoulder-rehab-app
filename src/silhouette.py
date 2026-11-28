@@ -1,7 +1,9 @@
 """Transparent 3D guide silhouette drawn over the camera view.
 
-A 3D body (pre-rendered from body-1/Male-low.OBJ by tools/silhouette_frames/render_frames.py)
-is blended see-through over the video. The silhouette shows where to stand (a fixed,
+A 3D body (pre-rendered by tools/silhouette_frames/render_frames.py) is blended see-through
+over the video. The frames in assets/silhouette/ come from body-1/Male-low.OBJ (the default,
+"classic"); Phase 11 adds CC0 MakeHuman bodies, a woman and a man, in sub-folders of the same
+format, chosen in the physio settings until Marwane approves one as the default. The silhouette shows where to stand (a fixed,
 well-framed position) and performs the abduction at a slow, steady rhythm the patient can
 follow. When the pose model sees the patient, its outline turns green once the shoulders line
 up with the silhouette's. It is a visual aid only: nothing here feeds counting or scoring.
@@ -10,6 +12,7 @@ Half body: the abduction needs the head, shoulders, elbows and hips, not the leg
 silhouette stops at the hands' reach and fills the picture from there to the head. The patient
 stands about a quarter closer to the screen than with the whole body (Marwane, 27 Nov).
 """
+from dataclasses import dataclass
 import json
 import math
 from pathlib import Path
@@ -20,9 +23,11 @@ import numpy as np
 
 from src.avatar_motion import demonstration_angle
 from src.geometry import PoseLandmarkIndex as I
+from src.user_profile import SILHOUETTE_BODIES
 from src.willy import exercise_screen_side
 
 ASSET_DIR = Path(__file__).resolve().parents[1] / "assets" / "silhouette"
+DEFAULT_BODY = "classic"
 
 # Body proportions, in shoulder widths (distance between the shoulder joints), measured on the frames.
 HEAD_ABOVE_SHOULDERS = .89    # top of the head, above the shoulder joints
@@ -41,6 +46,37 @@ SHOULDER_Y = TOP + HEAD_ABOVE_SHOULDERS * SHOULDER_WIDTH                        
 HIPS_BELOW_SHOULDERS = 1.14
 TOO_CLOSE = 1.15
 HEIGHT_TOLERANCE = .3
+
+
+@dataclass(frozen=True)
+class Proportions:
+    """A body's proportions in shoulder widths, measured on its frames (silhouette.json).
+
+    The defaults are the classic body's. Bodies rendered with tools/silhouette_frames
+    --body store theirs under "proportions"; the framing follows them, so a body with narrower
+    shoulders for its height is shown a little smaller and still fits the picture.
+    """
+    head: float = HEAD_ABOVE_SHOULDERS
+    reach: float = REACH_BELOW_SHOULDERS
+    hips: float = HIPS_BELOW_SHOULDERS
+    arm_side: float = ARM_REACH_SIDE
+    other_side: float = OTHER_SIDE
+
+    @classmethod
+    def from_meta(cls, meta):
+        values = meta.get("proportions") or {}
+        return cls(**{name: float(values[name]) for name in cls.__dataclass_fields__ if name in values})
+
+    @property
+    def shoulder_width(self):
+        """Shoulder width in frame heights: head to hands' reach between TOP and BOTTOM."""
+        return (BOTTOM - TOP) / (self.head + self.reach)
+
+    @property
+    def shoulder_y(self):
+        return TOP + self.head * self.shoulder_width
+
+
 FILL = (176, 98, 10)      # BGR: deep blue body
 OUTLINE_IDLE = (255, 215, 120)   # light blue rim
 OUTLINE_GOOD = (90, 190, 60)     # green
@@ -71,32 +107,34 @@ class SilhouetteGuide:
         return angle, label
 
 
-def layout(width, height, side=None):
+def layout(width, height, side=None, body=None):
     """Pixel anchors of the ideal position in the displayed (possibly mirrored) frame.
 
     `side` is the screen side of the raised arm ("R" or "L"). The body is centred, unless the
     raised hand would leave a narrow (4:3) picture: then it moves to the other side, just enough.
     "both" (both arms raised, Phase 10.1): centred, and smaller when both hands would not fit
     across the picture, so the patient stands a little further back.
+    `body` holds the proportions (default: the body on screen, see `use_body`).
     """
-    sw = SHOULDER_WIDTH * height
+    body = body or _frames().proportions
+    sw = body.shoulder_width * height
     cx = width / 2
     if side == "both":
-        sw = min(sw, width * (1 - 2 * EDGE) / (2 * ARM_REACH_SIDE))
-        return {"cx": cx, "sy": TOP * height + HEAD_ABOVE_SHOULDERS * sw, "sw": sw}
-    arm_limit, other_limit = width * (1 - EDGE) - ARM_REACH_SIDE * sw, width * EDGE + OTHER_SIDE * sw
+        sw = min(sw, width * (1 - 2 * EDGE) / (2 * body.arm_side))
+        return {"cx": cx, "sy": TOP * height + body.head * sw, "sw": sw}
+    arm_limit, other_limit = width * (1 - EDGE) - body.arm_side * sw, width * EDGE + body.other_side * sw
     if side == "R":
         cx = max(min(cx, arm_limit), other_limit)
     elif side == "L":
         cx = min(max(cx, width - arm_limit), width - other_limit)
-    return {"cx": cx, "sy": SHOULDER_Y * height, "sw": sw}
+    return {"cx": cx, "sy": body.shoulder_y * height, "sw": sw}
 
 
-def half_body(channels, shoulders):
+def half_body(channels, shoulders, reach_below=REACH_BELOW_SHOULDERS):
     """Coverage faded out below the hands' reach, and the rows under it dropped."""
     (lx, ly), (rx, ry) = shoulders
     width = float(np.hypot(rx - lx, ry - ly))
-    reach = (ly + ry) / 2 + REACH_BELOW_SHOULDERS * width
+    reach = (ly + ry) / 2 + reach_below * width
     rows = np.arange(channels.shape[0], dtype=np.float32)
     t = np.clip((reach - rows) / (FADE * width), 0., 1.)
     keep = t * t * (3 - 2 * t)  # smoothstep: a soft edge, not a hard cut
@@ -149,6 +187,7 @@ class _Frames:
         self.shoulders = np.asarray(meta["shoulders"], np.float32)
         self.dir = asset_dir
         self.size = tuple(meta["size"])
+        self.proportions = Proportions.from_meta(meta)
         self._cache = {}
 
     def _frame(self, index, width, height, side):
@@ -160,7 +199,8 @@ class _Frames:
             if rgba is None:
                 raise FileNotFoundError(f"Silhouette introuvable : arm_{self.angles[index]:03d}.png")
             # Stored channels (BGRA on disk): R = shading, G = rim, A = coverage.
-            channels = half_body(np.dstack([rgba[..., 2], rgba[..., 1], rgba[..., 3]]), self.shoulders)
+            channels = half_body(np.dstack([rgba[..., 2], rgba[..., 1], rgba[..., 3]]), self.shoulders,
+                                 self.proportions.reach)
             left, right = self.shoulders
             if side == "L":  # the frames raise the screen-right arm: mirror them
                 channels = channels[:, ::-1]
@@ -171,7 +211,7 @@ class _Frames:
                 channels = np.ascontiguousarray(np.concatenate([half[:, ::-1], half], axis=1))
                 centre, reach = half.shape[1], right[0] - mid
                 left, right = (centre - reach, right[1]), (centre + reach, right[1])
-            ideal = layout(width, height, side)
+            ideal = layout(width, height, side, self.proportions)
             scale = ideal["sw"] / max(1., float(np.hypot(*(np.subtract(right, left)))))
             mid = (np.add(left, right)) / 2 * scale
             ox, oy = ideal["cx"] - mid[0], ideal["sy"] - mid[1]
@@ -199,12 +239,32 @@ class _Frames:
 
 
 _FRAMES = None
+_BODY = DEFAULT_BODY
+
+
+def body_dir(name):
+    """Frames of a body: the classic one in assets/silhouette/, the others in a sub-folder."""
+    return ASSET_DIR if name == DEFAULT_BODY else ASSET_DIR / name
+
+
+def use_body(name):
+    """Show this body from now on (physio setting); an unknown or missing body falls back to the classic one."""
+    global _BODY, _FRAMES
+    if name not in SILHOUETTE_BODIES or not (body_dir(name) / "silhouette.json").is_file():
+        name = DEFAULT_BODY
+    if name != _BODY:
+        _BODY, _FRAMES = name, None
+    return _BODY
+
+
+def current_body():
+    return _BODY
 
 
 def _frames():
     global _FRAMES
     if _FRAMES is None:
-        _FRAMES = _Frames()
+        _FRAMES = _Frames(body_dir(_BODY))
     return _FRAMES
 
 

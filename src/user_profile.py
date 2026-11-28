@@ -13,6 +13,9 @@ import sys
 import tempfile
 
 MAX_DAYS = 60
+# Bodies of the guide silhouette (Phase 11): the first frames' body, and the CC0 MakeHuman
+# bodies (assets/silhouette/<name>/), shown only when the physio picks them in the settings.
+SILHOUETTE_BODIES = ("classic", "makehuman-female", "makehuman-male")
 SCHEMA_VERSION = 3      # 1: before plans (Nov 2026); 2: physio plan and its history; 3: a plan per exercise
 MAX_PLAN_HISTORY = 20
 
@@ -172,6 +175,7 @@ class Profile:
     slow_speech: bool = False       #   Willy speaks 20% slower
     subtitles: bool = False         #   every line Willy says also shows in his bubble
     auto_lite: bool = False         # the app switched to lite by itself because the PC was too slow
+    silhouette_body: str = "classic"  # body of the guide silhouette (SILHOUETTE_BODIES, Phase 11)
 
     @classmethod
     def load(cls, path=None):
@@ -210,6 +214,7 @@ class Profile:
         profile.pose_model = profile.pose_model if profile.pose_model in ("full", "lite") else None
         profile.auto_lite = profile.auto_lite is True
         profile.chattiness = profile.chattiness if profile.chattiness in ("lots", "normal", "little") else "normal"
+        profile.silhouette_body = profile.silhouette_body if profile.silhouette_body in SILHOUETTE_BODIES else "classic"
         for name in ("large_text", "high_contrast", "slow_speech", "subtitles"):
             setattr(profile, name, getattr(profile, name) is True)
         total = profile.total_reps

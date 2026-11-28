@@ -154,9 +154,9 @@ def test_large_text_values_never_run_into_the_settings_buttons():
     from PIL import Image
     from src import chattiness
     from src.dashboard import CANVAS_SIZE, _Painter
-    from src.physio_settings import ARM_LABELS, BOTH_ARMS_LABEL, MODEL_LABELS
+    from src.physio_settings import ARM_LABELS, BOTH_ARMS_LABEL, MODEL_LABELS, SILHOUETTE_LABELS
     from src.window_viewport import canvas_viewport
-    values = {*chattiness.LABELS.values(), *ARM_LABELS.values(), *MODEL_LABELS.values(),
+    values = {*chattiness.LABELS.values(), *ARM_LABELS.values(), *MODEL_LABELS.values(), *SILHOUETTE_LABELS.values(),
               BOTH_ARMS_LABEL, "Auto (rapide)", "Oui", "Non", "Abduction d'un bras", "Deux bras"}
     previous = accessibility.current()
     try:

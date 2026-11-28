@@ -44,6 +44,7 @@ from src.user_profile import data_dir
 from src.safety import SafetyMonitor
 from src.session_plan import SetTracker
 from src.session_processor import FrameAnalysis, SessionProcessor
+from src import silhouette
 from src.silhouette import patient_alignment
 from src.willy import exercise_screen_side, shared_guide
 from src.willy_lines import shared_script
@@ -518,6 +519,10 @@ class App:
         if callable(setter):
             setter(self.profile.slow_speech)
 
+    def apply_silhouette_body(self):
+        """Body of the guide silhouette chosen in the physio settings (Phase 11)."""
+        self.profile.silhouette_body = silhouette.use_body(self.profile.silhouette_body)
+
     def apply_chattiness(self):
         """How much Willy talks (Phase 9.5): the coach's pauses; the director reads the profile."""
         setter = getattr(self.audio, "set_chattiness", None)
@@ -534,6 +539,7 @@ class App:
         form.camera = self.capture.camera_index if self.capture is not None else 0
         form.model, form.auto_lite = self.profile.pose_model, self.profile.auto_lite
         form.chattiness = self.profile.chattiness
+        form.silhouette_body = self.profile.silhouette_body
         for name in physio.ACCESSIBILITY:
             setattr(form, name, getattr(self.profile, name))
         if self.profile.resting_angle is not None:
@@ -566,6 +572,10 @@ class App:
             self.profile.chattiness = form.chattiness
             self.profile.save()
             self.apply_chattiness()
+        if form is not None and form.silhouette_body != self.profile.silhouette_body:
+            self.profile.silhouette_body = form.silhouette_body
+            self.apply_silhouette_body()
+            self.profile.save()
         if form is not None and any(getattr(form, n) != getattr(self.profile, n) for n in physio.ACCESSIBILITY):
             for name in physio.ACCESSIBILITY:
                 setattr(self.profile, name, getattr(form, name))
@@ -712,6 +722,7 @@ class App:
             config.audio, enabled=self.profile.audio_enabled, language=self.profile.language or "fr"))
         self.apply_chattiness()
         self.apply_accessibility()
+        self.apply_silhouette_body()
         print(self.capture.status_message)
         self.processor.model_info = self.detector.model_info.copy()
         self.director = WillyDirector(self.profile, self.audio, self.guide, has_avatars=not args.no_avatars)

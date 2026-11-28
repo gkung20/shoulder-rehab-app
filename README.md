@@ -223,6 +223,25 @@ basses, et rotation de l’omoplate selon le rythme scapulo-huméral (presque to
 à l’épaule jusqu’à 30°, puis ≈2:1). Pour les régénérer : `python tools/silhouette_frames/render_frames.py
 chemin/vers/Male-low.OBJ` (Playwright + Chromium requis).
 
+**Nouveaux corps sous licence libre (Phase 11, en attente de validation)** : deux corps
+[MakeHuman](https://github.com/makehumancommunity/makehuman) (CC0, aucune attribution exigée),
+une femme et un homme adultes de corpulence moyenne, rendus par le même outil : mêmes 33 poses,
+même geste, même rythme scapulo-huméral. La clavicule se lève avec l’omoplate et le deltoïde
+tourne avec le bras sans pli (poids de peau du squelette MakeHuman, adoucis autour de l’épaule).
+Réglages kiné → page **« Écran et voix »** → **« Corps de la silhouette »** : *Actuelle* (par
+défaut), *Nouvelle, femme* ou *Nouvelle, homme*. La silhouette actuelle reste celle par défaut
+jusqu’à validation (licence : blocage B5 dans [docs/licences.md](docs/licences.md)). Chaque corps
+apporte ses proportions dans son `silhouette.json` : avec des épaules plus étroites pour leur
+taille, les nouveaux corps sont dessinés un peu plus petits, et le patient se place environ 13 %
+(homme) ou 20 % (femme) plus loin. Pour les régénérer :
+
+```powershell
+git clone --depth 1 https://github.com/makehumancommunity/makehuman
+python tools/silhouette_frames/makehuman_body.py makehuman/makehuman/data --out build/bodies
+python tools/silhouette_frames/render_frames.py --body build/bodies/makehuman-female.json --out assets/silhouette/makehuman-female
+python tools/silhouette_frames/render_frames.py --body build/bodies/makehuman-male.json --out assets/silhouette/makehuman-male
+```
+
 ## Coach médecin 3D et avatars homme / femme
 
 Dans **`app_live_cv.py`**, le médecin et un personnage utilisateur texturé apparaissent côte à côte dans la

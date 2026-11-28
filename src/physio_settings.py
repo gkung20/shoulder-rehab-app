@@ -18,7 +18,7 @@ import numpy as np
 from src import chattiness
 from src.dashboard import CANVAS_SIZE, MUTED, TEXT, _Painter
 from src.home_screen import _background
-from src.user_profile import PLAN_BOUNDS, Plan
+from src.user_profile import PLAN_BOUNDS, SILHOUETTE_BODIES, Plan
 from src.willy_overlay import draw_button
 from src.window_viewport import canvas_viewport
 
@@ -143,6 +143,7 @@ DEVICE_FIELDS = (
     ("high_contrast", "Contraste élevé", ""),
     ("slow_speech", "Voix plus lente", ""),
     ("subtitles", "Sous-titres toujours", ""),
+    ("silhouette_body", "Corps de la silhouette", ""),
 )
 PAGES = (("plan", "Plan du patient", PLAN_FIELDS), ("device", "Écran et voix", DEVICE_FIELDS))
 FIELDS = PLAN_FIELDS + DEVICE_FIELDS
@@ -154,6 +155,8 @@ CAMERA_RANGE = (0, 5)
 ARM_CHOICES = (None, "right", "left")
 ARM_LABELS = {None: "Au choix du patient", "right": "Droit", "left": "Gauche"}
 BOTH_ARMS_LABEL = "Les deux"
+# Phase 11: the CC0 bodies are offered here; the first frames' body stays the default.
+SILHOUETTE_LABELS = {"classic": "Actuelle", "makehuman-female": "Nouvelle, femme", "makehuman-male": "Nouvelle, homme"}
 
 
 @dataclass
@@ -178,6 +181,7 @@ class SettingsForm:
     high_contrast: bool = False
     slow_speech: bool = False
     subtitles: bool = False
+    silhouette_body: str = "classic"   # body of the guide silhouette (Phase 11)
 
     def __post_init__(self):
         self.original = self.original or self.plan
@@ -214,6 +218,9 @@ class SettingsForm:
         elif key == "chattiness":
             levels = chattiness.LEVELS
             self.chattiness = levels[(levels.index(chattiness.level_of(self.chattiness)) + direction) % len(levels)]
+        elif key == "silhouette_body":
+            index = SILHOUETTE_BODIES.index(self.silhouette_body) if self.silhouette_body in SILHOUETTE_BODIES else 0
+            self.silhouette_body = SILHOUETTE_BODIES[(index + direction) % len(SILHOUETTE_BODIES)]
         else:
             low, high, step = PLAN_BOUNDS[key]
             value = getattr(self.plan, key) + direction * step
@@ -239,6 +246,8 @@ class SettingsForm:
             return MODEL_LABELS[self.model]
         if key == "chattiness":
             return chattiness.LABELS[chattiness.level_of(self.chattiness)]
+        if key == "silhouette_body":
+            return SILHOUETTE_LABELS.get(self.silhouette_body, SILHOUETTE_LABELS["classic"])
         text = f"{value:g}"
         if language == "fr":
             text = text.replace(".", ",")

@@ -25,7 +25,7 @@ Updated after every phase.
 | 8 Ready to share | done | licences with 6 blockers and their options, journal and error screen; 8.2 not chosen |
 | 9 Willy polish | done | mouth follows the voice, points and looks at each zone, idle variety, pronunciation pass, express tour, chattiness |
 | 10 More for patients | done | both arms sideways, accessibility page, week dots and badges; 10.4 not chosen |
-| 11 New silhouette body | in progress | half-body framing done (Marwane, 27 Nov); the new licensed body is still to do |
+| 11 New silhouette body | done, waiting for approval | half-body framing (Marwane, 27 Nov); CC0 MakeHuman bodies (woman, man) in the physio settings, the current body stays the default; before/after sheet sent |
 
 ## Desktop folder
 
@@ -214,12 +214,39 @@ longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py 
   screen tour, the one part that is a sequence of things to look at; elsewhere a step is a choice.
 - `src/synthetic_pose.py`: one synthetic-body helper for tests, previews and tools (both arms,
   turning, seated, free hand raised).
+- Phase 11 body: MakeHuman's base mesh with its default sliders for a 25-year-old (average muscle,
+  weight, height and proportions; the three ethnic mixes equal), a woman and a man. CC0 checked in
+  four places (MakeHuman's LICENSE.md and LICENSE.ASSETS.md, the header of every file used, its
+  licence page and its 2020 FAQ). The nipples are flattened with two MakeHuman targets; no clothes.
+  Only MakeHuman's data files are read: its code is AGPL and is not used.
+- Phase 11 shoulder: MakeHuman's default skeleton gives the joints (shoulder, sternoclavicular, hips)
+  and its skin weights move the arm and the shoulder girdle. With the rig's weights as they are, the
+  top of the shoulder dented past 120 deg, so near the joint they are solved again as the smoothest
+  field over the surface (within 0.75 shoulder half-widths for the arm, 1.2 for the girdle): the
+  deltoid turns with the arm and the collarbone rises with the shoulder blade, without a crease.
+  The rest pose bends the elbows 47 deg with the forearms forward; they are opened to a soft 15 deg.
+- Phase 11 steps: every 5 deg like the current frames (0, 10 ... 160 are all there), not every
+  10 deg: the app cross-fades neighbouring frames, and 10 deg apart the arm shows double during
+  the fade. 33 frames per body, 1.7-2 MB each.
+- Phase 11 framing: each body's proportions (head, hands' reach, hips, raised hand, other arm) are
+  measured on its posed mesh and stored in its `silhouette.json`; `src/silhouette.py` frames with
+  them, and the current body (no proportions in its file) keeps the old constants. The new bodies
+  have narrower shoulders for their height, as most people do, so they are drawn a little smaller
+  and the patient stands about 13 % (man) or 20 % (woman) further back. The loader is otherwise
+  unchanged. Setting: "Corps de la silhouette" on the "Écran et voix" page (Actuelle, the default;
+  Nouvelle, femme; Nouvelle, homme). Once one is approved: set `DEFAULT_BODY` in
+  `src/silhouette.py`, delete the old frames, and licence blocker B5 is closed.
 - Found while building Phase 11: with large text, "Normalement" ran under the − button of the settings
   (when no one-line size fitted, the two-line fallback drew a lone long word larger than the
   smallest size tried). The fallback now never exceeds that size and shrinks such a word to its box.
 
 ## To test on the PC
 
+- After Phase 11: Réglages kiné (0000) → "Écran et voix" → "Corps de la silhouette": choose
+  "Nouvelle, femme", save, open the camera view (V) and the silhouette (G). Check that the head
+  sits near the top and the hands just above the bottom, that the outline turns green when your
+  shoulders match, and that the arm and shoulder move smoothly. Then try "Nouvelle, homme", the
+  both-arms exercise, and "Actuelle". Tell me which body should become the default.
 - After Phase 9: run the app with sound. Listen to Willy: his mouth should
   open and close with his voice, and in French he should say "Willy", "visite express" and
   "coach" the French way. To hear every line: `python tools/render_voices.py`, then play
