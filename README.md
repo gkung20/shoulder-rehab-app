@@ -79,6 +79,22 @@ Willy s’affiche aussi dans sa **bulle** : l’application reste utilisable son
   Chaque exercice garde **son propre plan** ; les résultats, l'historique et l'export ne montrent que
   les séances de l'exercice choisi.
 
+### Accessibilité (page « Écran et voix » des réglages)
+
+Les réglages kiné ont deux pages : **Plan du patient** et **Écran et voix** (caméra, modèle de
+suivi, « Willy parle », puis quatre réglages d'accessibilité) :
+
+- **Grand texte** : tous les textes 1,25 fois plus grands ; une étiquette trop longue pour son bouton
+  rétrécit juste assez. Un test dessine chaque écran en français et en anglais et vérifie qu'aucun
+  texte ne sort de la fenêtre ni n'en chevauche un autre.
+- **Contraste élevé** : chaque texte est foncé (ou éclairci sur un bouton sombre) jusqu'à un contraste
+  d'au moins 7:1 avec ce qu'il y a derrière (formule WCAG 2 ; le niveau AA est 4,5:1), et les bordures
+  jusqu'à 3:1. Un test mesure tous les textes de tous les écrans : aucun sous 4,5:1.
+- **Voix plus lente** : Piper parle 20 % plus lentement (length_scale x1,2), la voix Windows aussi
+  (débit x0,8), dès la phrase suivante.
+- **Sous-titres toujours** : chaque phrase de Willy s'affiche aussi dans sa bulle, même celles que
+  l'application dit elle-même (caméra reconnectée, douleur, etc.).
+
 ### Deux bras sur les côtés
 
 Même caméra, de face ; les deux bras sont mesurés. Un mouvement compte quand **les deux bras**

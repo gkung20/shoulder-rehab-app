@@ -128,9 +128,17 @@ class PiperSpeech:
         )
         self.willy_pitch = max(1., float(willy_pitch))
         self.settings = SynthesisConfig(length_scale=length_scale * self.willy_pitch, volume=volume, normalize_audio=True)
+        self.length_scale = length_scale
         kind = "francais local" if self.language == "fr" else "local English"
         self.label = f"Piper / {kind} / {voice}" + (" / voix de Willy" if self.willy_pitch > 1 else "")
         self._cache = OrderedDict()
+
+    def set_speed(self, length_scale, speech_rate=None):
+        """A new pace (Phase 10.2, slower speech): greater length_scale = slower. Clears the cache."""
+        import dataclasses
+        self.length_scale = float(length_scale)
+        self.settings = dataclasses.replace(self.settings, length_scale=self.length_scale * self.willy_pitch)
+        self._cache.clear()
 
     def synthesize(self, text):
         """Bounded in-memory cache for repeated guidance; no patient speech cache on disk.
@@ -232,6 +240,11 @@ class WindowsSpeech:
         self.engine.setProperty("rate", int(round(speech_rate / self.willy_pitch)))
         self.engine.setProperty("volume", volume)
         self.label = f"Windows / {voice.name}" + (" / voix de Willy" if self.willy_pitch > 1 else "")
+
+    def set_speed(self, length_scale=None, speech_rate=130):
+        """A new pace (Phase 10.2, slower speech), in words per minute."""
+        self.speech_rate = int(round(speech_rate))
+        self.engine.setProperty("rate", int(round(self.speech_rate / self.willy_pitch)))
 
     def _render(self, text):
         handle, path = tempfile.mkstemp(suffix=".wav", prefix="willy-")

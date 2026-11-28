@@ -111,15 +111,20 @@ def draw_button(p, bounds, label, primary=False, size=17):
         p.rect(bounds, fill=(255, 255, 255), outline=(150, 156, 161), radius=8)
         color = TEXT
     from src.i18n import tr
-    width = p.draw.textlength(tr(str(label), getattr(p, "lang", "fr")), font=p.font(size, True)) / p.sx  # as drawn
+    text = tr(str(label), getattr(p, "lang", "fr"))
     left, top, right, bottom = bounds
-    p.text((left + (right - left - width) / 2, top + (bottom - top - size) / 2 - 3), label, size, color, True)
+    # Large text (Phase 10.2) must not spill out of the button: the label shrinks back if needed.
+    while size > 11 and p.draw.textlength(text, font=p.font(size, True)) / p.sx > right - left - 12:
+        size -= 1
+    width = p.draw.textlength(text, font=p.font(size, True)) / p.sx  # as drawn
+    shown = size * getattr(p, "text_scale", 1.)
+    p.text((left + (right - left - width) / 2, top + (bottom - top - shown) / 2 - 3), label, size, color, True)
 
 
 def bubble_layout(p, overlay, candidates, width, size):
     """Bubble rect, wrapped paragraphs and the button row, at the first candidate clear of the spotlight."""
     paragraphs = [_wrap(p, text, width - 44, size, bold=False) for text in overlay.bubble if text]
-    line_h = size * 1.38
+    line_h = size * 1.38 * getattr(p, "text_scale", 1.)  # large text (Phase 10.2): taller lines
     height = 16 + sum(len(lines) for lines in paragraphs) * line_h + max(0, len(paragraphs) - 1) * 10 + 10
     if overlay.text_field is not None:
         height += 86

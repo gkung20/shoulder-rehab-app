@@ -31,3 +31,12 @@ def one_arm_wording():
     shared_script().variant = None
     yield
     shared_script().variant = None
+
+
+@pytest.fixture(autouse=True)
+def default_accessibility():
+    """Normal text and colours unless a test turns the accessibility settings on (Phase 10.2)."""
+    from src import accessibility
+    accessibility.set_current(accessibility.Accessibility())
+    yield
+    accessibility.set_current(accessibility.Accessibility())

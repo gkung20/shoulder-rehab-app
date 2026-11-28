@@ -125,7 +125,7 @@ def test_the_physio_can_force_a_model_in_the_settings(monkeypatch, tmp_path):
 
 
 def test_the_settings_page_shows_the_model_row_and_the_fast_model_note():
-    form = physio.SettingsForm(physio_plan())
+    form = physio.SettingsForm(physio_plan(), page="device")  # the screen-and-voice page (Phase 10.2)
     form.model, form.auto_lite = None, True
     image, boxes = physio.render_settings(form)
     assert ("set:+:model" in dict(boxes)) and image.shape == (840, 1280, 3)

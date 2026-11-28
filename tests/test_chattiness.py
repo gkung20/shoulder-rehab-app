@@ -99,6 +99,7 @@ def test_the_setting_is_in_the_physio_page_and_kept(tmp_path, monkeypatch):
     assert form.chattiness == "little" and tr(form.value_text("chattiness", "", "en"), "en") == "A little"
     form.step("chattiness", +1)
     assert form.chattiness == "lots"
+    form.page = "device"  # the screen-and-voice page (Phase 10.2)
     image, boxes = physio.render_settings(form)
     assert "set:+:chattiness" in dict(boxes)
     monkeypatch.setenv("MOUVEMENT_DATA_DIR", str(tmp_path))

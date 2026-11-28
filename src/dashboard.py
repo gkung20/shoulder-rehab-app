@@ -5,6 +5,7 @@ import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+from src import accessibility
 from src import layout as L
 from src.audio_feedback import spoken_french
 from src.i18n import tr
@@ -39,6 +40,8 @@ class _Painter:
     """Scale coordinates and font sizes before rasterizing; never enlarge UI pixels.
 
     Text is written in French; with lang="en" every string is drawn in English (src.i18n).
+    The accessibility settings (src.accessibility) make every font bigger and, in high contrast,
+    every text at least 7:1 against what is behind it.
     """
     def __init__(self,image,viewport,lang="fr"):
         self.lang=lang
@@ -48,6 +51,8 @@ class _Painter:
         self.sx=viewport.content_width/viewport.source_width
         self.sy=viewport.content_height/viewport.source_height
         self.scale=min(self.sx,self.sy)
+        self.access=accessibility.current()
+        self.text_scale=self.access.text_scale
 
     def point(self,x,y):
         return round(self.v.left+x*self.sx),round(self.v.top+y*self.sy)
@@ -56,10 +61,27 @@ class _Painter:
         return (*self.point(*bounds[:2]),*self.point(*bounds[2:]))
 
     def font(self,size,bold=False):
-        return _font(round(size*self.scale),bold)
+        return _font(round(size*self.scale*self.text_scale),bold)
+
+    def behind(self,box):
+        """The colour behind a pixel box, before anything is drawn over it."""
+        width,height=self.image.size
+        left,top=max(0,int(box[0])),max(0,int(box[1]))
+        right,bottom=min(width,max(left+1,int(box[2]))),min(height,max(top+1,int(box[3])))
+        region=np.asarray(self.image.crop((left,top,right,bottom))).reshape(-1,3)
+        return tuple(int(v) for v in np.median(region,axis=0)) if len(region) else BG
+
+    def ink(self,point,text,font,color):
+        """The text colour actually used: unchanged, or made readable in high contrast."""
+        if not self.access.high_contrast:
+            return color
+        return accessibility.readable(color,self.behind(self.draw.textbbox(point,text,font=font)))
+
+    def put(self,point,text,font,color):
+        self.draw.text(point,text,font=font,fill=self.ink(point,text,font,color))
 
     def text(self,xy,value,size=18,color=TEXT,bold=False):
-        self.draw.text(self.point(*xy),tr(str(value),self.lang),font=self.font(size,bold),fill=color)
+        self.put(self.point(*xy),tr(str(value),self.lang),self.font(size,bold),color)
 
     def wrap(self,xy,value,width,size=18,color=TEXT,bold=False,max_lines=3):
         x,y=xy
@@ -83,22 +105,43 @@ class _Painter:
             lines[-1]+="…"
         for line in lines:
             self.text((x,y),line,size,color,bold)
-            y+=size*1.4
+            y+=size*1.4*self.text_scale
         return y
+
+    def lines(self,value,width,size=18,bold=False):
+        """How many lines `wrap` would use for this text, without drawing it."""
+        font=self.font(size,bold)
+        count,line=0,""
+        for word in tr(str(value),self.lang).split():
+            candidate=f"{line} {word}".strip()
+            if self.draw.textlength(candidate,font=font)>width*self.sx and line:
+                count,line=count+1,word
+            else:
+                line=candidate
+        return count+(1 if line else 0)
+
+    def right(self,xy,value,size=18,color=TEXT,bold=False):
+        """Text that ends at x (it grows to the left)."""
+        x,y=xy
+        width=self.draw.textlength(tr(str(value),self.lang),font=self.font(size,bold))/self.sx
+        self.text((x-width,y),value,size,color,bold)
 
     def fit(self,xy,value,width,size=18,color=TEXT,bold=False,min_size=18):
         """One line shrunk (down to min_size) to fit `width`; else two smaller lines. Returns the size used."""
         text=tr(str(value),self.lang)
         x,y=xy
-        for used in range(size,min_size-1,-1):
+        lowest=max(8,round(min_size/self.text_scale))  # large text may shrink back to the normal minimum
+        for used in range(size,lowest-1,-1):
             if self.draw.textlength(text,font=self.font(used,bold))<=width*self.sx:
-                self.draw.text(self.point(x,y+(size-used)*.5),text,font=self.font(used,bold),fill=color)
+                self.put(self.point(x,y+(size-used)*.5),text,self.font(used,bold),color)
                 return used
         small=max(12,min_size-2)
         self.wrap((x,y-small*.35),text,width,small,color,bold,max_lines=2)
         return small
 
     def rect(self,bounds,fill=None,outline=None,radius=0):
+        if outline is not None and self.access.high_contrast:
+            outline=accessibility.readable(outline,fill or self.behind(self.box(bounds)),accessibility.OUTLINE_CONTRAST)
         if radius:
             self.draw.rounded_rectangle(self.box(bounds),radius=max(1,round(radius*self.scale)),
                 fill=fill,outline=outline,width=max(1,round(self.scale)))
@@ -106,6 +149,8 @@ class _Painter:
             self.draw.rectangle(self.box(bounds),fill=fill,outline=outline,width=max(1,round(self.scale)))
 
     def rule(self,x1,y1,x2,y2,color=LINE,width=1):
+        if self.access.high_contrast:
+            color=accessibility.readable(color,BG,accessibility.OUTLINE_CONTRAST)
         self.draw.line((*self.point(x1,y1),*self.point(x2,y2)),fill=color,width=max(1,round(width*self.scale)))
 
 
@@ -290,12 +335,16 @@ IN_STAGE_BUTTONS=("silhouette","replay_tour")
 
 
 @lru_cache(maxsize=16)
-def _chrome(width,height,lang,mode,arm,audio_enabled,details,help_visible,avatars,avatar_gender,silhouette,results,show_controls):
-    """The parts of the patient screen that only change with its state, not with each frame."""
+def _chrome(width,height,lang,mode,arm,audio_enabled,details,help_visible,avatars,avatar_gender,silhouette,results,show_controls,
+            access=None):
+    """The parts of the patient screen that only change with its state, not with each frame.
+
+    `access` (the accessibility settings' key) is only there so that a change redraws them.
+    """
     viewport=canvas_viewport(CANVAS_SIZE,width,height)
     canvas=Image.new("RGB",(width,height),BG)
     p=_Painter(canvas,viewport,lang)
-    p.text((32,17),"mouvement",30)
+    p.text((32,17),"mouvement",30/p.text_scale)  # the wordmark keeps its size next to the top bar
     p.text((34,60),"Épaule / séance guidée",14,MUTED)
     p.rule(32,98,1248,98)
     p.rule(32,732,1248,732)
@@ -325,7 +374,7 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
         width,height=CANVAS_SIZE
     viewport=canvas_viewport(CANVAS_SIZE,width,height)
     chrome_key=(width,height,lang,mode,processor.arm,audio_enabled,details,help_visible,avatars,avatar_gender,
-                silhouette,results,show_controls)
+                silhouette,results,show_controls,accessibility.current().key())
     canvas=(_chrome(*chrome_key) if cache else _chrome.__wrapped__(*chrome_key)).copy()
     p=_Painter(canvas,viewport,lang)
     use_avatars=avatars and avatar_stage is not None
@@ -384,7 +433,8 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
         label=f"SÉRIE {sets.current_set}/{sets.sets}"
     p.rule(920,444,1248,444)
     p.text((920,466),label,12,MUTED)
-    p.text((912,484),count,min(100,round(260/max(1,len(count)))))
+    # The big count is already large: it keeps its size with large text, so it stays above its label.
+    p.text((912,484),count,min(100,round(260/max(1,len(count))))/p.text_scale)
     p.wrap((920,596),"Comptées au retour au repos",150,14,MUTED,max_lines=2)
     if analysis.calibration_progress and mode == "running":
         progress,_=analysis.calibration_progress
@@ -440,10 +490,15 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
               "Commencez, puis gardez le bras baissé quelques instants.",
               "Suivez le coach et le texte : lever, maintenir, redescendre.",
               "Faites une pause quand vous en avez besoin. Arrêtez en cas de douleur."]
+        # The tips shrink (large text) until all of them fit in the panel ("Revoir la visite" is at the top).
+        room=570-235
+        size=19
+        while size > 12 and sum(min(2,p.lines(tip,684,size))*size*1.4*p.text_scale+20 for tip in tips) > room:
+            size-=1
         y=235
         for index,tip in enumerate(tips,1):
             p.text((82,y),f"0{index}",13,FAINT)
-            y=p.wrap((120,y-4),tip,684,19,max_lines=2)+22
+            y=p.wrap((120,y-4),tip,684,size,max_lines=2)+20
     big=overlay is not None and overlay.willy_big
     willy_box=WILLY_STAGE_BOX if big else WILLY_BOX
     if big:

@@ -24,7 +24,7 @@ Updated after every phase.
 | 7 Validation tools | done | protocol EN/FR with consent form, recorder, report, rotation chart |
 | 8 Ready to share | done | licences with 6 blockers and their options, journal and error screen; 8.2 not chosen |
 | 9 Willy polish | done | mouth follows the voice, points and looks at each zone, idle variety, pronunciation pass, express tour, chattiness |
-| 10 More for patients | in progress | 10.1 both arms done; 10.4 not chosen |
+| 10 More for patients | in progress | 10.1 both arms, 10.2 accessibility done; 10.4 not chosen |
 | 11 New silhouette body | in progress | half-body framing done (Marwane, 27 Nov); the new licensed body is still to do |
 
 ## Desktop folder
@@ -163,6 +163,16 @@ longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py 
   movements and drops the everyday lines (encouragements, "still there?", tips, button reminders);
   "beaucoup" shortens the pauses and counts every 3. Safety and pain lines, and the lines needed to
   go on (framing, camera, sets, start and end), play at every level.
+- Phase 10.2: the settings got a second page ("Écran et voix") rather than smaller rows, so large
+  text stays readable there too. Large text scales every font in the shared painter; the few places
+  that would overflow were fixed (the big count and the wordmark keep their size, the help tips
+  shrink to fit and "Revoir la visite" moved beside the help title, values shrink back to the normal
+  minimum, the pain scale's right label is right-aligned). High contrast is not a second palette:
+  the painter measures the colour behind each text and darkens (or lightens) the text until it
+  reaches 7:1, so every screen, present and future, is covered; the worst text is 4.7:1 (white on
+  the pain scale's red). Found on the way: the normal theme's grey text is 4.45:1 on the white
+  background, just under AA (4.5:1), and the last help tip overlapped "Revoir la visite" (fixed).
+  The colours of the normal theme are unchanged: that is Marwane's design choice.
 - Phase 10.1 (both arms sideways, chosen in Phase 0): the counted angle is the lower arm's, so
   "both reach the target band" and the hold time come out of the existing state machine unchanged;
   each arm is smoothed on its own first. The other checks take the worse side (the more bent elbow,

@@ -81,6 +81,8 @@ class AudioCoach:
         self.warning_persistence_sec = warning_persistence_sec
         self.announce_every_reps = announce_every_reps
         self.willy_pitch = willy_pitch
+        self._base_speed = (length_scale, speech_rate)  # the configured pace; slower speech scales it
+        self._speed_version = 0
         self.speaking = False  # True while a sentence plays: Willy moves his mouth
         self._lip = None       # the line playing, with its loudness (src.lip_sync.LipTrack)
         self._setup_announced = False
@@ -119,6 +121,16 @@ class AudioCoach:
         from src.chattiness import coach_settings
         for name, value in coach_settings(level, base).items():
             setattr(self, name, value)
+
+    def set_slow(self, slow):
+        """Slower speech (Phase 10.2): Piper's length_scale x1.2, the Windows rate x0.8.
+        The voices pick up the new pace before their next sentence."""
+        from src.accessibility import SLOW_LENGTH_SCALE, SLOW_RATE
+        length_scale, rate = self._base_speed
+        with self._lock:
+            self.length_scale = length_scale * (SLOW_LENGTH_SCALE if slow else 1.)
+            self.speech_rate = rate * (SLOW_RATE if slow else 1.)
+            self._speed_version += 1
 
     def _lip_started(self, envelope):
         self._lip = LipTrack(envelope)
@@ -193,6 +205,9 @@ class AudioCoach:
                     engine = self._engine_for(engines, item.language or self.language)
                     if engine is None:
                         continue
+                    if getattr(engine, "_speed_version", 0) != self._speed_version and hasattr(engine, "set_speed"):
+                        engine.set_speed(self.length_scale, self.speech_rate)  # slower speech changed
+                        engine._speed_version = self._speed_version
                     self.speaking = True
                     try:
                         if _accepts_on_start(engine):

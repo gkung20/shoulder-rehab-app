@@ -58,7 +58,7 @@ def render_pain(check, question, output_size=None, language="fr", guide=None, no
             p.text((x + (95 - text_width) / 2, 358), label, size, (255, 255, 255), True)
             hit_boxes.append((f"pain:{value}", bounds))
         p.text((48, 456), "Aucune douleur", 16, MUTED)
-        p.text((1100, 456), "Douleur maximale", 16, MUTED)
+        p.right((1232, 456), "Douleur maximale", 16, MUTED)
     else:
         p.text((48, 330), f"Douleur : {check.value}/10", 26, pain_colour(check.value), True)
         if check.can_continue:

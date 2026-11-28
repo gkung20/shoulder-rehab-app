@@ -23,6 +23,7 @@ from src.audio_feedback import AudioCoach
 from src.avatar_stage import AvatarStage
 from src.capture import VideoCaptureManager
 from src.dashboard import CANVAS_SIZE, render_dashboard
+from src import accessibility
 from src.exercises import get_exercise, load_exercises
 from src.gesture import HandRaise
 from src.hand_detector import HandDetector, MODEL_PATH as HAND_MODEL_PATH
@@ -306,6 +307,8 @@ class SettingsScreen(Screen):
         if action.startswith("set:"):
             _, sign, key = action.split(":", 2)
             self.form.step(key, 1 if sign == "+" else -1)
+        elif action.startswith("page:"):
+            self.form.page = action.split(":", 1)[1]
         elif action == "settings_save":
             app.save_plan(self.form.plan)
         elif action == "settings_cancel":
@@ -431,6 +434,7 @@ class App:
     def __init__(self, args, config, profile, window=None):
         self.args, self.config, self.profile = args, config, profile
         self.window = window or Window()
+        accessibility.set_current(profile.accessibility())  # large text, contrast (Phase 10.2)
         self.exercise = get_exercise(profile.exercise)  # the physio's choice (Phase 10.1)
         shared_script().variant = "both" if self.exercise.both_arms else None
         self.plan = profile.current_plan(self.exercise.apply(config), self.exercise.id)
@@ -506,6 +510,13 @@ class App:
         self.modal = None
         self.screens["settings"].form = None
 
+    def apply_accessibility(self):
+        """Large text and high contrast for every screen, slower speech (Phase 10.2)."""
+        accessibility.set_current(self.profile.accessibility())
+        setter = getattr(self.audio, "set_slow", None)
+        if callable(setter):
+            setter(self.profile.slow_speech)
+
     def apply_chattiness(self):
         """How much Willy talks (Phase 9.5): the coach's pauses; the director reads the profile."""
         setter = getattr(self.audio, "set_chattiness", None)
@@ -522,6 +533,8 @@ class App:
         form.camera = self.capture.camera_index if self.capture is not None else 0
         form.model, form.auto_lite = self.profile.pose_model, self.profile.auto_lite
         form.chattiness = self.profile.chattiness
+        for name in physio.ACCESSIBILITY:
+            setattr(form, name, getattr(self.profile, name))
         if self.profile.resting_angle is not None:
             form.resting_angle = self.profile.resting_angle
             form.resting_date = physio.short_date(self.profile.resting_date)
@@ -552,6 +565,11 @@ class App:
             self.profile.chattiness = form.chattiness
             self.profile.save()
             self.apply_chattiness()
+        if form is not None and any(getattr(form, n) != getattr(self.profile, n) for n in physio.ACCESSIBILITY):
+            for name in physio.ACCESSIBILITY:
+                setattr(self.profile, name, getattr(form, name))
+            self.profile.save()
+            self.apply_accessibility()
         edited = form.all_plans() if form is not None else {plan.exercise: plan}
         edited[plan.exercise] = plan
         changed = plan.exercise != self.exercise.id
@@ -690,6 +708,7 @@ class App:
         self.audio = self._devices.enter_context(AudioCoach.from_config(
             config.audio, enabled=self.profile.audio_enabled, language=self.profile.language or "fr"))
         self.apply_chattiness()
+        self.apply_accessibility()
         print(self.capture.status_message)
         self.processor.model_info = self.detector.model_info.copy()
         self.director = WillyDirector(self.profile, self.audio, self.guide, has_avatars=not args.no_avatars)
@@ -1075,6 +1094,12 @@ class App:
         return path
 
     def say_line(self, line_id, **values):
+        """A line said by the app itself. With subtitles on, it also shows in Willy's bubble."""
+        if line_id and self.profile.subtitles and hasattr(self.audio, "show"):
+            self.audio.show(shared_script().line(line_id, self.director.language, **values))
+        self._say_line(line_id, **values)
+
+    def _say_line(self, line_id, **values):
         """Willy's voice for a line while a modal screen is shown (his flow is paused)."""
         if line_id:
             self.audio.say(shared_script().text(line_id, self.director.language, **values), self.director.language)

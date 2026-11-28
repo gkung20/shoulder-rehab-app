@@ -164,6 +164,10 @@ class Profile:
     camera_index: int | None = None # camera chosen in the physio settings (None: the configured one)
     pose_model: str | None = None   # "full" or "lite" forced by the physio; None = automatic
     chattiness: str = "normal"      # how much Willy talks: "lots", "normal" or "little" (Phase 9.5)
+    large_text: bool = False        # accessibility (Phase 10.2): text x1.25
+    high_contrast: bool = False     #   every text at least 7:1 against its background
+    slow_speech: bool = False       #   Willy speaks 20% slower
+    subtitles: bool = False         #   every line Willy says also shows in his bubble
     auto_lite: bool = False         # the app switched to lite by itself because the PC was too slow
 
     @classmethod
@@ -203,6 +207,8 @@ class Profile:
         profile.pose_model = profile.pose_model if profile.pose_model in ("full", "lite") else None
         profile.auto_lite = profile.auto_lite is True
         profile.chattiness = profile.chattiness if profile.chattiness in ("lots", "normal", "little") else "normal"
+        for name in ("large_text", "high_contrast", "slow_speech", "subtitles"):
+            setattr(profile, name, getattr(profile, name) is True)
         camera = profile.camera_index
         profile.camera_index = camera if isinstance(camera, int) and not isinstance(camera, bool) and 0 <= camera <= 9 else None
         profile._path = path
@@ -222,6 +228,10 @@ class Profile:
         if previous:
             self.plan_history = (self.plan_history + [{"until": stamp, "plan": dict(previous)}])[-MAX_PLAN_HISTORY:]
         self.plans[plan.exercise] = asdict(replace(plan.clamped(), updated_at=stamp))
+
+    def accessibility(self):
+        from src.accessibility import Accessibility
+        return Accessibility(self.large_text, self.high_contrast, self.slow_speech, self.subtitles)
 
     def save(self):
         """Best effort: a profile that cannot be written never stops the exercise."""

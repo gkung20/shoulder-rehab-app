@@ -117,8 +117,9 @@ def short_date(iso):
     return "/".join(reversed(parts)) if len(parts) == 3 else ""
 
 
-# (key, French label, unit). The exercise, arm and seated rows are choices; the rest are numbers.
-FIELDS = (
+# (key, French label, unit). The exercise, arm, seated and yes/no rows are choices; the rest are numbers.
+# Two pages (Phase 10.2): the patient's plan, then the screen and the voice.
+PLAN_FIELDS = (
     ("exercise", "Exercice", ""),
     ("arm", "Bras", ""),
     ("target_min_deg", "Cible minimale", "°"),
@@ -133,10 +134,19 @@ FIELDS = (
     ("pain_go_max", "Douleur : séance normale jusqu'à", "/10"),
     ("pain_gentle_max", "Douleur : séance douce jusqu'à", "/10"),
     ("seated", "Exercice assis", ""),
+)
+DEVICE_FIELDS = (
     ("camera", "Caméra (numéro)", ""),
     ("model", "Modèle de suivi", ""),
     ("chattiness", "Willy parle", ""),
+    ("large_text", "Grand texte", ""),
+    ("high_contrast", "Contraste élevé", ""),
+    ("slow_speech", "Voix plus lente", ""),
+    ("subtitles", "Sous-titres toujours", ""),
 )
+PAGES = (("plan", "Plan du patient", PLAN_FIELDS), ("device", "Écran et voix", DEVICE_FIELDS))
+FIELDS = PLAN_FIELDS + DEVICE_FIELDS
+ACCESSIBILITY = ("large_text", "high_contrast", "slow_speech", "subtitles")
 MODEL_CHOICES = (None, "full", "lite")
 MODEL_LABELS = {None: "Automatique", "full": "Précis", "lite": "Rapide"}
 FAST_MODEL_NOTE = "Modèle rapide utilisé (ce PC est lent pour le modèle précis)"
@@ -163,6 +173,11 @@ class SettingsForm:
     plans: dict = field(default_factory=dict)
     names: dict = field(default_factory=dict)
     both: tuple = ()
+    page: str = "plan"            # "plan" or "device" (Phase 10.2)
+    large_text: bool = False      # accessibility (src.accessibility)
+    high_contrast: bool = False
+    slow_speech: bool = False
+    subtitles: bool = False
 
     def __post_init__(self):
         self.original = self.original or self.plan
@@ -190,6 +205,8 @@ class SettingsForm:
             self.plan = replace(self.plan, arm=ARM_CHOICES[index])
         elif key == "seated":
             self.plan = replace(self.plan, seated=not self.plan.seated)
+        elif key in ACCESSIBILITY:
+            setattr(self, key, not getattr(self, key))
         elif key == "camera":
             self.camera = min(CAMERA_RANGE[1], max(CAMERA_RANGE[0], self.camera + direction))
         elif key == "model":
@@ -212,6 +229,8 @@ class SettingsForm:
             return BOTH_ARMS_LABEL if self.plan.exercise in self.both else ARM_LABELS[value]
         if key == "seated":
             return "Oui" if value else "Non"
+        if key in ACCESSIBILITY:
+            return "Oui" if getattr(self, key) else "Non"
         if key == "camera":
             return str(self.camera)
         if key == "model":
@@ -276,10 +295,15 @@ def render_settings(form, output_size=None, language="fr"):
     p.text((48, 30), "Réglages kiné", 34)
     p.text((50, 78), "Le plan du patient. Chaque valeur reste dans des limites sûres.", 16, MUTED)
     hit_boxes = []
-    rows_per_column = 9
-    for index, (key, label, unit) in enumerate(FIELDS):
+    for index, (page, title, _) in enumerate(PAGES):  # the two pages, as tabs
+        bounds = (48 + index * 262, 104, 298 + index * 262, 150)
+        draw_button(p, bounds, title, primary=page == form.page, size=17)
+        hit_boxes.append((f"page:{page}", bounds))
+    fields = dict((page, rows) for page, _, rows in PAGES)[form.page]
+    rows_per_column = 7
+    for index, (key, label, unit) in enumerate(fields):
         column, row = divmod(index, rows_per_column)
-        x, y = 48 + column * 612, 112 + row * 66
+        x, y = 48 + column * 612, 166 + row * 66
         p.rect((x, y, x + 584, y + 58), fill=(255, 255, 255), outline=(214, 220, 219), radius=12)
         p.wrap((x + 20, y + 8), label, 260, 17, TEXT, max_lines=2)
         p.fit((x + 300, y + 13), form.value_text(key, unit, language), 136, 22, TEXT, True)
@@ -287,16 +311,16 @@ def render_settings(form, output_size=None, language="fr"):
         draw_button(p, minus, "−", size=26)
         draw_button(p, plus, "+", size=26)
         hit_boxes += [(f"set:-:{key}", minus), (f"set:+:{key}", plus)]
-    if form.resting_angle is not None:
+    if form.resting_angle is not None and form.page == "plan":
         p.text((760, 34), f"Angle de repos mesuré : {form.resting_angle:.0f}°", 17, TEXT, True)
         if form.resting_date:
             p.text((760, 62), f"Mesuré le {form.resting_date}", 14, MUTED)
-    if form.model is None and form.auto_lite:  # the app chose the fast model by itself (Phase 6.4)
-        p.text((760, 86), FAST_MODEL_NOTE, 14, MUTED)
-    if form.warning:
-        p.wrap((48, 718), form.warning, 760, 15, (176, 58, 46), max_lines=2)
+    if form.model is None and form.auto_lite and form.page == "device":  # the app chose the fast model (Phase 6.4)
+        p.text((48, 640), FAST_MODEL_NOTE, 14, MUTED)
+    if form.warning and form.page == "plan":
+        p.wrap((48, 640), form.warning, 1180, 15, (176, 58, 46), max_lines=2)
     if form.message:
-        p.text((48, 718), form.message, 16, (30, 120, 80), True)
+        p.text((48, 704), form.message, 16, (30, 120, 80), True)
     buttons = (("settings_pin", "Changer le code", (48, 760, 288, 816), False),
                ("settings_cancel", "Annuler", (820, 760, 1010, 816), False),
                ("settings_save", "Enregistrer", (1030, 760, 1232, 816), True))

@@ -76,13 +76,16 @@ def test_settings_steps_stay_inside_safe_bounds():
 def test_pin_pad_and_settings_draw_in_both_languages(language):
     image, boxes = render_pin(PinPad(), (1600, 1000), language)
     assert image.shape == (1000, 1600, 3) and {a for a, _ in boxes} >= {"pin:0", "pin:ok", "pin:cancel"}
-    image, boxes = render_settings(SettingsForm(Plan(), resting_angle=18., resting_date="25/11"), None, language)
-    assert image.shape == (840, 1280, 3)
-    actions = {a for a, _ in boxes}
-    assert {"settings_save", "settings_cancel", "settings_pin"} <= actions
+    actions = set()
+    for page in ("plan", "device"):  # two pages since Phase 10.2: every row is on one of them
+        form = SettingsForm(Plan(), resting_angle=18., resting_date="25/11", page=page)
+        image, boxes = render_settings(form, None, language)
+        assert image.shape == (840, 1280, 3)
+        actions |= {a for a, _ in boxes}
+        for _, bounds in boxes:
+            assert L.CANVAS.encloses(bounds)
+    assert {"settings_save", "settings_cancel", "settings_pin", "page:plan", "page:device"} <= actions
     assert all(f"set:+:{key}" in actions for key, _, _ in FIELDS)
-    for _, bounds in boxes:
-        assert L.CANVAS.encloses(bounds)
     for _, label, _ in FIELDS:  # every label has an English version
         assert tr(label, "en") != label
 

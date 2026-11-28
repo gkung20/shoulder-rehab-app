@@ -73,6 +73,9 @@ EN = {
     "Ouvrir le dossier du journal": "Open the log folder",
     "Willy parle": "Willy talks", "Beaucoup": "A lot", "Normalement": "Normally", "Peu": "A little",
     "Exercice": "Exercise", "Les deux": "Both",
+    "Plan du patient": "Patient's plan", "Écran et voix": "Screen and voice",
+    "Grand texte": "Large text", "Contraste élevé": "High contrast", "Voix plus lente": "Slower voice",
+    "Sous-titres toujours": "Subtitles always",
     # Guidance for the both-arm exercise (src.dashboard.BOTH_ARMS_TEXT)
     "Gardez les deux épaules et les deux coudes visibles, puis commencez.":
         "Keep both shoulders and both elbows in view, then start.",
