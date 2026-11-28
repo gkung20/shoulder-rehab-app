@@ -214,6 +214,9 @@ longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py 
   screen tour, the one part that is a sequence of things to look at; elsewhere a step is a choice.
 - `src/synthetic_pose.py`: one synthetic-body helper for tests, previews and tools (both arms,
   turning, seated, free hand raised).
+- Found while building Phase 11: with large text, "Normalement" ran under the − button of the settings
+  (when no one-line size fitted, the two-line fallback drew a lone long word larger than the
+  smallest size tried). The fallback now never exceeds that size and shrinks such a word to its box.
 
 ## To test on the PC
 

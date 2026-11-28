@@ -135,7 +135,13 @@ class _Painter:
             if self.draw.textlength(text,font=self.font(used,bold))<=width*self.sx:
                 self.put(self.point(x,y+(size-used)*.5),text,self.font(used,bold),color)
                 return used
-        small=max(12,min_size-2)
+        # Two lines, never larger than the smallest single line tried, and every word narrow
+        # enough for `width`: a lone long word ("Normalement" in large text) shrinks instead of
+        # running into the buttons beside it.
+        small=min(max(12,min_size-2),lowest)
+        words=text.split() or [text]
+        while small>8 and max(self.draw.textlength(w,font=self.font(small,bold)) for w in words)>width*self.sx:
+            small-=1
         self.wrap((x,y-small*.35),text,width,small,color,bold,max_lines=2)
         return small
 

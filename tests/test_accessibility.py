@@ -146,3 +146,28 @@ def test_saving_applies_the_settings_and_subtitles_show_the_apps_own_lines(monke
     finally:
         app.close()
         accessibility.set_current(Accessibility())
+
+
+def test_large_text_values_never_run_into_the_settings_buttons():
+    """A lone long word ("Normalement") shrinks to its box instead of running under the − button."""
+    import numpy as np
+    from PIL import Image
+    from src import chattiness
+    from src.dashboard import CANVAS_SIZE, _Painter
+    from src.physio_settings import ARM_LABELS, BOTH_ARMS_LABEL, MODEL_LABELS
+    from src.window_viewport import canvas_viewport
+    values = {*chattiness.LABELS.values(), *ARM_LABELS.values(), *MODEL_LABELS.values(),
+              BOTH_ARMS_LABEL, "Auto (rapide)", "Oui", "Non", "Abduction d'un bras", "Deux bras"}
+    previous = accessibility.current()
+    try:
+        for large in (False, True):
+            accessibility.set_current(Accessibility(large_text=large))
+            for language in ("fr", "en"):
+                for value in values:
+                    image = Image.new("RGB", CANVAS_SIZE, (255, 255, 255))
+                    painter = _Painter(image, canvas_viewport(CANVAS_SIZE, *CANVAS_SIZE), language)
+                    painter.fit((300, 13), value, 136, 22, (0, 0, 0), True)  # a settings value (render_settings)
+                    ink = np.nonzero((np.asarray(image) < 128).any(axis=2).any(axis=0))[0]
+                    assert ink.max() - 300 <= 136, (large, language, value)
+    finally:
+        accessibility.set_current(previous)
