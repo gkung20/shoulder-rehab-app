@@ -63,7 +63,8 @@ def render_home(director, guide=None, output_size=None, speaking=False):
     mouth = (420, 330)
     if guide is not None:
         state = SimpleNamespace(status="", metrics={}, phase=None, cue=None)
-        guide.point_side = "R"  # toward the bubble
+        guide.point_side = guide.glance_side = "R"  # toward the bubble
+        guide.point_at(None, HOME_WILLY_BOX)  # no spotlight on the home screen
         guide.update(state, "ready", SimpleNamespace(arm="right"), speaking=speaking)
         x1, y1, x2, y2 = p.box(HOME_WILLY_BOX)
         sprite = guide.render(x2 - x1, y2 - y1)

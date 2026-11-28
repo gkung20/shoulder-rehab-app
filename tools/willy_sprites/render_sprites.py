@@ -7,7 +7,9 @@ layers with OpenCV, so Willy stays on screen even with --no-avatars.
     python tools/willy_sprites/render_sprites.py
 
 Options: --three-dir DIR uses a local three@0.147.0 package instead of jsDelivr;
---browser PATH uses an installed Chrome.
+--browser PATH uses an installed Chrome; --only NAME... renders only the layers whose
+name starts with one of these (head_open, armL_0...) and merges them into the existing
+willy.json, so the other layers stay as they are; --out DIR writes somewhere else.
 """
 import argparse
 import base64
@@ -21,6 +23,8 @@ FILES = ("build/three.min.js", "examples/js/environments/RoomEnvironment.js")
 WIDTH, HEIGHT = 560, 588          # Orthographic frame: x -1.95..1.95, y -0.07..4.03 scene units
 ARM_ANGLES = list(range(0, 170, 10))
 WAVE_ELBOWS = (-40, -20, 0, 20, 40)
+# Heads turned toward a side of the screen (Phase 9.2): Willy looks at what he points at.
+LOOKS = {"L": -20, "R": 20}       # degrees about the vertical axis; negative faces screen left
 
 SETUP = """
 window.setupWilly = (W, H) => {
@@ -43,6 +47,7 @@ window.setupWilly = (W, H) => {
   window.renderLayer = (cfg) => {
     w.setArm('L', cfg.armL ?? 0, cfg.elbowL ?? 0); w.setArm('R', cfg.armR ?? 0, cfg.elbowR ?? 0);
     w.setFace(cfg.eyes ?? 'open', cfg.mouth ?? 'smile');
+    w.head.rotation.y = (cfg.look ?? 0) * Math.PI / 180;
     cam.layers.set(ids[cfg.layer]);
     r.render(scene, cam);
     return canvas.toDataURL('image/png');
@@ -60,6 +65,8 @@ def layers():
     for eyes in ("open", "blink", "happy"):
         for mouth in ("smile", "talk1", "talk2"):
             yield f"head_{eyes}_{mouth}", {"layer": "head", "eyes": eyes, "mouth": mouth}
+            for side, look in LOOKS.items():
+                yield f"head_{eyes}_{mouth}_look{side}", {"layer": "head", "eyes": eyes, "mouth": mouth, "look": look}
     yield "body", {"layer": "body"}
     for side in ("L", "R"):
         for angle in ARM_ANGLES:
@@ -72,12 +79,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--three-dir", type=Path, help="Local three@0.147.0 package directory")
     parser.add_argument("--browser", help="Chrome/Chromium executable")
+    parser.add_argument("--only", nargs="+", metavar="NAME", help="layers whose name starts with these")
+    parser.add_argument("--out", type=Path, default=OUT, help=f"folder (default {OUT})")
     args = parser.parse_args()
     from PIL import Image
     import io
     from playwright.sync_api import sync_playwright
-    OUT.mkdir(parents=True, exist_ok=True)
+    out = args.out
+    out.mkdir(parents=True, exist_ok=True)
     meta = {"canvas": [WIDTH, HEIGHT], "layers": {}}
+    wanted = [(name, cfg) for name, cfg in layers() if not args.only or name.startswith(tuple(args.only))]
+    if args.only and (out / "willy.json").is_file():  # keep the layers not rendered this time
+        meta = json.loads((out / "willy.json").read_text(encoding="utf-8"))
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path=args.browser, args=["--use-gl=swiftshader", "--ignore-gpu-blocklist"])
         page = browser.new_page()
@@ -92,17 +105,20 @@ def main():
         page.evaluate(f"setupWilly({WIDTH}, {HEIGHT})")
         meta["neck"] = page.evaluate("projectPoint(0, 1.9, 0)")
         meta["feet"] = page.evaluate("projectPoint(0, 0, 0)")
-        for name, cfg in layers():
+        for name, cfg in wanted:
             url = page.evaluate("cfg => renderLayer(cfg)", cfg)
             image = Image.open(io.BytesIO(base64.b64decode(url.split(",", 1)[1]))).convert("RGBA")
             box = image.getchannel("A").getbbox()
             if box is None:
                 raise RuntimeError(f"Empty layer: {name}")
-            image.crop(box).save(OUT / f"{name}.png", optimize=True)
+            image.crop(box).save(out / f"{name}.png", optimize=True)
             meta["layers"][name] = list(box[:2])
         browser.close()
-    (OUT / "willy.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
-    print(f"{len(meta['layers'])} layers written to {OUT}")
+    order = [name for name, _ in layers()]  # the file lists layers in drawing-table order
+    meta["layers"] = {name: meta["layers"][name] for name in sorted(meta["layers"], key=lambda n: (
+        order.index(n) if n in order else len(order), n))}
+    (out / "willy.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
+    print(f"{len(wanted)} layers rendered, {len(meta['layers'])} in {out / 'willy.json'}")
 
 
 if __name__ == "__main__":

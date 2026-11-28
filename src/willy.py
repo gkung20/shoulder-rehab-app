@@ -29,6 +29,16 @@ CALM_STATUSES = ("CALIBRATION", "SUIVI PERDU", "POSITION A AJUSTER", "EPAULES PR
 ANCHORS = {"head": (282., 150.), "mouth": (282., 230.), "shoulder_L": (172., 352.), "shoulder_R": (388., 352.),
            "trunk": (280., 440.), "arm_L": (100., 357.), "arm_R": (460., 357.)}
 ACTS = ("wave", "idle", "point", "demo", "nod", "cheer", "calm", "mirror")
+# Pointing at a zone of the screen (Phase 9.2): the arm on its side rises to its height.
+POINT_MIN = 30.            # even toward something below him, the arm comes away from the body
+POINT_HOLD = 4.            # seconds a point lasts with nothing to aim at (longer while speaking)
+LOOK_AFTER = 140.          # sprite pixels from the head's centre beyond which he turns his head
+# When nothing happens: blink every 3-6 s; after 13.5-28 quiet seconds a glance, then a stretch
+# or a wave (so one of the two every 30-60 s), never the same move twice in a row.
+BLINK_EVERY = (3., 6.)
+IDLE_WAIT = (13.5, 28.)
+IDLE_MOVES = {"glance": 1.6, "stretch": 2.4, "wave": 2.2}   # seconds each
+TIMED_ACTS = {"wave": 2.6, "cheer": 1.8, "nod": 1.4, "idle": 1., "calm": 1.}
 
 
 @dataclass
@@ -42,6 +52,7 @@ class WillyPose:
     mouth: str = "smile"      # smile | talk1 | talk2
     bob: float = 0.           # vertical offset, sprite pixels (negative = up)
     tilt: float = 0.          # head tilt, degrees
+    look: str | None = None   # head turned toward a screen side: "L", "R" or None (facing)
 
 
 def exercise_screen_side(arm, mirror=True):
@@ -73,7 +84,12 @@ class WillyGuide:
         self._celebrate_until = 0.
         self._celebrate_happy = True
         self._last_rep = 0
-        self._blink_at = 2.
+        self._blink_at, self._blink_until = 2., 0.
+        self._aim = None          # (side, arm angle, head turn) toward the zone Willy talks about
+        self._quiet_since = None  # last time something happened (speech, act, mode change)
+        self._idle = None         # (move, start) of the idle move in progress
+        self._idle_wait = None
+        self._last_idle = self._last_big = None
         self._mouth_next = 0.
         self._mouth = "smile"
         self._last_time = None
@@ -84,6 +100,7 @@ class WillyGuide:
         self.demo_angle = 0.     # arm angle of the "demo" act, set by the tour every frame
         self.demo_side = "R"
         self.point_side = "L"    # Willy points with the arm on the screen's left: toward the app
+        self.glance_side = "L"   # where he glances when nothing happens: toward the patient's image
 
     def perform(self, act, now=None):
         """Start an act for the line Willy is saying: wave, idle, point, demo, nod, cheer, calm, mirror."""
@@ -91,6 +108,7 @@ class WillyGuide:
             act = "idle"
         self._act = None if act == "mirror" else act
         self._act_since = time.monotonic() if now is None else now
+        self._quiet_since, self._idle = self._act_since, None
 
     def anchor(self, name, width, height):
         """Where a body point lands when Willy is rendered into width x height (bob ignored)."""
@@ -101,18 +119,50 @@ class WillyGuide:
         ox, oy = (width - round(cw * scale)) // 2, height - round(ch * scale)
         return ox + (x - left) * scale, oy + (y - top) * scale
 
+    def _to_sprite(self, x, y, width, height):
+        """The inverse of `anchor`: a point of the width x height render, in sprite pixels."""
+        left, top, right, bottom = self.crop
+        cw, ch = right - left, bottom - top
+        scale = min(width / cw, height / ch)
+        ox, oy = (width - round(cw * scale)) // 2, height - round(ch * scale)
+        return (x - ox) / scale + left, (y - oy) / scale + top
+
+    def point_at(self, target, box):
+        """Aim at `target` (x, y), Willy being drawn in `box` (left, top, right, bottom), same units.
+
+        The arm on the target's side rises to its height (higher zone, higher arm) and the head
+        turns toward it. A target on Willy himself, or None, cancels the aim. Screens call this
+        every frame before `update`, with the centre of the zone in the spotlight.
+        """
+        self._aim = None
+        if target is None:
+            return None
+        width, height = box[2] - box[0], box[3] - box[1]
+        x, y = self._to_sprite(target[0] - box[0], target[1] - box[1], width, height)
+        if ANCHORS["shoulder_L"][0] <= x <= ANCHORS["shoulder_R"][0] and ANCHORS["head"][1] - 150 <= y <= self.canvas_h:
+            return None  # on Willy himself
+        side = "L" if x < ANCHORS["trunk"][0] else "R"
+        sx, sy = ANCHORS[f"shoulder_{side}"]
+        angle = math.degrees(math.atan2(abs(x - sx), y - sy))  # 0: straight down, 90: level, 180: up
+        look = side if abs(x - ANCHORS["head"][0]) > LOOK_AFTER else None
+        self._aim = (side, float(np.clip(angle, POINT_MIN, ARM_MAX)), look)
+        return self._aim
+
     # ------------------------------------------------------------------ state
     def update(self, analysis, mode, processor, mirror=True, speaking=False, now=None):
         """Advance Willy from the current session state; returns the pose drawn next."""
         now = time.monotonic() if now is None else now
         dt = 0. if self._last_time is None else max(0., min(.2, now - self._last_time))
         self._last_time = now
-        if mode != self._mode:
+        changed = mode != self._mode
+        if changed:
             self._mode, self._mode_since = mode, now
             if mode == "finished":
                 self._celebrate_until, self._celebrate_happy = now + 3., True
             if mode == "ready":
                 self._last_rep = 0
+        if self._quiet_since is None or changed:
+            self._quiet_since, self._idle = now, None
         since = now - self._mode_since
         target = {"L": 0., "R": 0.}
         pose = WillyPose()
@@ -130,7 +180,7 @@ class WillyGuide:
                 self._celebrate_until, self._celebrate_happy = now + 1.6, bool(getattr(result, "is_correct", False))
 
         if mode == "ready":
-            wave = (since % 7.) < 2.2
+            wave = since < 2.2  # a greeting; then the idle moves below, when nothing happens
             happy = wave
         elif mode == "finished":
             happy = True
@@ -148,7 +198,24 @@ class WillyGuide:
 
         celebrating = now < self._celebrate_until
         if self._act is not None and mode != "running":
-            target, pose, happy, wave, celebrating = self._acted(now, target, pose)
+            target, pose, happy, wave, celebrating = self._acted(now, target, pose, speaking)
+        if self._aim is not None and not celebrating:
+            pose.look = self._aim[2]  # he looks at what he talks about
+        busy = (bool(speaking) or celebrating or wave or mode == "running" or self._aim is not None
+                or self._acting(now, speaking))
+        closed = False
+        idle = self._quiet(now, busy)
+        if idle is not None:
+            move, age = idle
+            if move == "glance":
+                pose.look = self.glance_side
+            elif move == "wave":
+                wave = happy = True
+            else:  # a small stretch: both arms up, eyes closed, a little taller
+                lift = min(1., age / .6, max(0., IDLE_MOVES["stretch"] - age) / .8)
+                target = {"L": 140. * lift, "R": 140. * lift}
+                pose.bob -= 6. * lift
+                closed = lift > .8
         if celebrating and self._celebrate_happy:
             target = {"L": 150., "R": 150.}
             pose.bob = -abs(math.sin(now * 9.)) * 14.
@@ -168,13 +235,14 @@ class WillyGuide:
         if not celebrating:
             pose.bob += math.sin(now * 2.) * 2.5
             pose.tilt += math.sin(now * .7) * 2.
-        pose.eyes = "happy" if happy else self._blink(now)
+        blink = self._blink(now)  # every frame, so the blinks keep their 3-6 s rhythm
+        pose.eyes = "happy" if happy else "blink" if closed else blink
         # `speaking` is the mouth matching the voice's loudness (lip sync), or True/False
         pose.mouth = speaking if isinstance(speaking, str) else self._talk(now) if speaking else "smile"
         self.pose = pose
         return pose
 
-    def _acted(self, now, target, pose):
+    def _acted(self, now, target, pose, speaking=False):
         """Pose for the current act: (arm targets, pose, happy eyes, waving, celebrating)."""
         act, age = self._act, now - self._act_since
         target, pose = {"L": 0., "R": 0.}, WillyPose()
@@ -183,7 +251,11 @@ class WillyGuide:
             wave = age < 2.6
             happy = wave
         elif act == "point":
-            target[self.point_side] = 70.
+            if self._aim is not None:  # the zone in the spotlight: its side, its height
+                side, angle, _ = self._aim
+                target[side] = angle
+            elif age < POINT_HOLD or speaking:
+                target[self.point_side] = 70.
         elif act == "cheer" and age < 1.8:
             celebrating, self._celebrate_happy = True, True
             self._celebrate_until = max(self._celebrate_until, self._act_since + 1.8)
@@ -194,12 +266,50 @@ class WillyGuide:
             happy = 80. <= self.demo_angle <= 100.
         return target, pose, happy, wave, celebrating
 
+    def _acting(self, now, speaking):
+        """Whether the current act still moves Willy (no idle move meanwhile)."""
+        act = self._act
+        if act is None:
+            return False
+        age = now - self._act_since
+        if act == "demo":
+            return True
+        if act == "point":
+            return age < POINT_HOLD or bool(speaking)
+        return age < TIMED_ACTS.get(act, 1.)
+
+    def _quiet(self, now, busy):
+        """The idle move in progress, as (move, seconds since it started), or None.
+
+        After 13.5-28 s without anything happening: a glance, then a stretch or a wave (the one
+        not done last time), and so on; never the same move twice in a row.
+        """
+        if busy:
+            self._quiet_since, self._idle = now, None
+            return None
+        if self._idle is not None:
+            move, start = self._idle
+            if now - start < IDLE_MOVES[move]:
+                return move, now - start
+            self._idle, self._quiet_since = None, now
+        if self._idle_wait is None:
+            self._idle_wait = IDLE_WAIT[0] + self.rng.random() * (IDLE_WAIT[1] - IDLE_WAIT[0])
+        if now - self._quiet_since < self._idle_wait:
+            return None
+        if self._last_idle != "glance":
+            move = "glance"
+        else:
+            move = {"stretch": "wave", "wave": "stretch"}.get(self._last_big) or self.rng.choice(("stretch", "wave"))
+            self._last_big = move
+        self._last_idle, self._idle, self._idle_wait = move, (move, now), None
+        return move, 0.
+
     def _blink(self, now):
+        """A blink of 0.14 s; the next one starts 3-6 s after this one started."""
         if now >= self._blink_at:
-            if now - self._blink_at < .14:
-                return "blink"
-            self._blink_at = now + 2.5 + self.rng.random() * 2.5
-        return "open"
+            self._blink_until = now + .14
+            self._blink_at = now + BLINK_EVERY[0] + self.rng.random() * (BLINK_EVERY[1] - BLINK_EVERY[0])
+        return "blink" if now < self._blink_until else "open"
 
     def _talk(self, now):
         if now >= self._mouth_next:
@@ -208,6 +318,11 @@ class WillyGuide:
         return self._mouth
 
     # ------------------------------------------------------------------ drawing
+    def _head_layer(self, pose):
+        name = f"head_{pose.eyes}_{pose.mouth}"
+        turned = f"{name}_look{pose.look}"
+        return turned if pose.look and turned in self.layers else name
+
     def _arm_layer(self, side, pose):
         if pose.wave_side == side:
             elbow = min(WAVE_ELBOWS, key=lambda e: abs(e - pose.wave_elbow))
@@ -256,7 +371,7 @@ class WillyGuide:
         canvas = np.zeros((self.canvas_h, self.canvas_w, 4), np.float32)
         self._shadow(canvas, pose.bob)
         self._paste(canvas, "body", pose.bob)
-        self._paste_head(canvas, f"head_{pose.eyes}_{pose.mouth}", pose.bob, pose.tilt)
+        self._paste_head(canvas, self._head_layer(pose), pose.bob, pose.tilt)
         self._paste(canvas, self._arm_layer("L", pose), pose.bob)
         self._paste(canvas, self._arm_layer("R", pose), pose.bob)
         left, top, right, bottom = self.crop
@@ -278,7 +393,7 @@ class WillyGuide:
         """Willy fitted into width x height: straight-alpha RGBA uint8, transparent margins."""
         width, height = max(1, int(width)), max(1, int(height))
         pose = self.pose
-        key = (width, height, self._arm_layer("L", pose), self._arm_layer("R", pose), pose.eyes, pose.mouth,
+        key = (width, height, self._arm_layer("L", pose), self._arm_layer("R", pose), self._head_layer(pose),
                round(pose.bob), round(pose.tilt, 1))
         cached = self._renders.get(key)
         if cached is not None:  # blinks, talking and bobbing come back to the same few poses

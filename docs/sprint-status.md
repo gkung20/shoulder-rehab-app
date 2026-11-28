@@ -163,6 +163,15 @@ longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py 
   movements and drops the everyday lines (encouragements, "still there?", tips, button reminders);
   "beaucoup" shortens the pauses and counts every 3. Safety and pain lines, and the lines needed to
   go on (framing, camera, sets, start and end), play at every level.
+- Phase 9.2: Willy points from the shoulder on the zone's side at the angle of the line to the
+  zone's centre (0 down, 90 level, 160 at most, 30 at least so a point downward is still seen);
+  more faithful than a fixed "higher zone, higher arm" scale, and the same rule works for the big
+  Willy of the demo. He turns his head (18 new layers, the same model turned 20 degrees) when the
+  zone is more than half a head to one side. A point with no zone now lasts the line (4 s, or as
+  long as he speaks) instead of staying up until the next line. The old "wave every 7 s before the
+  session" became one greeting wave, then the idle moves; a glance alternates with a stretch or a
+  wave, so the two bigger moves come every 30-60 s. Nothing idles while he talks, points, acts or
+  the patient exercises.
 - Phase 9.3: the pass read 392 texts (every line, every {a / b} option and singular form, and the
   screen cues the French voice may read). The French voice read 3 words the English way: "Willy"
   (wˈɪli, now "Houili": the silent h stops "Je suis‿z‿Ouili"), "express" and "coach". No symbols,

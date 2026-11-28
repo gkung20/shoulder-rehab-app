@@ -129,7 +129,7 @@ in the repository: pip installs them. Regenerate this table with
 
 | Asset | Where | Origin | Licence | Ships | May it be shared? |
 |---|---|---|---|---|---|
-| Willy's sprite layers (56 PNG) and `willy.json` | `assets/willy/` | Rendered by `tools/willy_sprites/render_sprites.py` from Willy's procedural model `tools/willy_sprites/willy_model.js` (the team's own work) | The team's, like the code (no licence chosen yet) | Yes | Once the team picks a licence |
+| Willy's sprite layers (72 PNG) and `willy.json` | `assets/willy/` | Rendered by `tools/willy_sprites/render_sprites.py` from Willy's procedural model `tools/willy_sprites/willy_model.js` (the team's own work) | The team's, like the code (no licence chosen yet) | Yes | Once the team picks a licence |
 | Willy's model and render page | `tools/willy_sprites/willy_model.js`, `render.html` | The team's own code; three.js r147 (MIT) loaded from a CDN while rendering | The team's; three.js MIT | Yes | Once the team picks a licence |
 | Silhouette frames (33 PNG) and `silhouette.json` | `assets/silhouette/` | Rendered by `tools/silhouette_frames/render_frames.py` (three.js r147, MIT, from a CDN) from `body-1/Male-low.OBJ` | Derived from an unlicensed model | Yes | **Blocker B5** |
 | `Male-low.OBJ` (and `body-2/male_body_files.zip`) | Marwane's Desktop, not in the repository | Downloaded; no licence found | Unknown | No | **B5** |

@@ -8,36 +8,108 @@
    137,
    25
   ],
+  "head_open_smile_lookL": [
+   140,
+   25
+  ],
+  "head_open_smile_lookR": [
+   140,
+   25
+  ],
   "head_open_talk1": [
    137,
+   25
+  ],
+  "head_open_talk1_lookL": [
+   140,
+   25
+  ],
+  "head_open_talk1_lookR": [
+   140,
    25
   ],
   "head_open_talk2": [
    137,
    25
   ],
+  "head_open_talk2_lookL": [
+   140,
+   25
+  ],
+  "head_open_talk2_lookR": [
+   140,
+   25
+  ],
   "head_blink_smile": [
    137,
+   25
+  ],
+  "head_blink_smile_lookL": [
+   140,
+   25
+  ],
+  "head_blink_smile_lookR": [
+   140,
    25
   ],
   "head_blink_talk1": [
    137,
    25
   ],
+  "head_blink_talk1_lookL": [
+   140,
+   25
+  ],
+  "head_blink_talk1_lookR": [
+   140,
+   25
+  ],
   "head_blink_talk2": [
    137,
+   25
+  ],
+  "head_blink_talk2_lookL": [
+   140,
+   25
+  ],
+  "head_blink_talk2_lookR": [
+   140,
    25
   ],
   "head_happy_smile": [
    137,
    25
   ],
+  "head_happy_smile_lookL": [
+   140,
+   25
+  ],
+  "head_happy_smile_lookR": [
+   140,
+   25
+  ],
   "head_happy_talk1": [
    137,
    25
   ],
+  "head_happy_talk1_lookL": [
+   140,
+   25
+  ],
+  "head_happy_talk1_lookR": [
+   140,
+   25
+  ],
   "head_happy_talk2": [
    137,
+   25
+  ],
+  "head_happy_talk2_lookL": [
+   140,
+   25
+  ],
+  "head_happy_talk2_lookR": [
+   140,
    25
   ],
   "body": [

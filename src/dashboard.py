@@ -174,12 +174,17 @@ WILLY_BOX=L.WILLY_BOX  # Right column, beside the repetition count: visible in e
 WILLY_STAGE_BOX=L.WILLY_STAGE_BOX  # The exercise demo: Willy steps into the large panel.
 
 
-def _draw_willy(canvas,p,willy,analysis,mode,processor,mirror,speaking,box=WILLY_BOX):
-    """Willy, the guide, is always on screen; he only reflects state already computed."""
+def _draw_willy(canvas,p,willy,analysis,mode,processor,mirror,speaking,box=WILLY_BOX,spotlight=None):
+    """Willy, the guide, is always on screen; he only reflects state already computed.
+
+    With a zone in the tour's spotlight, he points at it and looks at it (Phase 9.2).
+    """
     guide=willy if willy is not None else shared_guide()
     if guide is None:
         return None
     guide.point_side="R" if box == WILLY_STAGE_BOX else "L"  # point toward the bubble / the screen
+    guide.glance_side="L"  # when nothing happens, he glances at the patient's image
+    guide.point_at(None if spotlight is None else ((spotlight[0]+spotlight[2])/2,(spotlight[1]+spotlight[3])/2),box)
     guide.update(analysis,mode,processor,mirror=mirror,speaking=speaking)
     x1,y1,x2,y2=p.box(box)
     sprite=guide.render(x2-x1,y2-y1)
@@ -414,7 +419,8 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
     willy_box=WILLY_STAGE_BOX if big else WILLY_BOX
     if big:
         p.rect((446,132,860,602),fill=(236,244,242))
-    guide=_draw_willy(canvas,p,willy,analysis,mode,processor,mirror,speaking,willy_box)
+    spotlight=overlay.spotlight if overlay is not None else None
+    guide=_draw_willy(canvas,p,willy,analysis,mode,processor,mirror,speaking,willy_box,spotlight)
     if show_controls:  # buttons inside the stage go over the camera; the bars' buttons are in the cached layer
         for button in patient_buttons(mode,processor.arm,audio_enabled,details,help_visible,avatars,avatar_gender,silhouette,lang,results):
             if button.action in IN_STAGE_BUTTONS:

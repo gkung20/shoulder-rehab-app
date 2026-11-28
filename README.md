@@ -20,7 +20,8 @@ bras à exercer, réglage de la caméra avec la silhouette, puis les trois premi
 mouvements guidés. L’autre choix est la **visite complète** (environ 7 minutes) :
 règles de sécurité (jamais passées, même avec **Passer**), prénom facultatif, bras,
 coach et son, réglage de la caméra, tour de l’écran avec une zone éclairée à la
-fois (bouton **Retour** pour revoir la zone d’avant), démonstration du mouvement
+fois, que Willy montre du bras en tournant la tête vers elle (bouton **Retour**
+pour revoir la zone d’avant), démonstration du mouvement
 par Willy, puis les trois premiers mouvements guidés. Des points sous la bulle
 (●●○○) montrent l’étape de la visite.
 Ensuite, Willy accueille le patient (« Bonjour ! On fait vos exercices ? ») et la

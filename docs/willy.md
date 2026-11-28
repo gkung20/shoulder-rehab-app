@@ -9,7 +9,9 @@ avec `--no-avatars` et dans la page Streamlit (barre latérale + tableau de bord
 
 | Moment | Willy |
 | --- | --- |
-| Avant de commencer | Salue de la main toutes les 7 s |
+| Avant de commencer | Salue de la main en arrivant |
+| Rien ne se passe | Cligne des yeux toutes les 3 à 6 s ; après 13 à 28 s de calme, jette un coup d’œil vers l’image du patient, puis s’étire ou salue (l’un des deux toutes les 30 à 60 s), jamais deux fois la même chose de suite |
+| Visite de l’écran | Montre la zone éclairée avec le bras de son côté, d’autant plus haut qu’elle est haute, et tourne la tête vers elle |
 | Calibration, cadrage, suivi perdu | Reste calme, bras baissés |
 | Mouvement | Lève le **même bras que le patient, du même côté de l’écran** (miroir), à l’angle d’abduction déjà mesuré |
 | Maintien atteint | Yeux souriants |
@@ -76,10 +78,17 @@ dans tous les cas, la transformation de Willy est appliquée.
 
 ## Rendu
 
-Willy n’utilise pas le moteur 3D : `src/willy.py` assemble 54 calques PNG
-pré-rendus (`assets/willy/`, ~1 Mo) avec NumPy/OpenCV (quelques ms par image).
-Tête, bras gauche/droit (0–160° par pas de 10°, plus 5 images de salut) et corps
-sont superposés ; la tête s’incline autour du cou.
+Willy n’utilise pas le moteur 3D : `src/willy.py` assemble 72 calques PNG
+pré-rendus (`assets/willy/`, ~1,6 Mo) avec NumPy/OpenCV (quelques ms par image).
+Tête (de face, ou tournée de 20° vers la gauche ou la droite de l’écran :
+`head_…_lookL` / `_lookR`), bras gauche/droit (0–160° par pas de 10°, plus 5 images
+de salut) et corps sont superposés ; la tête s’incline autour du cou.
+
+Pour montrer une zone, l’écran appelle `guide.point_at(centre de la zone, cadre de
+Willy)` à chaque image : le bras du côté de la zone prend l’angle de la direction
+épaule → zone (0° vers le bas, 90° à l’horizontale, au plus 160°, au moins 30° pour
+une zone sous lui), et la tête se tourne si la zone est à plus d’une demi-tête de
+côté. Sans zone, « montrer » lève le bras vers l’écran le temps de la réplique.
 
 Pour modifier le modèle (`tools/willy_sprites/willy_model.js`) puis régénérer
 les calques :
@@ -89,3 +98,7 @@ python -m pip install playwright
 python -m playwright install chromium
 python tools/willy_sprites/render_sprites.py
 ```
+
+`--only head_open_smile_look armL_0` ne refait que les calques dont le nom commence
+ainsi et les ajoute à `willy.json` sans toucher aux autres (`--out` pour écrire
+ailleurs, `--three-dir` pour un three.js 0.147.0 local).
