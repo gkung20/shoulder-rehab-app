@@ -74,6 +74,23 @@ Willy s’affiche aussi dans sa **bulle** : l’application reste utilisable son
 - **Séries** : le compteur affiche « SÉRIE 2/3 » et « 6/10 ». À la fin d'une série, un repos avec
   compte à rebours, puis Willy propose de reprendre ; après la dernière série, la séance se termine
   seule et Willy annonce l'objectif atteint.
+- **Exercice** (première ligne des réglages) : « Un bras » (l'abduction d'un bras, comme avant) ou
+  « Deux bras » (les deux bras levés sur les côtés en même temps, `config/exercises/both_arms.yaml`).
+  Chaque exercice garde **son propre plan** ; les résultats, l'historique et l'export ne montrent que
+  les séances de l'exercice choisi.
+
+### Deux bras sur les côtés
+
+Même caméra, de face ; les deux bras sont mesurés. Un mouvement compte quand **les deux bras**
+atteignent la zone cible : l'angle compté est celui du bras le plus bas. Plus de **15°** d'écart entre
+les bras (`compensation: max_asymmetry_deg`) fait dire à Willy « Montez les deux bras à la même
+hauteur » pendant le mouvement, et le mouvement est signalé « à ajuster » (conseil : « Gardez les deux
+bras à la même hauteur »). Le bilan garde le pic de chaque bras et l'écart moyen. Il n'y a pas de bras
+à choisir : les boutons Bras droit / Bras gauche sont tous deux allumés et la visite express saute la
+question du bras. Willy suit les deux bras du patient, montre l'exercice avec ses deux bras, et ses
+répliques parlent « des bras » (variantes `both:` dans `assets/willy/lines.yaml`). La silhouette lève
+les deux bras ; sur une caméra 4:3 elle est un peu plus petite, pour que les deux mains tiennent dans
+l'image (reculez d'environ 15 %).
 
 ## Résultats, historique et export pour le kiné
 
@@ -505,7 +522,7 @@ shoulder-rehab-app/
 │   ├── state_machine.py        # Machine à états finis (REST/RISING/HOLD/LOWERING) & télémétrie de fluidité
 │   ├── rules_engine.py         # Moteur de règles cliniques et retours en français
 │   ├── cues.py                 # Un code par message en direct (Willy et la voix suivent le code)
-│   ├── exercises.py            # Exercices définis en YAML (config/exercises/)
+│   ├── exercises.py            # Exercices définis en YAML (config/exercises/ : un bras, deux bras)
 │   ├── layout.py               # Tous les rectangles des écrans (boutons, panneaux, zones de la visite)
 │   ├── desktop_app.py          # L'application de bureau : boucle, écrans, fenêtre (App)
 │   ├── synthetic_pose.py       # Corps synthétiques pour les tests et les outils (jamais en direct)

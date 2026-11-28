@@ -35,6 +35,7 @@ class Exercise:
     arms: str = "one"
     willy_demo: str = "raise_side"
     thresholds: dict = field(default_factory=dict)  # {"abduction": {...}, "timing": {...}}
+    short: dict = field(default_factory=dict)       # a short name for the settings ("Deux bras")
 
     def __post_init__(self):
         if not self.id or not isinstance(self.names, dict) or not {"fr", "en"} <= set(self.names):
@@ -48,6 +49,9 @@ class Exercise:
 
     def name(self, language="fr"):
         return self.names.get(language) or self.names["fr"]
+
+    def short_name(self, language="fr"):
+        return self.short.get(language) or self.short.get("fr") or self.name(language)
 
     @property
     def both_arms(self):
@@ -63,11 +67,11 @@ class Exercise:
     def from_yaml(cls, path):
         with open(path, "r", encoding="utf-8") as handle:
             raw = yaml.safe_load(handle) or {}
-        known = {"id", "names", "camera_view", "measured_angle", "arms", "willy_demo", "thresholds"}
+        known = {"id", "names", "camera_view", "measured_angle", "arms", "willy_demo", "thresholds", "short"}
         unknown = set(raw) - known
         if unknown:
             raise ValueError(f"{Path(path).name}: unknown keys {sorted(unknown)}")
-        return cls(**{**raw, "thresholds": raw.get("thresholds") or {}})
+        return cls(**{**raw, "thresholds": raw.get("thresholds") or {}, "short": raw.get("short") or {}})
 
 
 def load_exercises(directory=EXERCISES_DIR):

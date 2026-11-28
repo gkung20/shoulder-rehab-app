@@ -49,8 +49,8 @@ class CalibrationManager:
         return self._is_calibrating
 
     def start(self, arm="right", timestamp_sec=None):
-        if arm not in ("left", "right"):
-            raise ValueError("arm must be left or right")
+        if arm not in ("left", "right", "both"):
+            raise ValueError("arm must be left, right or both")
         self._active_arm = arm
         self._is_calibrating = True
         self._explicit_clock = timestamp_sec is not None
@@ -81,20 +81,31 @@ class CalibrationManager:
             self.start(arm, timestamp_sec)
         if not landmarks or len(landmarks) < 33:
             return self._reject(Cue.CAL_SHOW_SHOULDERS)
-        sh, hip, el, ear = ((I.LEFT_SHOULDER, I.LEFT_HIP, I.LEFT_ELBOW, I.LEFT_EAR)
-                            if arm == "left" else (I.RIGHT_SHOULDER, I.RIGHT_HIP, I.RIGHT_ELBOW, I.RIGHT_EAR))
+        sides = [(I.LEFT_SHOULDER, I.LEFT_HIP, I.LEFT_ELBOW, I.LEFT_EAR),
+                 (I.RIGHT_SHOULDER, I.RIGHT_HIP, I.RIGHT_ELBOW, I.RIGHT_EAR)]
+        if arm != "both":
+            sides = [sides[0] if arm == "left" else sides[1]]
+        sh, hip = sides[0][:2]
         required = [landmarks[i] for i in (I.LEFT_SHOULDER, I.RIGHT_SHOULDER)]
         if not are_landmarks_visible(required, self.min_visibility):
             return self._reject(Cue.CAL_SHOULDERS_LOW_VISIBILITY)
         width = calculate_distance_2d(landmarks[I.LEFT_SHOULDER], landmarks[I.RIGHT_SHOULDER])
-        ear_dist = None
-        if are_landmarks_visible([landmarks[ear]], self.min_visibility):
-            distance = landmarks[sh].y - landmarks[ear].y
-            if distance > 0:
-                ear_dist = distance
-        angle = None
-        if are_landmarks_visible([landmarks[el]], self.min_visibility):
-            angle = calculate_shoulder_reference_angle(landmarks[I.LEFT_SHOULDER], landmarks[I.RIGHT_SHOULDER], landmarks[sh], landmarks[el])
+        # Both arms: the ear distance is the mean of the two sides, and the arm that rests
+        # higher is the one that must be at rest (its angle sets the patient's resting angle).
+        ear_dists, angles = [], []
+        for side_sh, _, side_el, side_ear in sides:
+            if are_landmarks_visible([landmarks[side_ear]], self.min_visibility):
+                distance = landmarks[side_sh].y - landmarks[side_ear].y
+                ear_dists.append(distance if distance > 0 else None)
+            else:
+                ear_dists.append(None)
+            if are_landmarks_visible([landmarks[side_el]], self.min_visibility):
+                angles.append(calculate_shoulder_reference_angle(
+                    landmarks[I.LEFT_SHOULDER], landmarks[I.RIGHT_SHOULDER], landmarks[side_sh], landmarks[side_el]))
+            else:
+                angles.append(None)
+        ear_dist = None if None in ear_dists else sum(ear_dists) / len(ear_dists)
+        angle = None if None in angles else max(angles)
         hips_visible = (are_landmarks_visible([landmarks[I.LEFT_HIP], landmarks[I.RIGHT_HIP]], self.min_visibility)
                         and calculate_distance_2d(landmarks[sh], landmarks[hip]) > .1)
         lean = calculate_trunk_lean(*(landmarks[i] for i in (I.LEFT_SHOULDER, I.RIGHT_SHOULDER, I.LEFT_HIP, I.RIGHT_HIP))) if hips_visible else None

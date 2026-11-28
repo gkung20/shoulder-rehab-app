@@ -20,6 +20,7 @@ class Cue(str, Enum):
     KEEP_TRUNK_STRAIGHT = "keep_trunk_straight"
     KEEP_ARM_STRAIGHT = "keep_arm_straight"
     KEEP_ARM_IN_PLANE = "keep_arm_in_plane"
+    ARMS_UNEVEN = "arms_uneven"            # both-arm exercises: more than 15 deg between the arms
     # Rules engine: phases of the movement
     READY_RAISE = "ready_raise"
     RISE_SLOWLY = "rise_slowly"
@@ -57,6 +58,7 @@ TEXT = {
     Cue.KEEP_TRUNK_STRAIGHT: "Gardez le tronc droit !",
     Cue.KEEP_ARM_STRAIGHT: "Gardez le bras tendu !",
     Cue.KEEP_ARM_IN_PLANE: "Gardez le bras dans le plan du corps !",
+    Cue.ARMS_UNEVEN: "Montez les deux bras à la même hauteur",
     Cue.READY_RAISE: "Pret : levez le bras sur le cote",
     Cue.RISE_SLOWLY: "Montez lentement le bras...",
     Cue.ALMOST_TARGET: "Presque ! Rejoignez votre zone cible",
@@ -97,6 +99,7 @@ LINES = {
     Cue.KEEP_TRUNK_STRAIGHT: "E4.08",
     Cue.KEEP_ARM_STRAIGHT: "E4.09",
     Cue.KEEP_ARM_IN_PLANE: "E4.10",
+    Cue.ARMS_UNEVEN: "E4.12",
     Cue.LOWER_A_LITTLE: "E4.11",
     Cue.SHOULDERS_READY_SHOW_ELBOW: "E3.04",
     Cue.LOWER_BEFORE_REP: "E3.06",

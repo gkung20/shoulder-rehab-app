@@ -76,9 +76,14 @@ def layout(width, height, side=None):
 
     `side` is the screen side of the raised arm ("R" or "L"). The body is centred, unless the
     raised hand would leave a narrow (4:3) picture: then it moves to the other side, just enough.
+    "both" (both arms raised, Phase 10.1): centred, and smaller when both hands would not fit
+    across the picture, so the patient stands a little further back.
     """
     sw = SHOULDER_WIDTH * height
     cx = width / 2
+    if side == "both":
+        sw = min(sw, width * (1 - 2 * EDGE) / (2 * ARM_REACH_SIDE))
+        return {"cx": cx, "sy": TOP * height + HEAD_ABOVE_SHOULDERS * sw, "sw": sw}
     arm_limit, other_limit = width * (1 - EDGE) - ARM_REACH_SIDE * sw, width * EDGE + OTHER_SIDE * sw
     if side == "R":
         cx = max(min(cx, arm_limit), other_limit)
@@ -160,6 +165,12 @@ class _Frames:
             if side == "L":  # the frames raise the screen-right arm: mirror them
                 channels = channels[:, ::-1]
                 left, right = (self.size[0] - right[0], right[1]), (self.size[0] - left[0], left[1])
+            elif side == "both":  # the raised half of the body, and its mirror image for the other arm
+                mid = int(round((left[0] + right[0]) / 2))
+                half = channels[:, mid:]
+                channels = np.ascontiguousarray(np.concatenate([half[:, ::-1], half], axis=1))
+                centre, reach = half.shape[1], right[0] - mid
+                left, right = (centre - reach, right[1]), (centre + reach, right[1])
             ideal = layout(width, height, side)
             scale = ideal["sw"] / max(1., float(np.hypot(*(np.subtract(right, left)))))
             mid = (np.add(left, right)) / 2 * scale

@@ -23,7 +23,7 @@ from src.audio_feedback import AudioCoach
 from src.avatar_stage import AvatarStage
 from src.capture import VideoCaptureManager
 from src.dashboard import CANVAS_SIZE, render_dashboard
-from src.exercises import get_exercise
+from src.exercises import get_exercise, load_exercises
 from src.gesture import HandRaise
 from src.hand_detector import HandDetector, MODEL_PATH as HAND_MODEL_PATH
 from src.home_screen import render_home
@@ -399,7 +399,7 @@ class HistoryScreen(Screen):
     def draw(self, app, output_size):
         image, self.hit_boxes, line_id = render_history(self.records, output_size, app.director.language,
                                                         app.profile.streak(), self.period, message=self.message,
-                                                        can_open=self.folder is not None)
+                                                        can_open=self.folder is not None, exercise=app.exercise.id)
         if not self.said:
             self.said = True
             app.say_line(line_id)
@@ -431,7 +431,8 @@ class App:
     def __init__(self, args, config, profile, window=None):
         self.args, self.config, self.profile = args, config, profile
         self.window = window or Window()
-        self.exercise = get_exercise()
+        self.exercise = get_exercise(profile.exercise)  # the physio's choice (Phase 10.1)
+        shared_script().variant = "both" if self.exercise.both_arms else None
         self.plan = profile.current_plan(self.exercise.apply(config), self.exercise.id)
         self.processor = SessionProcessor(config, self.plan.arm or profile.arm or "right",
                                           exercise=self.exercise, plan=self.plan)
@@ -497,7 +498,7 @@ class App:
                 for line in results_lines(screen.record, self.director.language):
                     self.audio.say(line, self.director.language, interrupt=False)
         elif name == "history":
-            screen.records = session_store.load_sessions(since=datetime.date.today() - datetime.timedelta(days=29))
+            screen.records = self.exercise_sessions(since=datetime.date.today() - datetime.timedelta(days=29))
             screen.said, screen.message, screen.folder = False, "", None
         self.modal = name
 
@@ -512,7 +513,12 @@ class App:
             setter(self.profile.chattiness, self.config.audio)
 
     def new_form(self):
-        form = physio.SettingsForm(self.plan)
+        exercises = load_exercises()
+        plans = {key: self.profile.current_plan(exercise.apply(self.config), key) for key, exercise in exercises.items()}
+        form = physio.SettingsForm(
+            self.plan, plans=plans, both=tuple(key for key, exercise in exercises.items() if exercise.both_arms),
+            names={key: {language: exercise.short_name(language) for language in ("fr", "en")}
+                   for key, exercise in exercises.items()})
         form.camera = self.capture.camera_index if self.capture is not None else 0
         form.model, form.auto_lite = self.profile.pose_model, self.profile.auto_lite
         form.chattiness = self.profile.chattiness
@@ -546,17 +552,31 @@ class App:
             self.profile.chattiness = form.chattiness
             self.profile.save()
             self.apply_chattiness()
-        if plan != self.plan:
-            self.profile.set_plan(plan)
+        edited = form.all_plans() if form is not None else {plan.exercise: plan}
+        edited[plan.exercise] = plan
+        changed = plan.exercise != self.exercise.id
+        for key, value in edited.items():  # every exercise keeps its own plan (Phase 10.1)
+            if value != self.profile.current_plan(get_exercise(key).apply(self.config), key):
+                self.profile.set_plan(value)
+                changed = True
+        if changed:
+            self.profile.exercise = plan.exercise
             self.profile.save()
-            self.plan = self.profile.current_plan(self.exercise.apply(self.config), self.exercise.id)
-            if self.plan.arm:
-                self.processor.arm = self.plan.arm
-            self.new_processor()
+            self.set_exercise(plan.exercise)
             self.close_modal()
             self.director.plan_updated()
         else:
             self.close_modal()
+
+    def set_exercise(self, exercise_id):
+        """The exercise and its plan; Willy's lines speak of one arm or of both."""
+        self.exercise = get_exercise(exercise_id)
+        shared_script().variant = "both" if self.exercise.both_arms else None
+        self.plan = self.profile.current_plan(self.exercise.apply(self.config), self.exercise.id)
+        if self.plan.arm and not self.exercise.both_arms:
+            self.processor.arm = self.plan.arm
+        self.session_plan = self.plan
+        self.new_processor()
 
     # ----------------------------------------------------------------- lifecycle
     def run(self):
@@ -1059,12 +1079,18 @@ class App:
         if line_id:
             self.audio.say(shared_script().text(line_id, self.director.language, **values), self.director.language)
 
+    def exercise_sessions(self, since=None):
+        """Saved sessions of the current exercise (Phase 10.1: results and history per exercise)."""
+        return [record for record in session_store.load_sessions(since=since)
+                if (record.get("exercise") or "abduction") == self.exercise.id]
+
     def export_history(self, period):
         """PDF, CSV and session files for the physio, in Documents\\Mouvement; Willy confirms."""
         screen = self.screens["history"]
         try:
-            folder = history_export.export_history(session_store.load_sessions(), period, self.director.language,
-                                                   asdict(self.plan), self.profile.name, self.processor.arm)
+            folder = history_export.export_history(self.exercise_sessions(), period, self.director.language,
+                                                   asdict(self.plan), self.profile.name, self.processor.arm,
+                                                   exercise=self.exercise.name(self.director.language))
         except (OSError, ValueError) as error:
             print(f"[EXPORT] {error}")
             screen.message = "L'export n'a pas pu être enregistré."
@@ -1224,7 +1250,8 @@ class App:
 
     def new_processor(self):
         self._calibrations_seen = 0
-        self.processor = SessionProcessor(self.config, self.processor.arm, exercise=self.exercise, plan=self.plan)
+        arm = self.processor.arm if self.processor.arm in ("left", "right") else self.plan.arm or self.profile.arm or "right"
+        self.processor = SessionProcessor(self.config, arm, exercise=self.exercise, plan=self.plan)
         self.processor.model_info = self.detector.model_info.copy()
 
     def ensure_avatar_stage(self):

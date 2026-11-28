@@ -17,6 +17,7 @@ LINES_PATH = Path(__file__).resolve().parents[1] / "assets" / "willy" / "lines.y
 LANGUAGES = ("en", "fr")
 ANIMATIONS = ("wave", "idle", "point", "demo", "nod", "cheer", "calm", "mirror")
 LANGUAGE_NAMES = {"en": "English", "fr": "Français"}
+VARIANTS = ("both",)  # "both": the wording for exercises with both arms (Phase 10.1)
 
 _CHOICE = re.compile(r"\{([^{}]*/[^{}]*)\}")
 _FIELD = re.compile(r"\{(\w+)\}")
@@ -89,8 +90,12 @@ class WillyScript:
             for language in LANGUAGES:
                 if not str(entry.get(language) or "").strip():
                     raise ValueError(f"{line_id}: missing {language} text")
+            for variant in VARIANTS:
+                if variant in entry and not all(str((entry[variant] or {}).get(x) or "").strip() for x in LANGUAGES):
+                    raise ValueError(f"{line_id}: the {variant} wording needs English and French")
             self.entries[str(line_id)] = entry
         self._turns = {}
+        self.variant = None  # "both" while the exercise uses both arms: those lines speak of both
 
     def __contains__(self, line_id):
         return line_id in self.entries
@@ -104,13 +109,14 @@ class WillyScript:
     def template(self, line_id, language, values=None):
         entry = self.entries[line_id]
         language = _norm(language)
+        base = ((entry.get(self.variant) or {}) if self.variant else {}).get(language) or entry[language]
         one = entry.get("one") or {}
         values = values or {}
         if one.get(language):
             for key in _COUNTS:
-                if "{%s}" % key in entry[language] and values.get(key) == 1:
+                if "{%s}" % key in base and values.get(key) == 1:
                     return one[language]
-        return entry[language]
+        return base
 
     def text(self, line_id, language, **values):
         return fill(self.template(line_id, language, values), values)
@@ -152,6 +158,7 @@ _TIP_LINES = {
     "inclinaison du tronc": "E5.13",
     "coude plie": "E5.14",
     "bras projete vers l'avant (hors plan)": "E5.15",
+    "bras a des hauteurs differentes": "E5.21",
     "mouvement saccade (manque de fluidite)": "E5.16",
     "montee trop rapide": "E5.17",
     "maintien trop court": "E5.18",

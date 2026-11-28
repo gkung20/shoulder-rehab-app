@@ -26,8 +26,11 @@ def patient_buttons(mode="running", arm="right", audio_enabled=True, details=Fal
     buttons = [
         PatientButton("avatar_male", "Homme", L.AVATAR_MALE_BUTTON, selected=avatar_gender == "male"),
         PatientButton("avatar_female", "Femme", L.AVATAR_FEMALE_BUTTON, selected=avatar_gender == "female"),
-        PatientButton("arm_right", "Bras droit", L.ARM_RIGHT_BUTTON, mode in ("ready","paused"), arm == "right"),
-        PatientButton("arm_left", "Bras gauche", L.ARM_LEFT_BUTTON, mode in ("ready","paused"), arm == "left"),
+        # Both-arm exercise (arm "both"): the two buttons show as chosen and can't be pressed.
+        PatientButton("arm_right", "Bras droit", L.ARM_RIGHT_BUTTON, mode in ("ready","paused") and arm != "both",
+                      arm in ("right", "both")),
+        PatientButton("arm_left", "Bras gauche", L.ARM_LEFT_BUTTON, mode in ("ready","paused") and arm != "both",
+                      arm in ("left", "both")),
         PatientButton("audio", "Son activé" if audio_enabled else "Son coupé", L.AUDIO_BUTTON, selected=audio_enabled),
         PatientButton(*primary, L.MAIN_BUTTON, primary=True),
         # "Terminer" during a session; "Mon bilan" (a saved session's results) otherwise.

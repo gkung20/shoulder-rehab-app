@@ -290,16 +290,16 @@ def draw_skeleton(
             cv2.line(frame, pixels[idx1], pixels[idx2], COLOR_TRUNK_LINE, 2, cv2.LINE_AA)
 
     # 2. Left Arm
-    left_color = COLOR_ACTIVE_ARM if selected_arm.lower() == "left" else COLOR_INACTIVE_ARM
-    left_thick = 4 if selected_arm.lower() == "left" else 2
+    left_color = COLOR_ACTIVE_ARM if selected_arm.lower() in ("left", "both") else COLOR_INACTIVE_ARM
+    left_thick = 4 if selected_arm.lower() in ("left", "both") else 2
     if landmarks[PoseLandmarkIndex.LEFT_SHOULDER].visibility > 0.5 and landmarks[PoseLandmarkIndex.LEFT_ELBOW].visibility > 0.5:
         cv2.line(frame, pixels[PoseLandmarkIndex.LEFT_SHOULDER], pixels[PoseLandmarkIndex.LEFT_ELBOW], left_color, left_thick, cv2.LINE_AA)
     if landmarks[PoseLandmarkIndex.LEFT_ELBOW].visibility > 0.5 and landmarks[PoseLandmarkIndex.LEFT_WRIST].visibility > 0.5:
         cv2.line(frame, pixels[PoseLandmarkIndex.LEFT_ELBOW], pixels[PoseLandmarkIndex.LEFT_WRIST], left_color, left_thick, cv2.LINE_AA)
 
     # 3. Right Arm
-    right_color = COLOR_ACTIVE_ARM if selected_arm.lower() == "right" else COLOR_INACTIVE_ARM
-    right_thick = 4 if selected_arm.lower() == "right" else 2
+    right_color = COLOR_ACTIVE_ARM if selected_arm.lower() in ("right", "both") else COLOR_INACTIVE_ARM
+    right_thick = 4 if selected_arm.lower() in ("right", "both") else 2
     if landmarks[PoseLandmarkIndex.RIGHT_SHOULDER].visibility > 0.5 and landmarks[PoseLandmarkIndex.RIGHT_ELBOW].visibility > 0.5:
         cv2.line(frame, pixels[PoseLandmarkIndex.RIGHT_SHOULDER], pixels[PoseLandmarkIndex.RIGHT_ELBOW], right_color, right_thick, cv2.LINE_AA)
     if landmarks[PoseLandmarkIndex.RIGHT_ELBOW].visibility > 0.5 and landmarks[PoseLandmarkIndex.RIGHT_WRIST].visibility > 0.5:

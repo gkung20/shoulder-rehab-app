@@ -26,9 +26,10 @@ def demonstration_angle(elapsed, target=90., hold=1.):
 
 
 def arm_pose(angle,arm):
+    """Both arms raise together when `arm` is "both" (Phase 10.1)."""
     result={}
     for side,sign in (("right",-1),("left",1)):
-        a=math.radians(angle if side == arm else 0.)
+        a=math.radians(angle if arm in (side,"both") else 0.)
         shoulder=np.array([sign*.36,0.,1.48])
         direction=np.array([sign*math.sin(a),0.,-math.cos(a)])
         elbow=shoulder+.45*direction
@@ -136,7 +137,8 @@ class AvatarMotion:
             self.smoothed={}
             self.arm_filter.reset()
         if mode not in ('paused','finished'):
-            desired,_=arm_angles(coach[arm],arm)
+            lead="right" if arm == "both" else arm
+            desired,_=arm_angles(coach[lead],lead)
             coach=arm_pose(self.coach_filter.apply(desired if desired is not None else 0,min(dt,.1)),arm)
         self.last_coach=coach
         render_landmarks=list(analysis.landmarks)

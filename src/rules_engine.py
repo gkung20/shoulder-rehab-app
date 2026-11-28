@@ -46,6 +46,7 @@ ERR_SHOULDER_SHRUG = "Haussement d'epaule excessif"
 ERR_TRUNK_LEAN = "Inclinaison du tronc"
 ERR_ELBOW_BENT = "Coude plie"
 ERR_ANTERIOR_DRIFT = "Bras projete vers l'avant (hors plan)"
+ERR_ARMS_UNEVEN = "Bras a des hauteurs differentes"
 ERR_JERKY_MOVEMENT = "Mouvement saccade (manque de fluidite)"
 ERR_FAST_CONCENTRIC = "Montee trop rapide"
 ERR_SHORT_HOLD = "Maintien trop court"
@@ -216,6 +217,13 @@ class RulesEngine:
             errors.append(ClinicalError(
                 category=ERR_ANTERIOR_DRIFT,
                 detail=f"Bras projete vers l'avant ({rep.max_drift_deg:.1f} deg > {self.config.compensation.max_anterior_drift_deg:.0f} deg)",
+            ))
+
+        # 5b. Both arms together: the two arms at different heights
+        if rep.max_asymmetry_deg is not None and rep.max_asymmetry_deg > self.config.compensation.max_asymmetry_deg:
+            errors.append(ClinicalError(
+                category=ERR_ARMS_UNEVEN,
+                detail=f"Bras a des hauteurs differentes ({rep.max_asymmetry_deg:.1f} deg d'ecart > {self.config.compensation.max_asymmetry_deg:.0f} deg)",
             ))
 
         # 6. Motor Control Fluidity (Smoothness / Normalized Jerk)

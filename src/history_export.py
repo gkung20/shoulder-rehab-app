@@ -32,6 +32,8 @@ WORDS = {
     "subtitle": ("Rééducation de l'épaule, exercices à la maison", "Shoulder rehabilitation, home exercises"),
     "patient": ("Patient", "Patient"),
     "arm": ("Bras", "Arm"),
+    "exercise": ("Exercice", "Exercise"),
+    "both": ("les deux", "both"),
     "period": ("Période", "Period"),
     "plan": ("Plan", "Plan"),
     "plan_text": ("Cible {lo}-{hi}°, {reps} répétitions x {sets} séries, repos {rest} s, maintien {hold} s",
@@ -136,7 +138,7 @@ def _chart(records, language, plan):
     return buffer
 
 
-def write_pdf(records, path, language="fr", plan=None, patient="", arm="", period="30"):
+def write_pdf(records, path, language="fr", plan=None, patient="", arm="", period="30", exercise=""):
     styles = getSampleStyleSheet()
     title = ParagraphStyle("t", parent=styles["Title"], fontSize=18, spaceAfter=2)
     small = ParagraphStyle("s", parent=styles["Normal"], fontSize=8.5, leading=11, textColor=colors.HexColor("#555b60"))
@@ -144,8 +146,11 @@ def write_pdf(records, path, language="fr", plan=None, patient="", arm="", perio
     story = [Paragraph(escape(w("title", language)), title), Paragraph(escape(w("subtitle", language)), small),
              Spacer(1, 10)]
     span = w("all", language) if PERIOD_DAYS.get(period) is None else w("days", language, n=PERIOD_DAYS[period])
-    meta = [(w("patient", language), patient or "-"), (w("arm", language), w(arm, language) if arm in ("right", "left") else "-"),
+    meta = [(w("patient", language), patient or "-"),
+            (w("arm", language), w(arm, language) if arm in ("right", "left", "both") else "-"),
             (w("period", language), span)]
+    if exercise:
+        meta.insert(1, (w("exercise", language), exercise))
     if plan:
         meta.append((w("plan", language), w("plan_text", language, lo=number(plan["target_min_deg"], language),
                                             hi=number(plan["target_max_deg"], language), reps=plan["reps_per_set"],
@@ -188,12 +193,13 @@ def write_pdf(records, path, language="fr", plan=None, patient="", arm="", perio
                       title=w("title", language)).build(story)
 
 
-def export_history(records, period="30", language="fr", plan=None, patient="", arm="", root=None, now=None):
+def export_history(records, period="30", language="fr", plan=None, patient="", arm="", root=None, now=None,
+                   exercise=""):
     """Write the PDF, the CSV and copies of the session files; returns the new folder."""
     chosen = select(records, period, (now or dt.datetime.now()).date())
     folder = Path(root or export_root()) / f"bilan_{(now or dt.datetime.now()).strftime('%Y-%m-%d_%H%M%S')}"
     (folder / "seances").mkdir(parents=True, exist_ok=True)
-    write_pdf(chosen, folder / "bilan.pdf", language, plan, patient, arm, period)
+    write_pdf(chosen, folder / "bilan.pdf", language, plan, patient, arm, period, exercise)
     write_csv(chosen, folder / "mouvements.csv", language)
     for record in chosen:
         clean = {k: v for k, v in record.items() if not k.startswith("_")}

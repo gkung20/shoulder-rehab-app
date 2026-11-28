@@ -56,7 +56,12 @@ class WillyPose:
 
 
 def exercise_screen_side(arm, mirror=True):
-    """Willy faces the patient like a mirror: raise the arm on the patient's screen side."""
+    """Willy faces the patient like a mirror: raise the arm on the patient's screen side.
+
+    "both" for an exercise with both arms (Phase 10.1).
+    """
+    if arm == "both":
+        return "both"
     return "R" if (arm == "right") == bool(mirror) else "L"
 
 
@@ -185,10 +190,14 @@ class WillyGuide:
         elif mode == "finished":
             happy = True
         elif mode == "running" and status not in CALM_STATUSES:
-            side = exercise_screen_side(getattr(processor, "arm", "right"), mirror)
-            angle = (getattr(analysis, "metrics", None) or {}).get("abduction")
-            if angle is not None and math.isfinite(angle):
-                target[side] = float(np.clip(angle, 0, ARM_MAX))
+            arm = getattr(processor, "arm", "right")
+            metrics = getattr(analysis, "metrics", None) or {}
+            # Both arms: each of Willy's arms follows the patient's arm on its side of the screen.
+            measured = ({exercise_screen_side(a, mirror): metrics.get(f"abduction_{a}") for a in ("left", "right")}
+                        if arm == "both" else {exercise_screen_side(arm, mirror): metrics.get("abduction")})
+            for side, angle in measured.items():
+                if angle is not None and math.isfinite(angle):
+                    target[side] = float(np.clip(angle, 0, ARM_MAX))
             phase = getattr(getattr(analysis, "phase", None), "name", "")
             hold = getattr(processor.config.timing, "min_hold_time_sec", 0) if hasattr(processor, "config") else 0
             happy = phase == "HOLD" and getattr(analysis, "hold_seconds", 0) >= hold
@@ -262,7 +271,8 @@ class WillyGuide:
         elif act == "nod" and age < 1.4:
             pose.tilt = math.sin(age * 10.) * 6.
         elif act == "demo":
-            target[self.demo_side] = float(np.clip(self.demo_angle, 0, ARM_MAX))
+            for side in (("L", "R") if self.demo_side == "both" else (self.demo_side,)):
+                target[side] = float(np.clip(self.demo_angle, 0, ARM_MAX))
             happy = 80. <= self.demo_angle <= 100.
         return target, pose, happy, wave, celebrating
 

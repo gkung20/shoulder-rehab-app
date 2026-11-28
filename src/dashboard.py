@@ -109,10 +109,37 @@ class _Painter:
         self.draw.line((*self.point(x1,y1),*self.point(x2,y2)),fill=color,width=max(1,round(width*self.scale)))
 
 
+# Both-arm exercise (Phase 10.1): the same guidance, speaking of both arms.
+BOTH_ARMS_TEXT={
+    "Gardez les deux épaules et le coude visibles. Choisissez votre bras, puis commencez.":
+        "Gardez les deux épaules et les deux coudes visibles, puis commencez.",
+    "Gardez le bras baissé":"Gardez les bras baissés",
+    "Replacez les deux épaules et le coude du bras suivi dans l’image.":"Replacez les deux épaules et les deux coudes dans l’image.",
+    "Montrez le coude":"Montrez les coudes",
+    "Vos épaules sont repérées. Le coude du bras suivi doit aussi rester visible.":
+        "Vos épaules sont repérées. Vos deux coudes doivent aussi rester visibles.",
+    "Baissez le bras":"Baissez les bras",
+    "Levez le bras":"Levez les deux bras",
+    "Montez doucement sur le côté, vers votre zone de mouvement.":
+        "Montez doucement sur les côtés, en même temps, vers votre zone de mouvement.",
+    "Ramenez doucement le bras au repos.":"Ramenez doucement les bras au repos.",
+    "Levez doucement le bras sur le côté pour commencer le mouvement.":
+        "Levez doucement les deux bras sur les côtés pour commencer le mouvement.",
+    "Levez, maintenez, puis ramenez le bras au repos.":"Levez, maintenez, puis ramenez les bras au repos.",
+}
+
+
 def patient_guidance(analysis,mode,processor,lang="fr",sets=None,now=0.,override=None):
     """(title, body, status) for the guidance column; French, translated when drawn in English."""
     if override is not None:
         return override
+    guidance=_guidance(analysis,mode,processor,lang,sets,now)
+    if getattr(processor,"arm",None) == "both":
+        return tuple(BOTH_ARMS_TEXT.get(text,text) for text in guidance)
+    return guidance
+
+
+def _guidance(analysis,mode,processor,lang,sets,now):
     if mode == "paused" and sets is not None and sets.waiting:
         if sets.resting:
             return ("Pause entre les séries",
@@ -134,7 +161,8 @@ def patient_guidance(analysis,mode,processor,lang="fr",sets=None,now=0.,override
         return "Baissez le bras", "Repartez de la position de repos.", "POSITION DE DÉPART"
     if analysis.cue.level.value == "WARNING":
         line_id=cue_line_id(analysis.cue)
-        title=(shared_script().text(line_id,lang) if line_id and lang == "en" else spoken_french(analysis.cue))
+        both=getattr(processor,"arm",None) == "both"  # the line's own both-arm wording
+        title=(shared_script().text(line_id,lang) if line_id and (lang == "en" or both) else spoken_french(analysis.cue))
         return title.split(".")[0], "Ajustez doucement la position, sans forcer.", "AJUSTEMENT"
     if analysis.phase == ExercisePhase.RISING:
         return "Levez le bras", "Montez doucement sur le côté, vers votre zone de mouvement.", "EN COURS"
@@ -277,7 +305,7 @@ def _chrome(width,height,lang,mode,arm,audio_enabled,details,help_visible,avatar
                 _button(p,button)
     else:
         p.text((32,766),"Utilisez les commandes de la page pour mettre en pause ou terminer.",16,MUTED)
-        label="Bras droit" if arm == "right" else "Bras gauche"
+        label={"right":"Bras droit","left":"Bras gauche"}.get(arm,"Deux bras")
         p.text((920,37),f"{label} · Son {'activé' if audio_enabled else 'coupé'}",15,MUTED)
     p.text((32,819),"Prototype éducatif · Mesures estimées. Arrêtez en cas de douleur.",11,MUTED)
     return canvas
@@ -399,7 +427,8 @@ def render_dashboard(camera_frame,analysis,processor,fps=0,mirror=True,audio_ena
         p.text((32,674),f"Répétition {result.rep_index} comptée.",16)
         p.wrap((32,701),note,825,13,MUTED,max_lines=1)
     else:
-        p.text((32,674),"Levez, maintenez, puis ramenez le bras au repos.",16,MUTED)
+        footer="Levez, maintenez, puis ramenez le bras au repos."
+        p.text((32,674),BOTH_ARMS_TEXT[footer] if processor.arm == "both" else footer,16,MUTED)
 
     if help_visible:
         p.rect((52,152,840,582),fill=BG,outline=LINE)

@@ -13,6 +13,8 @@ import numpy as np
 from PIL import Image
 
 from src.dashboard import CANVAS_SIZE, LINE, MUTED, TEXT, _Painter
+from src.exercises import get_exercise
+from src.i18n import tr
 from src.home_screen import _background
 from src.willy_lines import shared_script
 from src.willy_overlay import draw_button
@@ -96,8 +98,9 @@ def render_results(record, output_size=None, language="fr", guide=None):
     canvas, p = _canvas(output_size, language)
     p.text((48, 30), "Mon bilan", 34)
     started = _date(record)
-    if started:
-        p.text((50, 78), started.strftime("%d/%m/%Y · %H:%M"), 16, MUTED)
+    when = started.strftime("%d/%m/%Y · %H:%M") if started else ""
+    exercise = get_exercise(record.get("exercise")).name(language)
+    p.text((50, 78), f"{when} · {exercise}" if when else exercise, 16, MUTED)
     totals = record.get("totals", {})
     goal = totals.get("goal")
     reps = totals.get("reps", 0)
@@ -197,12 +200,13 @@ TREND_LINES = {"improving": "E7.04", "steady": "E7.05", "lower": "E7.06", None: 
 
 
 def render_history(records, output_size=None, language="fr", streak=0, period="30", today=None, message="",
-                   can_open=False):
-    """The last 30 days as a BGR image, and its hit boxes (back, export period, export)."""
+                   can_open=False, exercise=None):
+    """The last 30 days of one exercise as a BGR image, and its hit boxes (back, export period, export)."""
     today = today or dt.date.today()
     canvas, p = _canvas(output_size, language)
     p.text((48, 30), "Historique", 34)
-    p.text((50, 78), "Les 30 derniers jours", 16, MUTED)
+    subtitle = tr("Les 30 derniers jours", language)
+    p.text((50, 78), f"{subtitle} · {get_exercise(exercise).name(language)}" if exercise else subtitle, 16, MUTED)
     days = daily(records, today)
     p.text((900, 40), f"{streak} jour(s) d'affilée" if streak else "Pas de série en cours", 18, TEXT, True)
     # Calendar strip: one cell per day, a dot when there was a session.

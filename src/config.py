@@ -22,6 +22,7 @@ class CompensationThresholds:
     max_shrug_ratio: float = 0.12
     min_elbow_angle_deg: float = 155.0
     max_anterior_drift_deg: float = 25.0
+    max_asymmetry_deg: float = 15.0  # both-arm exercises: difference between the arms
     min_fluidity_pct: float = 60.0
     evaluate_fluidity: bool = False  # Experimental proxy; not a validated quality criterion.
 
@@ -125,6 +126,7 @@ class ExerciseConfig:
         c = self.compensation
         if not (0 < c.max_trunk_lean_deg <= 90 and 0 < c.max_shrug_ratio <= 1
                 and 0 < c.min_elbow_angle_deg <= 180 and 0 < c.max_anterior_drift_deg <= 90
+                and 0 < c.max_asymmetry_deg <= 90
                 and 0 <= c.min_fluidity_pct <= 100):
             raise ValueError("Invalid compensation thresholds")
         t = self.timing
@@ -205,6 +207,7 @@ class ExerciseConfig:
                 max_shrug_ratio=float(comp.get("max_shrug_ratio", 0.12)),
                 min_elbow_angle_deg=float(comp.get("min_elbow_angle_deg", 155.0)),
                 max_anterior_drift_deg=float(comp.get("max_anterior_drift_deg", 25.0)),
+                max_asymmetry_deg=float(comp.get("max_asymmetry_deg", 15.0)),
                 min_fluidity_pct=float(comp.get("min_fluidity_pct", 60.0)),
                 evaluate_fluidity=comp.get("evaluate_fluidity", False) is True,
             ),

@@ -301,16 +301,25 @@ S6.01:
   anim: point
   en: "Here is your exercise: raising your arm out to the side."
   fr: "Voici votre exercice : lever le bras sur le côté."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Here is your exercise: raising both arms out to the sides."
+    fr: "Voici votre exercice : lever les deux bras sur les côtés."
 S6.02:
   moment: "Demo pose: rest"
   anim: demo
   en: "Start with your arm relaxed along your body."
   fr: "Commencez le bras détendu, le long du corps."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Start with your arms relaxed along your body."
+    fr: "Commencez les bras détendus, le long du corps."
 S6.03:
   moment: "Demo pose: rising"
   anim: demo
   en: "Raise it slowly out to the side, elbow straight."
   fr: "Levez-le lentement sur le côté, coude tendu."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Raise them slowly out to the sides, together, elbows straight."
+    fr: "Levez-les lentement sur les côtés, en même temps, coudes tendus."
 S6.04:
   moment: Shoulder highlighted
   anim: demo
@@ -326,6 +335,9 @@ S6.06:
   anim: demo
   en: "Keep your arm out to the side, not in front of you."
   fr: "Gardez le bras sur le côté, pas devant vous."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Keep your arms out to the sides, not in front of you."
+    fr: "Gardez les bras sur les côtés, pas devant vous."
 S6.07:
   moment: "Demo pose: hold at shoulder height"
   anim: demo
@@ -341,6 +353,9 @@ S6.09:
   anim: demo
   en: "Then lower your arm slowly, all the way down."
   fr: "Puis redescendez lentement le bras, jusqu'en bas."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Then lower your arms slowly, all the way down."
+    fr: "Puis redescendez lentement les bras, jusqu'en bas."
 S6.10:
   moment: Back at rest
   anim: nod
@@ -383,6 +398,9 @@ S7.02:
   anim: calm
   en: "First, keep your arm down and still for a few seconds."
   fr: "D'abord, gardez le bras baissé et immobile quelques secondes."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "First, keep your arms down and still for a few seconds."
+    fr: "D'abord, gardez les bras baissés et immobiles quelques secondes."
 S7.03:
   moment: Progress line fills
   anim: idle
@@ -393,16 +411,25 @@ S7.04:
   anim: point
   en: "I can see your shoulders. Now show me your elbow too."
   fr: "Je vois vos épaules. Montrez-moi aussi votre coude."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "I can see your shoulders. Now show me both elbows too."
+    fr: "Je vois vos épaules. Montrez-moi aussi vos deux coudes."
 S7.05:
   moment: Arm raised during calibration
   anim: calm
   en: "Lower your arm first, then we'll begin."
   fr: "Baissez d'abord le bras, puis nous commencerons."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Lower your arms first, then we'll begin."
+    fr: "Baissez d'abord les bras, puis nous commencerons."
 S7.06:
   moment: Tracking lost
   anim: calm
   en: "I can't see you anymore. Show both shoulders and your elbow."
   fr: "Je ne vous vois plus. Montrez vos deux épaules et votre coude."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "I can't see you anymore. Show both shoulders and both elbows."
+    fr: "Je ne vous vois plus. Montrez vos deux épaules et vos deux coudes."
 S7.07:
   moment: Calibration done
   anim: nod
@@ -413,6 +440,9 @@ S7.08:
   anim: demo
   en: "Slowly raise your arm out to the side."
   fr: "Levez doucement le bras sur le côté."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Slowly raise both arms out to the sides."
+    fr: "Levez doucement les deux bras sur les côtés."
 S7.09:
   moment: Movement 1, rising
   anim: mirror
@@ -618,6 +648,9 @@ E2.07:
   anim: calm
   en: "Stop and rest your arm. I've paused the session."
   fr: "Arrêtez-vous et reposez votre bras. J'ai mis la séance en pause."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Stop and rest your arms. I've paused the session."
+    fr: "Arrêtez-vous et reposez vos bras. J'ai mis la séance en pause."
 E2.08:
   moment: After E2.07
   anim: calm
@@ -630,11 +663,17 @@ E3.01:
   anim: calm
   en: "Get comfortable. Keep your arm at rest."
   fr: "Installez-vous confortablement. Gardez le bras au repos."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Get comfortable. Keep your arms at rest."
+    fr: "Installez-vous confortablement. Gardez les bras au repos."
 E3.02:
   moment: Both shoulders needed
   anim: point
   en: "Show both shoulders and keep your arm at rest."
   fr: "Montrez vos deux épaules et gardez le bras au repos."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Show both shoulders and keep your arms at rest."
+    fr: "Montrez vos deux épaules et gardez les bras au repos."
 E3.03:
   moment: Shoulders unclear
   anim: point
@@ -645,16 +684,25 @@ E3.04:
   anim: point
   en: "Ready. Now show the elbow of your working arm."
   fr: "C'est prêt. Montrez maintenant le coude du bras suivi."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Ready. Now show both your elbows."
+    fr: "C'est prêt. Montrez maintenant vos deux coudes."
 E3.05:
   moment: Arm up during calibration
   anim: calm
   en: "Keep your arm down while I get set up."
   fr: "Gardez le bras baissé pendant le réglage."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Keep your arms down while I get set up."
+    fr: "Gardez les bras baissés pendant le réglage."
 E3.06:
   moment: Arm up before a movement
   anim: calm
   en: "Lower your arm first, then start the movement."
   fr: "Baissez d'abord le bras, puis commencez la répétition."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Lower your arms first, then start the movement."
+    fr: "Baissez d'abord les bras, puis commencez la répétition."
 E3.07:
   moment: Nobody detected
   anim: calm
@@ -665,6 +713,9 @@ E3.08:
   anim: point
   en: "Show both shoulders and the elbow of your working arm."
   fr: "Montrez les deux épaules et le coude du bras suivi."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Show both shoulders and both elbows."
+    fr: "Montrez les deux épaules et les deux coudes."
 E3.09:
   moment: Nobody facing the camera
   anim: point
@@ -682,11 +733,17 @@ E4.01:
   anim: idle
   en: "Whenever you like, gently raise your arm to the side."
   fr: "Quand vous voulez, levez doucement le bras sur le côté."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Whenever you like, gently raise both arms to the sides."
+    fr: "Quand vous voulez, levez doucement les deux bras sur les côtés."
 E4.02:
   moment: Rising
   anim: mirror
   en: "Raise your arm gently, without forcing."
   fr: "Montez le bras doucement, sans forcer."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Raise your arms gently, without forcing."
+    fr: "Montez les bras doucement, sans forcer."
 E4.03:
   moment: Almost in the zone
   anim: mirror
@@ -722,16 +779,27 @@ E4.09:
   anim: calm
   en: "Keep your arm straight, but not stiff."
   fr: "Gardez le bras tendu, sans le raidir."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Keep your arms straight, but not stiff."
+    fr: "Gardez les bras tendus, sans les raidir."
 E4.10:
   moment: Arm drifting forward
   anim: calm
   en: "Keep your arm out to the side."
   fr: "Gardez le bras sur le côté du corps."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Keep your arms out to the sides."
+    fr: "Gardez les bras sur les côtés du corps."
 E4.11:
   moment: Too high
   anim: calm
   en: "A little lower. Come back into your target zone."
   fr: "Un peu moins haut. Revenez doucement dans la zone cible."
+E4.12:
+  moment: Both arms, during the movement, more than 15 deg apart
+  anim: nod
+  en: "Raise both arms to the same height."
+  fr: "Montez les deux bras à la même hauteur."
 
 # --- Everyday: after each movement -------------------------------------------------------
 E5.01:
@@ -784,11 +852,17 @@ E5.14:
   anim: nod
   en: "Keep your arm straight."
   fr: "Gardez le bras tendu."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Keep your arms straight."
+    fr: "Gardez les bras tendus."
 E5.15:
   moment: Arm in front of the body
   anim: nod
   en: "Keep your arm out to the side, not in front."
   fr: "Gardez le bras bien sur le côté, pas devant."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Keep your arms out to the sides, not in front."
+    fr: "Gardez les bras bien sur les côtés, pas devant."
 E5.16:
   moment: Jerky movement
   anim: nod
@@ -799,6 +873,9 @@ E5.17:
   anim: nod
   en: "Take more time to raise your arm."
   fr: "Prenez plus de temps pour monter le bras."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Take more time to raise your arms."
+    fr: "Prenez plus de temps pour monter les bras."
 E5.18:
   moment: Hold too short
   anim: nod
@@ -809,11 +886,19 @@ E5.19:
   anim: nod
   en: "Lower your arm more slowly."
   fr: "Redescendez plus doucement."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Lower your arms more slowly."
+    fr: "Redescendez plus doucement."
 E5.20:
   moment: Any other case
   anim: nod
   en: "Let's take the next one gently."
   fr: "Reprenons doucement le mouvement."
+E5.21:
+  moment: Both arms, at different heights (more than 15 deg apart)
+  anim: nod
+  en: "Keep both arms at the same height."
+  fr: "Gardez les deux bras à la même hauteur."
 
 # --- Everyday: milestones and status -----------------------------------------------------
 E6.01:
@@ -955,6 +1040,9 @@ E9.07:
   anim: calm
   en: "Let's stop here. Breathe and let your arm rest."
   fr: "On s'arrête là. Respirez et laissez reposer votre bras."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Let's stop here. Breathe and let your arms rest."
+    fr: "On s'arrête là. Respirez et laissez reposer vos bras."
 E9.08:
   moment: After It hurts, the two choices
   anim: idle
@@ -970,6 +1058,9 @@ E9.10:
   anim: calm
   en: "Your arm seems tired. Take a short break if you need one."
   fr: "Votre bras semble fatigué. Faites une petite pause si besoin."
+  both:  # exercises with both arms (Phase 10.1)
+    en: "Your arms seem tired. Take a short break if you need one."
+    fr: "Vos bras semblent fatigués. Faites une petite pause si besoin."
 E9.11:
   moment: It hurts pressed a second time in one session
   anim: calm

@@ -69,6 +69,9 @@ thresholds:
     # Measured using MediaPipe world landmarks depth deviation from torso coronal plane.
     max_anterior_drift_deg: 25.0   # Arm drifting forward into antépulsion/flexion (compensation if exceeded)
 
+    # Both arms together (config/exercises/both_arms.yaml): difference between the two arms (degrees)
+    max_asymmetry_deg: 15.0        # More than this between the arms: "same height" cue and a flagged movement
+
     # Motor Smoothness & Fluidity Score (percentage)
     # Derived from Normalized Jerk (third derivative of angular displacement).
     min_fluidity_pct: 60.0         # Experimental proxy threshold, not a fatigue diagnosis

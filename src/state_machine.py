@@ -41,6 +41,10 @@ class RepetitionMetrics:
     config_snapshot: dict = field(default_factory=dict)
     calibration_snapshot: dict = field(default_factory=dict)
     angle_reference: str = "torso"
+    # Both-arm exercises (the counted angle is the lower arm's): each arm's peak and the
+    # largest difference between the arms during the movement.
+    peaks: dict = field(default_factory=dict)
+    max_asymmetry_deg: Optional[float] = None
 
 
 class RepetitionStateMachine:
@@ -89,8 +93,8 @@ class RepetitionStateMachine:
         self._rep_counter = 0
 
     def set_arm(self, arm):
-        if arm not in ("left", "right"):
-            raise ValueError("arm must be left or right")
+        if arm not in ("left", "right", "both"):
+            raise ValueError("arm must be left, right or both")
         self.arm = arm
         self.reset_current_rep()
 

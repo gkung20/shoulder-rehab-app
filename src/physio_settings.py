@@ -117,8 +117,9 @@ def short_date(iso):
     return "/".join(reversed(parts)) if len(parts) == 3 else ""
 
 
-# (key, French label, unit). The arm and seated rows are choices; the rest are numbers.
+# (key, French label, unit). The exercise, arm and seated rows are choices; the rest are numbers.
 FIELDS = (
+    ("exercise", "Exercice", ""),
     ("arm", "Bras", ""),
     ("target_min_deg", "Cible minimale", "°"),
     ("target_max_deg", "Cible maximale", "°"),
@@ -142,6 +143,7 @@ FAST_MODEL_NOTE = "Modèle rapide utilisé (ce PC est lent pour le modèle préc
 CAMERA_RANGE = (0, 5)
 ARM_CHOICES = (None, "right", "left")
 ARM_LABELS = {None: "Au choix du patient", "right": "Droit", "left": "Gauche"}
+BOTH_ARMS_LABEL = "Les deux"
 
 
 @dataclass
@@ -156,17 +158,34 @@ class SettingsForm:
     model: str | None = None      # forced pose model; None = automatic
     chattiness: str = "normal"    # how much Willy talks (src.chattiness)
     auto_lite: bool = False       # shown as "Modèle rapide utilisé" when automatic chose lite
+    # Phase 10.1: one plan per exercise. `plans` holds every exercise's plan ({id: Plan}),
+    # `names` their short names ({id: {"fr": ..., "en": ...}}), `both` the both-arm exercises.
+    plans: dict = field(default_factory=dict)
+    names: dict = field(default_factory=dict)
+    both: tuple = ()
 
     def __post_init__(self):
         self.original = self.original or self.plan
+        self.plans = {**self.plans, self.plan.exercise: self.plan}
+        self.originals = dict(self.plans)
+
+    def all_plans(self):
+        """Every exercise's plan, with the one on screen as edited."""
+        return {**self.plans, self.plan.exercise: self.plan}
 
     @property
     def changed(self):
-        return self.plan != self.original
+        return self.plan.exercise != self.original.exercise or self.all_plans() != self.originals
 
     def step(self, key, direction):
         """Change one setting by one step (direction +1 or -1), inside its bounds."""
-        if key == "arm":
+        if key == "exercise":
+            ids = list(self.plans)
+            self.plans[self.plan.exercise] = self.plan
+            self.plan = self.plans[ids[(ids.index(self.plan.exercise) + direction) % len(ids)]]
+        elif key == "arm":
+            if self.plan.exercise in self.both:
+                return  # both arms: nothing to choose
             index = (ARM_CHOICES.index(self.plan.arm) + direction) % len(ARM_CHOICES)
             self.plan = replace(self.plan, arm=ARM_CHOICES[index])
         elif key == "seated":
@@ -187,8 +206,10 @@ class SettingsForm:
 
     def value_text(self, key, unit, language):
         value = getattr(self.plan, key, None)
+        if key == "exercise":
+            return (self.names.get(value) or {}).get(language) or (self.names.get(value) or {}).get("fr") or value
         if key == "arm":
-            return ARM_LABELS[value]
+            return BOTH_ARMS_LABEL if self.plan.exercise in self.both else ARM_LABELS[value]
         if key == "seated":
             return "Oui" if value else "Non"
         if key == "camera":
@@ -255,14 +276,14 @@ def render_settings(form, output_size=None, language="fr"):
     p.text((48, 30), "Réglages kiné", 34)
     p.text((50, 78), "Le plan du patient. Chaque valeur reste dans des limites sûres.", 16, MUTED)
     hit_boxes = []
-    rows_per_column = 8
+    rows_per_column = 9
     for index, (key, label, unit) in enumerate(FIELDS):
         column, row = divmod(index, rows_per_column)
-        x, y = 48 + column * 612, 112 + row * 74
-        p.rect((x, y, x + 584, y + 64), fill=(255, 255, 255), outline=(214, 220, 219), radius=12)
-        p.wrap((x + 20, y + 10), label, 260, 17, TEXT, max_lines=2)
-        p.fit((x + 300, y + 16), form.value_text(key, unit, language), 136, 22, TEXT, True)
-        minus, plus = (x + 444, y + 8, x + 504, y + 56), (x + 514, y + 8, x + 574, y + 56)
+        x, y = 48 + column * 612, 112 + row * 66
+        p.rect((x, y, x + 584, y + 58), fill=(255, 255, 255), outline=(214, 220, 219), radius=12)
+        p.wrap((x + 20, y + 8), label, 260, 17, TEXT, max_lines=2)
+        p.fit((x + 300, y + 13), form.value_text(key, unit, language), 136, 22, TEXT, True)
+        minus, plus = (x + 444, y + 6, x + 504, y + 52), (x + 514, y + 6, x + 574, y + 52)
         draw_button(p, minus, "−", size=26)
         draw_button(p, plus, "+", size=26)
         hit_boxes += [(f"set:-:{key}", minus), (f"set:+:{key}", plus)]

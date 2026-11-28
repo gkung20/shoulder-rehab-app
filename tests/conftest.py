@@ -22,3 +22,12 @@ def fresh_screen_cache():
     from src.dashboard import _chrome
     _chrome.cache_clear()
     yield
+
+
+@pytest.fixture(autouse=True)
+def one_arm_wording():
+    """Willy's shared script speaks of one arm unless a test chose a both-arm exercise (Phase 10.1)."""
+    from src.willy_lines import shared_script
+    shared_script().variant = None
+    yield
+    shared_script().variant = None

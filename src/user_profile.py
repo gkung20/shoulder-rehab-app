@@ -13,7 +13,7 @@ import sys
 import tempfile
 
 MAX_DAYS = 60
-SCHEMA_VERSION = 2      # 1: before plans (Nov 2026); 2: physio plan and its history
+SCHEMA_VERSION = 3      # 1: before plans (Nov 2026); 2: physio plan and its history; 3: a plan per exercise
 MAX_PLAN_HISTORY = 20
 
 # Settings the physio can change: (lowest, highest, step). Shared with the settings screen.
@@ -152,7 +152,8 @@ class Profile:
     seen: list = field(default_factory=list)          # once-only lines already played (Scenario 8)
     session_days: list = field(default_factory=list)  # ISO dates with at least one movement, oldest first
     last_correct: int | None = None                   # spot-on movements in the last session
-    plan: dict | None = None        # the physio's plan (Plan as a dict); None = defaults
+    exercise: str = "abduction"     # the exercise the physio chose (config/exercises/<id>.yaml)
+    plans: dict = field(default_factory=dict)         # the physio's plan for each exercise: {id: Plan as a dict}
     plan_history: list = field(default_factory=list)  # earlier plans: [{"until": iso, "plan": {...}}]
     schema_version: int = SCHEMA_VERSION
     pin_salt: str = ""              # physio PIN: salt and PBKDF2 hash (src.physio_settings); empty = 0000
@@ -184,8 +185,14 @@ class Profile:
         profile.seen = [str(x) for x in profile.seen] if isinstance(profile.seen, list) else []
         days = profile.session_days if isinstance(profile.session_days, list) else []
         profile.session_days = sorted({d for d in days if _parse(d) is not None})[-MAX_DAYS:]
-        # Version 1 profiles (before plans) simply have no plan yet: defaults apply.
-        profile.plan = Plan.from_dict(profile.plan).__dict__.copy() if isinstance(profile.plan, dict) else None
+        # Version 1 profiles (before plans) simply have no plan yet: defaults apply. Version 2 had
+        # one plan, for the exercise it names: it becomes that exercise's plan.
+        plans = profile.plans if isinstance(profile.plans, dict) else {}
+        if isinstance(raw, dict) and isinstance(raw.get("plan"), dict):
+            plans.setdefault(str(raw["plan"].get("exercise") or "abduction"), raw["plan"])
+        profile.plans = {str(key): asdict(replace(Plan.from_dict(value, Plan(exercise=str(key))), exercise=str(key)))
+                         for key, value in plans.items() if isinstance(value, dict)}
+        profile.exercise = str(profile.exercise or "abduction")
         history = profile.plan_history if isinstance(profile.plan_history, list) else []
         profile.plan_history = [h for h in history if isinstance(h, dict)][-MAX_PLAN_HISTORY:]
         profile.schema_version = SCHEMA_VERSION
@@ -203,16 +210,18 @@ class Profile:
 
     # ------------------------------------------------------------------ the physio's plan
     def current_plan(self, config, exercise="abduction"):
-        """The saved plan, or the default one from the configuration."""
+        """The saved plan of this exercise, or the default one from the configuration."""
         default = Plan.from_config(config, exercise)
-        return Plan.from_dict(self.plan, default) if self.plan else default
+        saved = self.plans.get(exercise)
+        return replace(Plan.from_dict(saved, default), exercise=exercise) if saved else default
 
     def set_plan(self, plan, now=None):
-        """Save a new plan; the previous one goes to the history (last 20 kept)."""
+        """Save a new plan for its exercise; the previous one goes to the history (last 20 kept)."""
         stamp = (now or dt.datetime.now()).isoformat(timespec="seconds")
-        if self.plan:
-            self.plan_history = (self.plan_history + [{"until": stamp, "plan": dict(self.plan)}])[-MAX_PLAN_HISTORY:]
-        self.plan = asdict(replace(plan.clamped(), updated_at=stamp))
+        previous = self.plans.get(plan.exercise)
+        if previous:
+            self.plan_history = (self.plan_history + [{"until": stamp, "plan": dict(previous)}])[-MAX_PLAN_HISTORY:]
+        self.plans[plan.exercise] = asdict(replace(plan.clamped(), updated_at=stamp))
 
     def save(self):
         """Best effort: a profile that cannot be written never stops the exercise."""

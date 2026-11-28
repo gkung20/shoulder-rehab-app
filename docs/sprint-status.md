@@ -24,7 +24,7 @@ Updated after every phase.
 | 7 Validation tools | done | protocol EN/FR with consent form, recorder, report, rotation chart |
 | 8 Ready to share | done | licences with 6 blockers and their options, journal and error screen; 8.2 not chosen |
 | 9 Willy polish | done | mouth follows the voice, points and looks at each zone, idle variety, pronunciation pass, express tour, chattiness |
-| 10 More for patients | to do | 10.4 not chosen |
+| 10 More for patients | in progress | 10.1 both arms done; 10.4 not chosen |
 | 11 New silhouette body | in progress | half-body framing done (Marwane, 27 Nov); the new licensed body is still to do |
 
 ## Desktop folder
@@ -163,6 +163,18 @@ longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py 
   movements and drops the everyday lines (encouragements, "still there?", tips, button reminders);
   "beaucoup" shortens the pauses and counts every 3. Safety and pain lines, and the lines needed to
   go on (framing, camera, sets, start and end), play at every level.
+- Phase 10.1 (both arms sideways, chosen in Phase 0): the counted angle is the lower arm's, so
+  "both reach the target band" and the hold time come out of the existing state machine unchanged;
+  each arm is smoothed on its own first. The other checks take the worse side (the more bent elbow,
+  the higher shoulder, the larger drift). Calibration checks that the higher-resting arm is down.
+  The gap between the arms is a live warning (E4.12) and, above 15 deg during the movement, a
+  correction after it (E5.21). A both-arm processor has arm "both": logs, the state machine, the
+  silhouette, Willy, the coach and the skeleton all read it; one-arm sessions are unchanged (all the
+  old tests pass untouched). Profiles are now schema 3: one plan per exercise (a version 2 plan
+  becomes the abduction plan); the physio picks the exercise in the settings' first row. Lines that
+  speak of one arm got a `both:` wording (27, checked by the pronunciation pass), not a template
+  field, so each sentence reads naturally in both languages. Not done: the 10.1 alternative "arm
+  forward" (not chosen).
 - Phase 9.2: Willy points from the shoulder on the zone's side at the angle of the line to the
   zone's centre (0 down, 90 level, 160 at most, 30 at least so a point downward is still seen);
   more faithful than a fixed "higher zone, higher arm" scale, and the same rule works for the big
@@ -189,7 +201,7 @@ longer waits for it. Run `python tools/benchmark.py` and `python app_live_cv.py 
 
 ## To test on the PC
 
-- After Phase 9: delete nothing, just run the app with sound. Listen to Willy: his mouth should
+- After Phase 9: run the app with sound. Listen to Willy: his mouth should
   open and close with his voice, and in French he should say "Willy", "visite express" and
   "coach" the French way. To hear every line: `python tools/render_voices.py`, then play
   `output\voices\all_fr.wav` (the times of each line are in `all_fr.txt`); tell me any word he

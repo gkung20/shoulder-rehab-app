@@ -72,6 +72,9 @@ def sample_texts(script, languages=LANGUAGES):
             one = (entry.get("one") or {}).get(language)
             if one:
                 templates.append(("one", one))
+            both = (entry.get("both") or {}).get(language)
+            if both:
+                templates.append(("both", both))  # the wording for both-arm exercises
             for form, template in templates:
                 options = [len(group.split("/")) for group in re.findall(r"\{([^{}]*/[^{}]*)\}", template)]
                 for choice in range(max(options, default=1)):

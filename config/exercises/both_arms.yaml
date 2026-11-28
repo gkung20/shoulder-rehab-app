@@ -1,0 +1,15 @@
+# Both arms raised sideways together, patient facing the camera (Phase 10.1).
+# A movement counts when both arms reach the target band: the lower arm's angle is the one
+# counted. More than 15 deg between the arms (compensation: max_asymmetry_deg) is flagged.
+# Thresholds are those of config/exercise_config.yaml, then the patient's plan for this exercise.
+id: both_arms
+names:
+  fr: "Les deux bras sur les côtés"
+  en: "Both arms sideways"
+short:
+  fr: "Deux bras"
+  en: "Both arms"
+camera_view: front
+measured_angle: abduction
+arms: both
+willy_demo: raise_both

@@ -55,6 +55,8 @@ def repetition_log(evaluation):
         "derive_max_deg": None if "derive 3D" in m.missing_metrics else round(m.max_drift_deg, 1),
         "fluidite_pct": m.fluidity_score_pct,
         "reference_angle": m.angle_reference,
+        "angle_max_gauche_deg": m.peaks.get("left"), "angle_max_droit_deg": m.peaks.get("right"),
+        "ecart_bras_max_deg": None if m.max_asymmetry_deg is None else round(m.max_asymmetry_deg, 1),
         "remarques": "; ".join(evaluation.reasons) if evaluation.reasons else "Seuils du prototype respectes",
         "session_id": m.session_id, "configuration": m.config_snapshot,
         "calibration": m.calibration_snapshot, "mesures_manquantes": list(m.missing_metrics),
@@ -66,6 +68,11 @@ REST_MARGIN_DEG = 8.          # rest threshold = resting angle + 8 deg
 RISE_MARGIN_DEG = 7.          # rise threshold = rest threshold + 7 deg
 TARGET_GAP_DEG = 10.          # the rise threshold stays at least 10 deg below the target
 SEATED_TILT_ALLOWANCE_DEG = 5.  # seated: shoulder-line tilt allowed before it counts as leaning
+
+
+# Landmarks of each arm: shoulder, hip, elbow, wrist, ear.
+SIDES = {"left": (I.LEFT_SHOULDER, I.LEFT_HIP, I.LEFT_ELBOW, I.LEFT_WRIST, I.LEFT_EAR),
+         "right": (I.RIGHT_SHOULDER, I.RIGHT_HIP, I.RIGHT_ELBOW, I.RIGHT_WRIST, I.RIGHT_EAR)}
 
 
 def shoulder_line_tilt(left, right):
@@ -84,7 +91,8 @@ class SessionProcessor:
         self.config = self.exercise.apply(self._base_config)
         if plan is not None:
             self.config = plan.apply(self.config)
-        self.arm = arm
+        # Both-arm exercises measure the two arms together: arm "both" (Phase 10.1).
+        self.arm = "both" if self.exercise.both_arms else arm if arm in ("left", "right") else "right"
         self.rules_engine = rules_engine or RulesEngine(self.config)
         self.rules_engine.config = self.config
         self.session_id = uuid4().hex
@@ -105,7 +113,7 @@ class SessionProcessor:
         self.calibrations_done = 0
         a = self.config.abduction
         self.state_machine = RepetitionStateMachine(a.rest_threshold_deg, a.rising_start_deg,
-            a.target_min_deg, a.target_max_deg, self.config.timing.min_hold_time_sec, arm)
+            a.target_min_deg, a.target_max_deg, self.config.timing.min_hold_time_sec, self.arm)
         self.last_evaluation = None
         self.model_info = {}
         self._last_frame_time = None
@@ -115,6 +123,11 @@ class SessionProcessor:
         self.interrupted_attempts = 0
         self.frames_total = 0
         self.frames_tracked = 0
+        self._reset_pair()
+
+    def _reset_pair(self):
+        """Both arms: each arm's peak and the largest gap between them in the current movement."""
+        self._pair_peaks, self._pair_gap = {}, None
 
     @staticmethod
     def _facing_ratio(pts):
@@ -165,7 +178,8 @@ class SessionProcessor:
         if timestamp_sec is None:
             timestamp_sec = self._last_frame_time if self._last_frame_time is not None else 0.0
         self.finish()
-        self.arm = arm or self.arm
+        if self.arm != "both":  # a both-arm exercise has no arm to choose
+            self.arm = arm or self.arm
         self.state_machine.set_arm(self.arm)
         self.smoother.reset_all()
         self._last_valid_time = None
@@ -182,6 +196,7 @@ class SessionProcessor:
                 self.interrupted_attempts += 1
                 self.rules_engine.session.interrupted_attempts += 1
             self.state_machine.reset_current_rep()
+            self._reset_pair()
             self.smoother.reset_all()
             self._need_rest = True
 
@@ -191,6 +206,7 @@ class SessionProcessor:
             self.interrupted_attempts += 1
             self.rules_engine.session.interrupted_attempts += 1
         self.state_machine.reset_current_rep()
+        self._reset_pair()
         self._need_rest = True
 
     def process(self, landmarks, world_landmarks, width, height, timestamp_sec):
@@ -206,7 +222,10 @@ class SessionProcessor:
             self._pause(now)
             if self.calibrator.is_calibrating:
                 self.calibrator.start(self.arm, now)
-        frame = FrameAnalysis(now, landmarks or [], metrics={k: None for k in ("abduction", "lean", "shrug", "elbow", "drift")})
+        names = ("abduction", "lean", "shrug", "elbow", "drift")
+        if self.arm == "both":
+            names += ("abduction_left", "abduction_right", "asymmetry")
+        frame = FrameAnalysis(now, landmarks or [], metrics={k: None for k in names})
         frame.world_landmarks=list(world_landmarks or [])
         if not landmarks or len(landmarks) < 33:
             if self.calibrator.is_calibrating:
@@ -217,8 +236,8 @@ class SessionProcessor:
             return frame
 
         pts = to_measurement_space(landmarks, width, height)
-        sh, hip, el, wr, ear = ((I.LEFT_SHOULDER, I.LEFT_HIP, I.LEFT_ELBOW, I.LEFT_WRIST, I.LEFT_EAR)
-            if self.arm == "left" else (I.RIGHT_SHOULDER, I.RIGHT_HIP, I.RIGHT_ELBOW, I.RIGHT_WRIST, I.RIGHT_EAR))
+        arms = ("left", "right") if self.arm == "both" else (self.arm,)
+        sh, hip, el, wr, ear = SIDES[arms[0]]
         torso = (I.LEFT_SHOULDER, I.RIGHT_SHOULDER, I.LEFT_HIP, I.RIGHT_HIP)
         min_v = self.config.filtering.min_landmark_visibility
 
@@ -227,7 +246,8 @@ class SessionProcessor:
                 and all(0 <= landmarks[i].x <= 1 and 0 <= landmarks[i].y <= 1 for i in indices))
 
         shoulders_ok = visible((I.LEFT_SHOULDER, I.RIGHT_SHOULDER)) and calculate_distance_2d(pts[I.LEFT_SHOULDER], pts[I.RIGHT_SHOULDER]) > .05
-        elbow_ok = visible((sh, el)) and calculate_distance_2d(pts[sh], pts[el]) > .02
+        elbow_ok = all(visible((SIDES[a][0], SIDES[a][2])) and calculate_distance_2d(pts[SIDES[a][0]], pts[SIDES[a][2]]) > .02
+                       for a in arms)
         torso_ok = visible(torso) and calculate_distance_2d(pts[sh], pts[hip]) > .1
         if self.calibrator.is_calibrating:
             # Invisible or off-screen optional landmarks must not be used as observations.
@@ -246,13 +266,23 @@ class SessionProcessor:
         mode = baseline.reference_mode if baseline.is_calibrated else ("torso" if torso_ok else "shoulders")
         frame.angle_reference = mode
         raw = frame.metrics.copy()
-        if elbow_ok and mode == "torso" and torso_ok:
-            raw["abduction"] = calculate_abduction_angle(pts[sh], pts[hip], pts[el])
-        elif elbow_ok and shoulders_ok and mode == "shoulders":
-            raw["abduction"] = calculate_shoulder_reference_angle(pts[I.LEFT_SHOULDER], pts[I.RIGHT_SHOULDER], pts[sh], pts[el])
-        angle_ok = raw["abduction"] is not None
-        if visible((sh, el, wr)) and calculate_distance_2d(pts[el], pts[wr]) > 0.02:
-            raw["elbow"] = calculate_elbow_angle(pts[sh], pts[el], pts[wr])
+        angles, elbows = {}, []
+        for a in arms:
+            a_sh, a_hip, a_el, a_wr, _ = SIDES[a]
+            if elbow_ok and mode == "torso" and torso_ok:
+                angles[a] = calculate_abduction_angle(pts[a_sh], pts[a_hip], pts[a_el])
+            elif elbow_ok and shoulders_ok and mode == "shoulders":
+                angles[a] = calculate_shoulder_reference_angle(pts[I.LEFT_SHOULDER], pts[I.RIGHT_SHOULDER], pts[a_sh], pts[a_el])
+            if visible((a_sh, a_el, a_wr)) and calculate_distance_2d(pts[a_el], pts[a_wr]) > 0.02:
+                elbows.append(calculate_elbow_angle(pts[a_sh], pts[a_el], pts[a_wr]))
+        if self.arm == "both":
+            # Each arm is smoothed on its own; the counted angle (the lower arm) is taken after.
+            raw["abduction_left"], raw["abduction_right"] = angles.get("left"), angles.get("right")
+        else:
+            raw["abduction"] = angles.get(self.arm)
+        angle_ok = len(angles) == len(arms)
+        if len(elbows) == len(arms):
+            raw["elbow"] = min(elbows)  # both arms: the more bent elbow
         if visible(torso) and math.hypot((pts[I.LEFT_SHOULDER].x + pts[I.RIGHT_SHOULDER].x - pts[I.LEFT_HIP].x - pts[I.RIGHT_HIP].x) / 2,
                 (pts[I.LEFT_SHOULDER].y + pts[I.RIGHT_SHOULDER].y - pts[I.LEFT_HIP].y - pts[I.RIGHT_HIP].y) / 2) > .1:
             raw["lean"] = calculate_trunk_lean(*(pts[i] for i in torso))
@@ -260,20 +290,29 @@ class SessionProcessor:
             # Seated, hips hidden by the chair or table: the shoulder line's tilt stands in for the
             # trunk lean, minus a few degrees of natural tilt as the arm rises (Phase 4.4).
             raw["lean"] = max(0., shoulder_line_tilt(pts[I.LEFT_SHOULDER], pts[I.RIGHT_SHOULDER]) - SEATED_TILT_ALLOWANCE_DEG)
-        if baseline.is_calibrated and baseline.baseline_ear_shoulder_dist is not None and visible((ear, sh)):
-            raw["shrug"] = calculate_shoulder_shrug(pts[ear], pts[sh], baseline.baseline_ear_shoulder_dist, baseline.baseline_shoulder_width)
+        if baseline.is_calibrated and baseline.baseline_ear_shoulder_dist is not None:
+            shrugs = [calculate_shoulder_shrug(pts[SIDES[a][4]], pts[SIDES[a][0]], baseline.baseline_ear_shoulder_dist,
+                                               baseline.baseline_shoulder_width)
+                      for a in arms if visible((SIDES[a][4], SIDES[a][0]))]
+            if len(shrugs) == len(arms):
+                raw["shrug"] = max(shrugs)
         turned = False
         if world_landmarks and len(world_landmarks) >= 33:
-            other_sh, other_hip = ((I.RIGHT_SHOULDER, I.RIGHT_HIP) if self.arm == "left" else (I.LEFT_SHOULDER, I.LEFT_HIP))
-            wpts = [world_landmarks[i] for i in (sh, other_sh, hip, other_hip, el)]
-            # World hips inferred outside the image do not establish a visible torso.
-            if torso_ok and elbow_ok and are_landmarks_visible(wpts, min_v):
-                lateral = math.dist((wpts[0].x,wpts[0].y,wpts[0].z), (wpts[1].x,wpts[1].y,wpts[1].z))
-                arm_length = math.dist((wpts[0].x,wpts[0].y,wpts[0].z), (wpts[4].x,wpts[4].y,wpts[4].z))
-                if lateral > .05 and arm_length > .05:
-                    raw["drift"] = calculate_anterior_drift_angle(*wpts)
-                    if abs(wpts[0].z - wpts[1].z) / lateral > self.config.filtering.max_turn_depth_ratio:
-                        angle_ok, turned = False, True
+            drifts = []
+            for a in arms:
+                a_sh, a_hip, a_el = SIDES[a][:3]
+                other_sh, other_hip = SIDES["right" if a == "left" else "left"][:2]
+                wpts = [world_landmarks[i] for i in (a_sh, other_sh, a_hip, other_hip, a_el)]
+                # World hips inferred outside the image do not establish a visible torso.
+                if torso_ok and elbow_ok and are_landmarks_visible(wpts, min_v):
+                    lateral = math.dist((wpts[0].x,wpts[0].y,wpts[0].z), (wpts[1].x,wpts[1].y,wpts[1].z))
+                    arm_length = math.dist((wpts[0].x,wpts[0].y,wpts[0].z), (wpts[4].x,wpts[4].y,wpts[4].z))
+                    if lateral > .05 and arm_length > .05:
+                        drifts.append(calculate_anterior_drift_angle(*wpts))
+                        if abs(wpts[0].z - wpts[1].z) / lateral > self.config.filtering.max_turn_depth_ratio:
+                            angle_ok, turned = False, True
+            if drifts and len(drifts) == len(arms):
+                raw["drift"] = max(drifts)
         if baseline.is_calibrated and shoulders_ok:
             width_ratio = calculate_distance_2d(pts[I.LEFT_SHOULDER], pts[I.RIGHT_SHOULDER]) / baseline.baseline_shoulder_width
             if not .65 <= width_ratio <= 1.4:
@@ -287,6 +326,11 @@ class SessionProcessor:
             smoother = self.smoother.get_smoother(name)
             smoother.alpha = alpha
             frame.metrics[name] = smoother.update(value) if value is not None else None
+        if self.arm == "both":
+            left, right = frame.metrics["abduction_left"], frame.metrics["abduction_right"]
+            if left is not None and right is not None:
+                frame.metrics["abduction"] = min(left, right)  # a movement counts when both arms get there
+                frame.metrics["asymmetry"] = abs(left - right)
 
         if not baseline.is_calibrated:
             frame.status = "CALIBRATION"
@@ -294,6 +338,8 @@ class SessionProcessor:
             return frame
         if not angle_ok:
             frame.metrics["abduction"] = None
+            if self.arm == "both":
+                frame.metrics["abduction_left"] = frame.metrics["abduction_right"] = frame.metrics["asymmetry"] = None
             self._pause(now)
             frame.status = "EPAULES PRETES" if shoulders_ok and not elbow_ok else "POSITION A AJUSTER"
             frame.cue = cue_feedback(Cue.FACE_CAMERA if turned and elbow_ok else
@@ -319,8 +365,19 @@ class SessionProcessor:
         frame.hold_seconds = self.state_machine.hold_duration_sec
         frame.status = "CADRAGE SERRE" if mode == "shoulders" else "SUIVI ACTIF" if not missing else "MESURES PARTIELLES"
         frame.cue = self.rules_engine.evaluate_live_frame(angle, m["lean"], m["shrug"], m["elbow"], frame.phase, m["drift"])
+        if self.arm == "both" and frame.phase != ExercisePhase.REST:
+            gap = m["asymmetry"]
+            self._pair_gap = gap if self._pair_gap is None else max(self._pair_gap, gap)
+            for a in ("left", "right"):
+                self._pair_peaks[a] = max(self._pair_peaks.get(a, 0.), m[f"abduction_{a}"])
+            if gap > self.config.compensation.max_asymmetry_deg and frame.cue.level != FeedbackLevel.WARNING:
+                frame.cue = cue_feedback(Cue.ARMS_UNEVEN, FeedbackLevel.WARNING)
         if frame.phase == ExercisePhase.HOLD and frame.hold_seconds >= self.config.timing.min_hold_time_sec and frame.cue.level != FeedbackLevel.WARNING:
             frame.cue = cue_feedback(Cue.HOLD_DONE_LOWER)
+        if rep and self.arm == "both":
+            rep.peaks = {a: round(v, 1) for a, v in self._pair_peaks.items()}
+            rep.max_asymmetry_deg = self._pair_gap
+            self._reset_pair()
         if rep:
             # Global numbering survives recalibration and arm changes within this processor.
             rep.rep_index = self.rules_engine.session.total_repetitions + 1

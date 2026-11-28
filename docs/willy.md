@@ -12,6 +12,7 @@ avec `--no-avatars` et dans la page Streamlit (barre latérale + tableau de bord
 | Avant de commencer | Salue de la main en arrivant |
 | Rien ne se passe | Cligne des yeux toutes les 3 à 6 s ; après 13 à 28 s de calme, jette un coup d’œil vers l’image du patient, puis s’étire ou salue (l’un des deux toutes les 30 à 60 s), jamais deux fois la même chose de suite |
 | Visite de l’écran | Montre la zone éclairée avec le bras de son côté, d’autant plus haut qu’elle est haute, et tourne la tête vers elle |
+| Exercice à deux bras | Suit les deux bras du patient (chacun de son côté de l’écran) et montre l’exercice avec ses deux bras |
 | Calibration, cadrage, suivi perdu | Reste calme, bras baissés |
 | Mouvement | Lève le **même bras que le patient, du même côté de l’écran** (miroir), à l’angle d’abduction déjà mesuré |
 | Maintien atteint | Yeux souriants |
@@ -29,6 +30,7 @@ le comptage ou l’évaluation.
 | Fichier | Rôle |
 | --- | --- |
 | `assets/willy/lines.yaml` | Toutes les répliques, anglais et français, par ID (S1.01 à S8.14, E1 à E7) |
+| `assets/willy/lines.yaml` (`both:`) | Pour l’exercice à deux bras, 27 répliques ont une variante qui parle « des bras » ; l’app la choisit (`shared_script().variant = "both"`) |
 | `assets/willy/pronounce.yaml` | Réécritures pour la voix seule (« Willy » à la française, unités, symboles) ; l’écran garde la réplique |
 | `src/willy_lines.py` | Lit les répliques, remplit `{n}`, `{name}`, `{tip}`, `{droit / gauche}`, singulier |
 | `src/willy_tour.py` | Le « metteur en scène » : visite guidée (scénarios 1 à 7), répliques uniques du scénario 8, lignes du quotidien |

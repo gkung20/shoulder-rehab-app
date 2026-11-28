@@ -1,11 +1,11 @@
 # Pronunciation pass
 
-Every line Willy can say, read by its voice's phonemizer (Piper, espeak-ng), on 27 Nov 2026. Made by `python tools/pronunciation_check.py --report docs/pronunciation.md`; its first lines explain the flags. Respellings live in `assets/willy/pronounce.yaml` (spoken text only: the screen keeps the line as written). Listen to any line with `python tools/render_voices.py --only <ID>`.
+Every line Willy can say, read by its voice's phonemizer (Piper, espeak-ng), on 28 Nov 2026. Made by `python tools/pronunciation_check.py --report docs/pronunciation.md`; its first lines explain the flags. Respellings live in `assets/willy/pronounce.yaml` (spoken text only: the screen keeps the line as written). Listen to any line with `python tools/render_voices.py --only <ID>`.
 
 | Language | Voice | Texts read | Problems | Respelled | Numbers to listen to |
 | --- | --- | ---: | ---: | ---: | ---: |
-| en | en_US-ryan-medium | 194 | 0 | 0 | 21 |
-| fr | fr_FR-tom-medium | 198 | 0 | 6 | 21 |
+| en | en_US-ryan-medium | 223 | 0 | 0 | 21 |
+| fr | fr_FR-tom-medium | 227 | 0 | 6 | 21 |
 
 ## Problems
 

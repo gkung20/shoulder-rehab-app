@@ -72,6 +72,25 @@ EN = {
                                         "it happens again, show the log to your physio.",
     "Ouvrir le dossier du journal": "Open the log folder",
     "Willy parle": "Willy talks", "Beaucoup": "A lot", "Normalement": "Normally", "Peu": "A little",
+    "Exercice": "Exercise", "Les deux": "Both",
+    # Guidance for the both-arm exercise (src.dashboard.BOTH_ARMS_TEXT)
+    "Gardez les deux épaules et les deux coudes visibles, puis commencez.":
+        "Keep both shoulders and both elbows in view, then start.",
+    "Gardez les bras baissés": "Keep your arms down",
+    "Replacez les deux épaules et les deux coudes dans l’image.": "Bring both shoulders and both elbows back into the picture.",
+    "Montrez les coudes": "Show your elbows",
+    "Vos épaules sont repérées. Vos deux coudes doivent aussi rester visibles.":
+        "Your shoulders are found. Both elbows must stay in view too.",
+    "Baissez les bras": "Lower your arms",
+    "Levez les deux bras": "Raise both arms",
+    "Montez doucement sur les côtés, en même temps, vers votre zone de mouvement.":
+        "Raise them gently out to the sides, together, toward your movement zone.",
+    "Ramenez doucement les bras au repos.": "Gently bring your arms back to rest.",
+    "Levez doucement les deux bras sur les côtés pour commencer le mouvement.":
+        "Gently raise both arms out to the sides to start the movement.",
+    "Levez, maintenez, puis ramenez les bras au repos.": "Raise, hold, then bring your arms back to rest.",
+    "Deux bras": "Both arms",
+    "Montez les deux bras à la même hauteur": "Raise both arms to the same height",
     "Modèle rapide utilisé (ce PC est lent pour le modèle précis)":
         "Fast model in use (this PC is slow for the accurate model)",
     "Je me prépare…": "Getting ready…", "Préparation des avatars 3D…": "Preparing the 3D avatars…",
@@ -203,6 +222,8 @@ _PATTERNS = [
     (re.compile(r"^(\d+(?:[.,]\d+)?)/10$"), r"\1/10"),
     (re.compile(r"^Bras (droit|gauche) · Son (activé|coupé)$"),
      lambda m: f"{'Right' if m.group(1) == 'droit' else 'Left'} arm · Sound {'on' if m.group(2) == 'activé' else 'off'}"),
+    (re.compile(r"^Deux bras · Son (activé|coupé)$"),
+     lambda m: f"Both arms · Sound {'on' if m.group(1) == 'activé' else 'off'}"),
 ]
 
 

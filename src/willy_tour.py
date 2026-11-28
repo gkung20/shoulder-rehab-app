@@ -432,6 +432,8 @@ class WillyDirector:
             self.say("S1.07" if skipped else "S1.08")
             yield _Speech()
         stages = EXPRESS_TOUR if express else FULL_TOUR
+        if self._both_arms():  # nothing to choose: the express tour has no arm stage
+            stages = tuple(stage for stage in stages if stage != "arm")
         self._stage(stages, "safety", skipped)
         yield from self._safety()
         if skipped:
@@ -441,8 +443,9 @@ class WillyDirector:
             return
         self.screen = "dashboard"
         if express:
-            self._stage(stages, "arm")
-            yield from self._arm_step()
+            if "arm" in stages:
+                self._stage(stages, "arm")
+                yield from self._arm_step()
         else:
             self._stage(stages, "profile")
             yield from self._profile_setup()
@@ -507,8 +510,13 @@ class WillyDirector:
     def _next(self):
         return [TourButton("next", ui("next", self.language), True)]
 
+    def _both_arms(self):
+        return getattr(self.ctx.processor, "arm", None) == "both"
+
     def _arm_step(self):
-        """Which arm? (Scenario 3, also in the express tour)"""
+        """Which arm? (Scenario 3, also in the express tour; not for a both-arm exercise)"""
+        if self._both_arms():
+            return
         self.want_avatars, self.want_silhouette = (True if self.has_avatars else None), False
         self.allowed = ("arm_left", "arm_right")
         self.say("S3.04", spotlight="arm_buttons", buttons=self._next())
@@ -637,6 +645,7 @@ class WillyDirector:
         for line_id, pose, highlight in steps:
             self._demo = (self.clock(), pose)
             side = self._demo_side()
+            side = "R" if side == "both" else side  # both arms: the circle goes on one of them
             point = {"shoulder": f"shoulder_{side}", "hand": f"arm_{side}", "trunk": "trunk"}.get(highlight)
             self.say(line_id, highlight=point)
             yield _Speech(gap=.8 if pose == "loop" else .45)

@@ -66,6 +66,11 @@ class SessionLog:
             "issues": [error.category for error in evaluation.errors],
             "tip": evaluation_tip(evaluation),
         })
+        peaks = getattr(m, "peaks", None)
+        if peaks:  # both arms (Phase 10.1): each arm's peak and the largest gap between them
+            gap = getattr(m, "max_asymmetry_deg", None)
+            self.reps[-1].update({"peak_left_deg": peaks.get("left"), "peak_right_deg": peaks.get("right"),
+                                  "gap_deg": None if gap is None else round(gap, 1)})
 
     def add_stop(self, kind, t_sec):
         self.stops.append({"t": round(float(t_sec), 1), "kind": kind})
@@ -79,6 +84,7 @@ class SessionLog:
         ended = now or dt.datetime.now()
         started = _parse_time(self.started_at) or ended
         peaks = [r["peak_deg"] for r in self.reps if r["peak_deg"] is not None]
+        gaps = [r["gap_deg"] for r in self.reps if r.get("gap_deg") is not None]
         counts = {q: sum(r["quality"] == q for r in self.reps) for q in ("correct", "to_fix", "unknown")}
         goal = sets.reps_per_set * sets.sets if sets is not None else None
         return {
@@ -99,6 +105,7 @@ class SessionLog:
                 "reps": len(self.reps), **counts,
                 "best_peak_deg": max(peaks) if peaks else None,
                 "mean_peak_deg": round(sum(peaks) / len(peaks), 1) if peaks else None,
+                **({"mean_gap_deg": round(sum(gaps) / len(gaps), 1)} if gaps else {}),
                 "goal": goal,
                 "goal_reached": bool(sets is not None and sets.done),
                 "sets_done": (sets.current_set - (0 if sets.done else 1)) if sets is not None else None,

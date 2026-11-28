@@ -131,7 +131,10 @@ def make_app(monkeypatch, tmp_path, window, args=("--no-avatars", "--no-hands"),
     monkeypatch.setenv("MOUVEMENT_DATA_DIR", str(tmp_path))
     profile = Profile.load()
     for key, value in profile_fields.items():
-        setattr(profile, key, value)
+        if key == "plan":  # one plan per exercise since schema 3 (Phase 10.1)
+            profile.plans[value.get("exercise") or "abduction"] = value
+        else:
+            setattr(profile, key, value)
     profile.save()
     clock = [1000.]
 

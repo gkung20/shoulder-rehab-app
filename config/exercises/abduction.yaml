@@ -5,6 +5,9 @@ id: abduction
 names:
   fr: "Abduction de l'épaule"
   en: "Shoulder abduction"
+short:                    # in the physio settings' exercise row
+  fr: "Un bras"
+  en: "One arm"
 camera_view: front        # front: facing the camera; side: camera beside the patient
 measured_angle: abduction # angle between the trunk and the upper arm, in the frontal plane
 arms: one                 # one: the arm chosen in the plan; both: both arms together
