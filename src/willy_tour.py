@@ -11,7 +11,7 @@ import datetime as dt
 import math
 import time
 
-from src import chattiness
+from src import chattiness, motivation
 from src.cues import Cue, code_of
 from src import layout as L
 from src.i18n import ui
@@ -139,6 +139,7 @@ class WillyDirector:
         self.coaching = False            # Scenario 7: the tour speaks the first movements itself
         self.in_tour = False
         self.results_available = False  # a saved session exists: "Mes résultats" on the home screen
+        self.weekly_goal = 5             # the plan's sessions per week (Phase 10.3), set by the app
         self.closing_until = None
         self._gen = None
         self._wait = None
@@ -943,8 +944,15 @@ class WillyDirector:
             yield _Speech()
         if not self._session_recorded and total > 0:
             self._session_recorded = True
-            self.profile.record_session(correct)
+            self.profile.record_session(correct, reps=total)
+            motivation.award(self.profile, self.weekly_goal)
             self.profile.save()
+        while self.profile.badges_pending:  # Phase 10.3: each badge celebrated once, gently
+            badge = self.profile.badges_pending.pop(0)
+            self.profile.save()
+            if badge in motivation.BADGE_LINES:
+                self.say(motivation.BADGE_LINES[badge], compact=not first)
+                yield _Speech()
         if first:
             for line_id, zone in (("S8.10", "details_button"), ("S8.11", "main_button"), ("S8.12", None),
                                   ("S8.13", "help_button")):
@@ -971,7 +979,8 @@ class WillyDirector:
         """Called when the app closes or restarts: keep the day in the profile if movements were counted."""
         if session is not None and session.total_repetitions > 0 and not self._session_recorded:
             self._session_recorded = True
-            self.profile.record_session(session.correct_repetitions)
+            self.profile.record_session(session.correct_repetitions, reps=session.total_repetitions)
+            motivation.award(self.profile, self.weekly_goal)  # celebrated at the end of the next session
             self.profile.save()
 
     # ------------------------------------------------------------------ overlay

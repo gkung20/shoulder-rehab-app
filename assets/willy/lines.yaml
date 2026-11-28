@@ -934,6 +934,26 @@ E6.11:
   anim: cheer
   en: "Last set! You're nearly there."
   fr: "Dernière série ! Vous y êtes presque."
+E6.12:
+  moment: "Badge: the first session with movements (Phase 10.3)"
+  anim: cheer
+  en: "Your first session is done. Well done for starting!"
+  fr: "Votre première séance est faite. Bravo d'avoir commencé !"
+E6.13:
+  moment: "Badge: sessions on three days in a row"
+  anim: cheer
+  en: "Three days in a row: your shoulder thanks you!"
+  fr: "Trois jours de suite : votre épaule vous remercie !"
+E6.14:
+  moment: "Badge: the week's goal reached"
+  anim: cheer
+  en: "This week's goal is reached. Wonderfully steady!"
+  fr: "L'objectif de la semaine est atteint. Quelle régularité !"
+E6.15:
+  moment: "Badge: a hundred movements since the start"
+  anim: cheer
+  en: "A hundred movements since you started. What a journey!"
+  fr: "Cent mouvements depuis le début. Beau chemin parcouru !"
 E6.04:
   moment: No movement for 30 s during a session
   anim: idle

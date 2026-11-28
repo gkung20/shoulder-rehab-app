@@ -14,6 +14,7 @@ from PIL import Image
 
 from src.dashboard import CANVAS_SIZE, LINE, MUTED, TEXT, _Painter
 from src.exercises import get_exercise
+from src import motivation
 from src.i18n import tr
 from src.home_screen import _background
 from src.willy_lines import shared_script
@@ -200,7 +201,7 @@ TREND_LINES = {"improving": "E7.04", "steady": "E7.05", "lower": "E7.06", None: 
 
 
 def render_history(records, output_size=None, language="fr", streak=0, period="30", today=None, message="",
-                   can_open=False, exercise=None):
+                   can_open=False, exercise=None, badges=()):
     """The last 30 days of one exercise as a BGR image, and its hit boxes (back, export period, export)."""
     today = today or dt.date.today()
     canvas, p = _canvas(output_size, language)
@@ -209,6 +210,13 @@ def render_history(records, output_size=None, language="fr", streak=0, period="3
     p.text((50, 78), f"{subtitle} · {get_exercise(exercise).name(language)}" if exercise else subtitle, 16, MUTED)
     days = daily(records, today)
     p.text((900, 40), f"{streak} jour(s) d'affilée" if streak else "Pas de série en cours", 18, TEXT, True)
+    x = 1232
+    for badge in reversed([b for b in motivation.BADGES if b in badges]):  # earned badges, right-aligned (10.3)
+        label = tr(motivation.BADGE_NAMES[badge], language)
+        width = p.draw.textlength(label, font=p.font(13, True)) / p.sx + 24
+        p.rect((x - width, 74, x, 100), fill=(232, 244, 237), outline=(52, 140, 94), radius=13)
+        p.text((x - width + 12, 79), label, 13, (30, 96, 62), True)
+        x -= width + 8
     # Calendar strip: one cell per day, a dot when there was a session.
     for i in range(HISTORY_DAYS):
         day = today - dt.timedelta(days=HISTORY_DAYS - 1 - i)

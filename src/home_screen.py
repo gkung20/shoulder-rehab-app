@@ -10,9 +10,10 @@ import numpy as np
 from PIL import Image
 
 from src import layout as L
+from src import motivation
 
 from src.dashboard import CANVAS_SIZE, MUTED, TEXT, _Painter
-from src.i18n import ui
+from src.i18n import tr, ui
 from src.window_viewport import canvas_viewport
 from src.willy_overlay import GLOW, _wrap, draw_button, draw_dots
 
@@ -73,6 +74,8 @@ def render_home(director, guide=None, output_size=None, speaking=False):
         mouth = (HOME_WILLY_BOX[0] + mx, HOME_WILLY_BOX[1] + my)
 
     overlay = director.overlay
+    if director.profile.tour_done and not director.in_tour and director.profile.language is not None:
+        _week(p, director)
     bottom = BUBBLE_TOP
     if overlay.bubble:
         bottom = _bubble(p, overlay.bubble, mouth)
@@ -106,12 +109,30 @@ def render_home(director, guide=None, output_size=None, speaking=False):
     return cv2.cvtColor(np.asarray(canvas), cv2.COLOR_RGB2BGR)
 
 
+DONE = (52, 140, 94)   # the "correct" green of the results
+
+
+def _week(p, director):
+    """The week's sessions as dots, above the bubble (Phase 10.3): what was done, never what was missed."""
+    done, goal = motivation.week_progress(director.profile.session_days, getattr(director, "weekly_goal", 5))
+    x, y = BUBBLE_LEFT, 116
+    p.text((x, y), "Cette semaine", 16, MUTED)
+    x += p.draw.textlength(tr("Cette semaine", p.lang), font=p.font(16)) / p.sx + 20
+    size = 18 * p.text_scale
+    for index in range(goal):
+        top = y + 1
+        p.rect((x, top, x + size, top + size), fill=DONE if index < done else (255, 255, 255),
+               outline=DONE if index < done else (150, 156, 161), radius=size / 2)
+        x += size + 8
+    p.text((x + 6, y), f"{done}/{goal}", 16, TEXT, True)
+
+
 def _bubble(p, paragraphs, mouth):
     size, small = 30, 25
     width = BUBBLE_RIGHT - BUBBLE_LEFT
     wrapped = [(_wrap(p, text, width - 64, size if i == 0 else small), size if i == 0 else small)
                for i, text in enumerate(paragraphs)]
-    height = 44 + sum(len(lines) * s * 1.35 for lines, s in wrapped) + 18 * (len(wrapped) - 1)
+    height = 44 + sum(len(lines) * s * 1.35 * p.text_scale for lines, s in wrapped) + 18 * (len(wrapped) - 1)
     rect = (BUBBLE_LEFT, BUBBLE_TOP, BUBBLE_RIGHT, BUBBLE_TOP + height)
     p.rect((rect[0] + 4, rect[1] + 6, rect[2] + 4, rect[3] + 6), fill=(200, 212, 209), radius=28)
     p.rect(rect, fill=(255, 255, 255), outline=(190, 200, 198), radius=28)
@@ -125,6 +146,6 @@ def _bubble(p, paragraphs, mouth):
     for index, (lines, s) in enumerate(wrapped):
         for line in lines:
             p.text((rect[0] + 32, y), line, s, TEXT if index == 0 else MUTED)
-            y += s * 1.35
+            y += s * 1.35 * p.text_scale
         y += 18
     return rect[3]

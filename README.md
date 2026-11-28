@@ -79,6 +79,16 @@ Willy s’affiche aussi dans sa **bulle** : l’application reste utilisable son
   Chaque exercice garde **son propre plan** ; les résultats, l'historique et l'export ne montrent que
   les séances de l'exercice choisi.
 
+### Motivation sans culpabilité
+
+- **La semaine en points** : sur l'accueil de Willy, au-dessus de sa bulle, « Cette semaine ●●●○○ 3/5 » :
+  les jours avec une séance depuis lundi, sur l'objectif du plan (séances par semaine, au plus 7).
+- **Badges** : première séance, 3 jours de suite, semaine complète (objectif de la semaine atteint),
+  100 mouvements depuis le début. Willy fête chacun **une seule fois**, à la fin de la séance qui le
+  gagne (E6.12 à E6.15) ; ils restent dans le profil et s'affichent en haut de l'**Historique**.
+- Un jour sans séance n'enlève rien et n'est jamais reproché : rien ne se perd, aucun compteur ne
+  redescend, et après une absence Willy dit seulement « Cela fait quelques jours. Reprenons en douceur. »
+
 ### Accessibilité (page « Écran et voix » des réglages)
 
 Les réglages kiné ont deux pages : **Plan du patient** et **Écran et voix** (caméra, modèle de

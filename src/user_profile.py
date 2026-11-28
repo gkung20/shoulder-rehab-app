@@ -152,6 +152,9 @@ class Profile:
     seen: list = field(default_factory=list)          # once-only lines already played (Scenario 8)
     session_days: list = field(default_factory=list)  # ISO dates with at least one movement, oldest first
     last_correct: int | None = None                   # spot-on movements in the last session
+    total_reps: int = 0             # movements counted since the start (Phase 10.3, the 100 badge)
+    badges: dict = field(default_factory=dict)        # badges earned (src.motivation): {id: ISO date}
+    badges_pending: list = field(default_factory=list)  # earned, still to be celebrated by Willy
     exercise: str = "abduction"     # the exercise the physio chose (config/exercises/<id>.yaml)
     plans: dict = field(default_factory=dict)         # the physio's plan for each exercise: {id: Plan as a dict}
     plan_history: list = field(default_factory=list)  # earlier plans: [{"until": iso, "plan": {...}}]
@@ -209,6 +212,12 @@ class Profile:
         profile.chattiness = profile.chattiness if profile.chattiness in ("lots", "normal", "little") else "normal"
         for name in ("large_text", "high_contrast", "slow_speech", "subtitles"):
             setattr(profile, name, getattr(profile, name) is True)
+        total = profile.total_reps
+        profile.total_reps = total if isinstance(total, int) and not isinstance(total, bool) and total >= 0 else 0
+        badges = profile.badges if isinstance(profile.badges, dict) else {}
+        profile.badges = {str(k): str(v) for k, v in badges.items()}
+        pending = profile.badges_pending if isinstance(profile.badges_pending, list) else []
+        profile.badges_pending = [str(b) for b in pending if str(b) in profile.badges]
         camera = profile.camera_index
         profile.camera_index = camera if isinstance(camera, int) and not isinstance(camera, bool) and 0 <= camera <= 9 else None
         profile._path = path
@@ -259,10 +268,11 @@ class Profile:
         return True
 
     # ------------------------------------------------------------------ sessions
-    def record_session(self, correct, day=None):
+    def record_session(self, correct, day=None, reps=0):
         day = (day or dt.date.today()).isoformat()
         self.session_days = sorted(set(self.session_days) | {day})[-MAX_DAYS:]
         self.last_correct = int(correct)
+        self.total_reps += max(0, int(reps))
 
     def last_day(self):
         return _parse(self.session_days[-1]) if self.session_days else None

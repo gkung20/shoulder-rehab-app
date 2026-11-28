@@ -402,7 +402,8 @@ class HistoryScreen(Screen):
     def draw(self, app, output_size):
         image, self.hit_boxes, line_id = render_history(self.records, output_size, app.director.language,
                                                         app.profile.streak(), self.period, message=self.message,
-                                                        can_open=self.folder is not None, exercise=app.exercise.id)
+                                                        can_open=self.folder is not None, exercise=app.exercise.id,
+                                                        badges=tuple(app.profile.badges))
         if not self.said:
             self.said = True
             app.say_line(line_id)
@@ -591,6 +592,8 @@ class App:
         self.exercise = get_exercise(exercise_id)
         shared_script().variant = "both" if self.exercise.both_arms else None
         self.plan = self.profile.current_plan(self.exercise.apply(self.config), self.exercise.id)
+        if self.director is not None:
+            self.director.weekly_goal = self.plan.sessions_per_week
         if self.plan.arm and not self.exercise.both_arms:
             self.processor.arm = self.plan.arm
         self.session_plan = self.plan
@@ -713,6 +716,7 @@ class App:
         self.processor.model_info = self.detector.model_info.copy()
         self.director = WillyDirector(self.profile, self.audio, self.guide, has_avatars=not args.no_avatars)
         self.director.results_available = bool(session_store.session_files())
+        self.director.weekly_goal = self.plan.sessions_per_week  # the week's dots and badge (Phase 10.3)
         if args.skip_home:
             self.director.screen = "dashboard"
         elif args.tour:

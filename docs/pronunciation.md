@@ -4,8 +4,8 @@ Every line Willy can say, read by its voice's phonemizer (Piper, espeak-ng), on 
 
 | Language | Voice | Texts read | Problems | Respelled | Numbers to listen to |
 | --- | --- | ---: | ---: | ---: | ---: |
-| en | en_US-ryan-medium | 223 | 0 | 0 | 21 |
-| fr | fr_FR-tom-medium | 227 | 0 | 6 | 21 |
+| en | en_US-ryan-medium | 227 | 0 | 0 | 21 |
+| fr | fr_FR-tom-medium | 231 | 0 | 6 | 21 |
 
 ## Problems
 
